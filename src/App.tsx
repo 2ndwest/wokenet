@@ -4,7 +4,7 @@ import { Header } from "./components/Header";
 import { Putzopticon } from "./pages/Putzopticon";
 import { AuthedHome } from "./pages/AuthedHome";
 import { Unauthorized } from "./pages/Unauthorized";
-import { Management } from "./pages/Management";
+import { AdminPanel } from "./pages/AdminPanel";
 import { memo, useEffect, useState } from "react";
 import { useConvexAuth, useMutation } from "convex/react";
 import { CenterSpinner } from "./utils/spinner";
@@ -54,7 +54,7 @@ const App = memo(() => {
             <Routes>
               <Route path="/" element={<AuthedHome />} />
               <Route path="/putzopticon" element={<Putzopticon />} />
-              {isAdmin && <Route path="/management" element={<Management />} />}
+              {isAdmin && <Route path="/adminpanel" element={<AdminPanel />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           ) : (

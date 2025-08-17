@@ -3,12 +3,10 @@ import { mutation, query } from "./_generated/server";
 
 import schema from "./schema";
 
-// TODO: Remove this once we have a real source of locations.
-import Life360Data from "./life360.json";
 export const loadLocations = mutation({
   args: {},
   handler: async (ctx) => {
-    for (const member of Life360Data.members) {
+    for (const member of [] as any) {
       let locationName: Infer<typeof schema.tables.locations.validator.fields.location> = undefined;
 
       if (member.location) {

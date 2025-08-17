@@ -6,7 +6,7 @@ import { api } from "../../convex/_generated/api";
 import { Affiliation, AFFILIATION_VALIDATOR } from "../../convex/schema";
 import { CenterSpinner } from "../utils/spinner";
 
-export const Management = memo(() => {
+export const AdminPanel = memo(() => {
   const users = useQuery(api.users.listUsers);
 
   const updateUser = useMutation(api.users.updateUser);

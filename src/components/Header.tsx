@@ -47,9 +47,7 @@ export const Header = memo(
           <NavButton disabled={affiliation === "NONE"} to="/putzopticon">
             Putzopticon
           </NavButton>
-          <NavButton disabled={!isAdmin} to="/management">
-            Management
-          </NavButton>
+          {isAdmin && <NavButton to="/adminpanel">Admin Panel</NavButton>}
         </Flex>
 
         {isAuthLoading ? (
@@ -67,7 +65,7 @@ export const Header = memo(
 );
 
 export const NavButton = memo(
-  ({ to, disabled, children }: { to: string; disabled: boolean; children: React.ReactNode }) => {
+  ({ to, disabled, children }: { to: string; disabled?: boolean; children: React.ReactNode }) => {
     return (
       <NavLink to={to}>
         {({ isActive }) => (
