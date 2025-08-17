@@ -1,3 +1,3 @@
 # wokenet
 
-monorepo for t11s's putz-related web services
+monorepo for t11s' putz-related web services
