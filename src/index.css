@@ -1,0 +1,62 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+@font-face {
+  font-family: Mondwest;
+  src: url("./fonts/Mondwest-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: Non Natural Grotesk;
+  src: url("./fonts/NONNaturalGrotesk-Bold.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: Non Natural Grotesk;
+  src: url("./fonts/NONNaturalGrotesk-Regular.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500;
+}
+
+@font-face {
+  font-family: Non Natural Mono;
+  src: url("./fonts/NONNaturalMono-Light.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: "BerkeleyMono";
+  src: url("./fonts/BerkeleyMonoVariable-Regular.woff2") format("woff2-variations");
+  font-display: block;
+  font-weight: 100;
+}
+
+.radix-themes {
+  --default-font-family: "BerkeleyMono" !important;
+  --cursor-button: pointer !important;
+}
+
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.blink {
+  animation: blink 2s ease-in-out infinite;
+}
