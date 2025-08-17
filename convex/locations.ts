@@ -1,5 +1,6 @@
 import type { Infer } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requirePutz } from "./utils/auth";
 
 import schema from "./schema";
 
@@ -43,6 +44,8 @@ export const loadLocations = mutation({
 export const getLocations = query({
   args: {},
   handler: async (ctx) => {
+    await requirePutz(ctx);
+
     return await ctx.db.query("locations").collect();
   },
 });
