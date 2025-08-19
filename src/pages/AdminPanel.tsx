@@ -29,18 +29,18 @@ export const AdminPanel = memo(() => {
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {users.map((u) => (
-                <Table.Row key={u._id} align="center">
-                  <Table.RowHeaderCell>{u.name}</Table.RowHeaderCell>
+              {users.map((user) => (
+                <Table.Row key={user._id} align="center">
+                  <Table.RowHeaderCell>{user.name}</Table.RowHeaderCell>
                   <Table.Cell>
-                    <Text>{u.email}</Text>
+                    <Text>{user.email}</Text>
                   </Table.Cell>
                   <Table.Cell>
                     <Select.Root
-                      value={u.affiliation}
+                      value={user.affiliation}
                       onValueChange={(value) => {
                         updateUser({
-                          userId: u._id,
+                          userId: user._id,
                           affiliation: value as Affiliation,
                         }).catch(alert);
                       }}
@@ -58,12 +58,12 @@ export const AdminPanel = memo(() => {
                   <Table.Cell>
                     <Switch
                       mr="3"
-                      checked={u.isAdmin}
+                      checked={user.isAdmin}
                       onCheckedChange={(checked) => {
-                        updateUser({ userId: u._id, isAdmin: checked }).catch(alert);
+                        updateUser({ userId: user._id, isAdmin: checked }).catch(alert);
                       }}
                     />
-                    {u.isAdmin ? (
+                    {user.isAdmin ? (
                       <Badge color="green">Admin</Badge>
                     ) : (
                       <Badge color="gray">User</Badge>
