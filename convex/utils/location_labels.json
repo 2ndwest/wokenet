@@ -46,7 +46,7 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Main Campus",
+        "name": "Main Group",
         "color": "orange"
       },
       "geometry": {
@@ -183,9 +183,9 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Broader Campus",
+        "name": "Campus",
         "matchLast": "true",
-        "color": "GREEN"
+        "color": "gray"
       },
       "geometry": {
         "coordinates": [

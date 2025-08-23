@@ -1,5 +1,5 @@
 import { Infer, v } from "convex/values";
-import { internalAction, internalMutation, query } from "./_generated/server";
+import { action, internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requirePutz } from "./utils/auth";
 import { titleCase } from "./utils/strings";
@@ -8,6 +8,15 @@ import locationLabels from "./utils/location_labels.json"; // Edit this on geojs
 import schema from "./schema";
 import { getGoogleMapsSharedPeople } from "google-maps-location-sharing-lib-js";
 import { GOOGLE_AUTH_USER } from "./googleAuth";
+
+export const refetchLocations = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requirePutz(ctx); // Avoid spamming Google Maps API.
+
+    await ctx.scheduler.runAfter(0, internal.locations.loadLocations);
+  },
+});
 
 export const loadLocations = internalAction({
   args: {},
@@ -65,7 +74,7 @@ export const getLocations = query({
           return {
             ...location,
             label: feature.properties.name.toUpperCase(),
-            color: feature.properties.color ?? "grey",
+            color: feature.properties.color ?? "gray",
           };
         }
       }
