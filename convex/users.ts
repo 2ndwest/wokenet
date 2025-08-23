@@ -3,6 +3,37 @@ import { Affiliation, AFFILIATION_VALIDATOR } from "./schema";
 import { v } from "convex/values";
 import { requireAdmin, getUser, requirePutz } from "./utils/auth";
 
+export const createUser = mutation({
+  args: {
+    kerb: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+
+    const kerb = args.kerb.trim().toLowerCase();
+    if (kerb.length === 0 || kerb.includes("@")) throw new Error("INVALID_KERB");
+
+    const email = `${kerb}@mit.edu`;
+
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+
+    if (existing) throw new Error("USER_ALREADY_EXISTS");
+
+    const id = await ctx.db.insert("users", {
+      name: args.name.trim() || "UNKNOWN",
+      email,
+      affiliation: "NONE",
+      isAdmin: false,
+    });
+
+    return id;
+  },
+});
+
 export const setupUser = mutation({
   args: {},
   handler: async (ctx) => {

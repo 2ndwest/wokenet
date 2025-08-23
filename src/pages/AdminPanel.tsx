@@ -1,4 +1,4 @@
-import { Badge, Box, Flex, Heading, Select, Switch, Table, Text } from "@radix-ui/themes";
+import { Badge, Box, Flex, Heading, Select, Switch, Table, Text, Button } from "@radix-ui/themes";
 import { memo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -10,13 +10,25 @@ export const AdminPanel = memo(() => {
   const users = useQuery(api.users.listUsers);
 
   const updateUser = useMutation(api.users.updateUser);
+  const createUser = useMutation(api.users.createUser);
 
   return (
     <Flex direction="column" align="center" p="4" width="100%" height="100%">
       <Box minWidth={{ initial: "100%", lg: "750px" }} pb="4">
-        <Heading size="8" mb="4">
-          Users
-        </Heading>
+        <Flex justify="between" align="center" mb="4">
+          <Heading size="8">Users</Heading>
+          <Button
+            onClick={() => {
+              const kerb = prompt("Kerb (without @mit.edu)")?.trim();
+              if (!kerb) return;
+              const name = prompt("Name")?.trim();
+              if (!name) return;
+              createUser({ kerb, name }).catch(alert);
+            }}
+          >
+            New user
+          </Button>
+        </Flex>
 
         {users ? (
           <Table.Root variant="surface">
