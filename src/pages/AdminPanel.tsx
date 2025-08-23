@@ -13,7 +13,7 @@ export const AdminPanel = memo(() => {
 
   return (
     <Flex direction="column" align="center" p="4" width="100%" height="100%">
-      <Box minWidth={{ initial: "100%", lg: "750px" }}>
+      <Box minWidth={{ initial: "100%", lg: "750px" }} mb="4">
         <Heading size="8" mb="4">
           Users
         </Heading>
