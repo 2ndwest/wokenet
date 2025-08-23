@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
-import { requireAdmin } from "./utils/auth";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { parseNetscapeCookieString } from "google-maps-location-sharing-lib-js";
 import schema from "./schema";
 import { internal } from "./_generated/api";
