@@ -87,7 +87,7 @@ export const PersonRow = memo(
             fontWeight: "bold",
           }}
         >
-          <span style={{ fontSize: "85cqh" }}>{name}</span>
+          <span style={{ fontSize: "min(85cqh, 28cqw)" }}>{name}</span>
         </Flex>
 
         <Flex
@@ -103,7 +103,7 @@ export const PersonRow = memo(
             fontWeight: "bold",
           }}
         >
-          <span style={{ fontSize: "80cqh" }}>{label}</span>
+          <span style={{ fontSize: "min(80cqh, 14cqw)" }}>{label}</span>
         </Flex>
       </Flex>
     );
