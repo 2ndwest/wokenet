@@ -7,7 +7,7 @@ import { MapContainer, TileLayer, Circle, Popup, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
 
-const LOCATION_RADIUS_THRESHOLD = 10;
+const LOCATION_RADIUS_THRESHOLD = 30;
 
 export const Putz360 = memo(() => {
   const locations = useQuery(api.locations.getLocations);
