@@ -5,6 +5,8 @@ import { memo } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 
+const COLOR_ORDER = ["green", "orange", "purple", "blue", "red"];
+
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
 
@@ -31,9 +33,8 @@ export const Putzopticon = memo(() => {
             };
           })
           .sort((a, b) => {
-            const colorOrder = ["green", "var(--orange-9)", "red", "blue"];
-            const aOrder = colorOrder.indexOf(a.color);
-            const bOrder = colorOrder.indexOf(b.color);
+            const aOrder = COLOR_ORDER.indexOf(a.color);
+            const bOrder = COLOR_ORDER.indexOf(b.color);
             if (aOrder !== bOrder) return aOrder - bOrder;
             return a.name.localeCompare(b.name);
           })
