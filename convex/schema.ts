@@ -5,12 +5,20 @@ export const AFFILIATION_VALIDATOR = v.union(v.literal("PUTZ"), v.literal("NONE"
 export type Affiliation = Infer<typeof AFFILIATION_VALIDATOR>;
 
 export default defineSchema({
+  googleAuthCookies: defineTable({
+    name: v.string(),
+    value: v.string(),
+  }).index("by_name", ["name"]),
+
   locations: defineTable({
     name: v.string(),
-    location: v.optional(
-      v.union(v.literal("ON CAMPUS"), v.literal("OFF CAMPUS"), v.literal("IN HOUSING"))
-    ),
-  }),
+    providerId: v.string(),
+    latitude: v.number(),
+    longitude: v.number(),
+    timestamp: v.number(),
+    accuracy: v.number(),
+  }).index("by_providerId", ["providerId"]),
+
   users: defineTable({
     name: v.string(),
     email: v.string(),

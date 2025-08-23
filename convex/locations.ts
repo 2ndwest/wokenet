@@ -1,51 +1,96 @@
-import type { Infer } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { Infer, v } from "convex/values";
+import { internalAction, internalMutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requirePutz } from "./utils/auth";
-
+import { titleCase } from "./utils/strings";
+import { booleanPointInPolygon } from "@turf/turf";
+import locationLabels from "./utils/location_labels.json"; // Edit this on geojson.io
 import schema from "./schema";
+import { getGoogleMapsSharedPeople } from "google-maps-location-sharing-lib-js";
+import { GOOGLE_AUTH_USER } from "./googleAuth";
 
-export const loadLocations = mutation({
+export const loadLocations = internalAction({
   args: {},
   handler: async (ctx) => {
-    for (const member of [] as any) {
-      let locationName: Infer<typeof schema.tables.locations.validator.fields.location> = undefined;
+    const cookies = await ctx.runQuery(internal.googleAuth.getGoogleAuthCookies);
 
-      if (member.location) {
-        if (
-          member.location.name?.toLowerCase().includes("house") ||
-          member.location.name?.toLowerCase().includes("haus") ||
-          member.location.name?.toLowerCase().includes("hall") ||
-          member.location.name?.toLowerCase().includes("macgregor") ||
-          member.location.name?.toLowerCase().includes("masseh")
-        ) {
-          locationName = "IN HOUSING";
-        } else if (member.location && member.location.latitude && member.location.longitude) {
-          // MIT campus bounding box:
-          // Bottom left: 42.353384, -71.108388
-          // Top right:   42.365686, -71.091830
-          const lat = parseFloat(member.location.latitude);
-          const lng = parseFloat(member.location.longitude);
-          if (lat >= 42.353384 && lat <= 42.365686 && lng >= -71.108388 && lng <= -71.09183) {
-            locationName = "ON CAMPUS";
-          } else {
-            locationName = "OFF CAMPUS";
-          }
-        }
-      }
+    const { people, newCookies } = await getGoogleMapsSharedPeople(
+      new Map(cookies.map((cookie) => [cookie.name, cookie.value])),
+      GOOGLE_AUTH_USER
+    );
 
-      ctx.db.insert("locations", {
-        name: member.firstName.split(" ")[0],
-        location: locationName,
-      });
-    }
+    await ctx.runMutation(internal.googleAuth.setGoogleAuthCookies, {
+      cookies: Array.from(newCookies.entries()).map(([name, value]) => ({ name, value })),
+    });
+
+    await ctx.runMutation(internal.locations.setLocations, {
+      locations: people.map((person) => ({
+        name: titleCase(person.nickname ?? "Unknown"),
+        latitude: Number(person.latitude ?? -1),
+        longitude: Number(person.longitude ?? -1),
+        providerId: person.id ?? "UNKNOWN_ID",
+        timestamp: Number(person.timestamp ?? 0),
+        accuracy: Number(person.accuracy ?? -1),
+      })),
+    });
   },
 });
 
 export const getLocations = query({
   args: {},
-  handler: async (ctx) => {
+  handler: async (
+    ctx
+  ): Promise<
+    (Infer<typeof schema.tables.locations.validator> & { label: string; color: string })[]
+  > => {
     await requirePutz(ctx);
 
-    return await ctx.db.query("locations").collect();
+    const locations = await ctx.db.query("locations").collect();
+
+    return locations.map((location) => {
+      const [lat, lng] = [location.latitude, location.longitude];
+
+      // Invalid location.
+      if (lat == -1 || lng == -1) return { ...location, label: "UNKNOWN", color: "grey" };
+
+      // Check if point is within any of the labeled polygons.
+      for (const feature of locationLabels.features.sort((a, b) => {
+        // If feature has matchLast: true, sort it to the back.
+        if (a.properties.matchLast && !b.properties.matchLast) return 1;
+        if (!a.properties.matchLast && b.properties.matchLast) return -1;
+        return 0;
+      })) {
+        // Note: GeoJSON uses [lng, lat] ordering.
+        if (booleanPointInPolygon([lng, lat], feature as any)) {
+          return {
+            ...location,
+            label: feature.properties.name.toUpperCase(),
+            color: feature.properties.color ?? "grey",
+          };
+        }
+      }
+
+      return { ...location, label: "OFF CAMPUS", color: "red" };
+    });
+  },
+});
+
+export const setLocations = internalMutation({
+  args: {
+    locations: v.array(schema.tables.locations.validator),
+  },
+  handler: async (ctx, args) => {
+    for (const location of args.locations) {
+      const existing = await ctx.db
+        .query("locations")
+        .withIndex("by_providerId", (q) => q.eq("providerId", location.providerId))
+        .unique();
+
+      if (existing) {
+        await ctx.db.patch(existing._id, location);
+      } else {
+        await ctx.db.insert("locations", location);
+      }
+    }
   },
 });

@@ -13,9 +13,12 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as crons from "../crons.js";
+import type * as googleAuth from "../googleAuth.js";
 import type * as locations from "../locations.js";
 import type * as users from "../users.js";
 import type * as utils_auth from "../utils/auth.js";
+import type * as utils_strings from "../utils/strings.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -26,9 +29,12 @@ import type * as utils_auth from "../utils/auth.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  crons: typeof crons;
+  googleAuth: typeof googleAuth;
   locations: typeof locations;
   users: typeof users;
   "utils/auth": typeof utils_auth;
+  "utils/strings": typeof utils_strings;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
