@@ -26,8 +26,8 @@ export const Putz360 = memo(() => {
       <Flex width="100%" height="100%">
         <MapContainer
           bounds={[
-            [42.358187, -71.090877],
-            [42.360679, -71.08849],
+            [42.35902, -71.089305],
+            [42.361621, -71.087837],
           ]}
           style={{ height: "100%", width: "100%" }}
           zoomControl={true}
