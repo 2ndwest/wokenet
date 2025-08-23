@@ -1,0 +1,114 @@
+import { Flex } from "@radix-ui/themes";
+import { api } from "../../convex/_generated/api";
+import { useMutation, useQuery } from "convex/react";
+import { memo, useMemo, useState } from "react";
+import { MapContainer, TileLayer, Circle, Popup } from "react-leaflet";
+
+import "leaflet/dist/leaflet.css";
+import { CenterSpinner } from "../utils/spinner";
+
+const LOCATION_RADIUS_THRESHOLD = 30;
+
+export const Putz360 = memo(() => {
+  const locations = useQuery(api.locations.getLocations);
+  const validLocations = useMemo(() => {
+    if (!locations) return [];
+    return locations.filter((loc) => loc.latitude !== -1 && loc.longitude !== -1);
+  }, [locations]);
+
+  const [refetching, setRefetching] = useState(false);
+  const refetchLocations = useMutation(api.locations.refetchLocations);
+
+  if (!locations) return <CenterSpinner />;
+
+  return (
+    <Flex direction="column" width="100%" height="100vh" style={{ position: "relative" }}>
+      <Flex width="100%" height="100%">
+        <MapContainer
+          bounds={[
+            [42.356809, -71.094804],
+            [42.362555, -71.088163],
+          ]}
+          style={{ height: "100%", width: "100%" }}
+          zoomControl={true}
+          scrollWheelZoom={true}
+          doubleClickZoom={true}
+          dragging={true}
+        >
+          {/* Base Map Layer */}
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+          {/* User Location Markers */}
+          {validLocations
+            .sort((a, b) => b.accuracy - a.accuracy) // So the most accurate locations are on top.
+            .map((location) => {
+              const radius = Math.min(location.accuracy, LOCATION_RADIUS_THRESHOLD);
+
+              return (
+                <Circle
+                  key={location.providerId}
+                  center={[location.latitude, location.longitude]}
+                  radius={radius}
+                  pathOptions={{
+                    color: location.color,
+                    weight: 2,
+                    opacity: 0.8,
+
+                    fillColor: location.color,
+                    fillOpacity: 0.4,
+                    ...(location.accuracy > LOCATION_RADIUS_THRESHOLD
+                      ? {
+                          dashArray: "5, 5",
+                        }
+                      : {}),
+                  }}
+                >
+                  <Popup>
+                    <strong>{location.name}</strong>
+                    <br />
+                    <span style={{ fontSize: "0.9em", opacity: 0.8 }}>{location.label}</span>
+
+                    <br />
+                    <span style={{ fontSize: "0.8em", opacity: 0.7 }}>
+                      ±{Math.round(location.accuracy)}m accuracy
+                    </span>
+                  </Popup>
+                </Circle>
+              );
+            })}
+        </MapContainer>
+      </Flex>
+
+      {/* User Count */}
+      <Flex
+        onClick={async () => {
+          setRefetching(true);
+          await refetchLocations();
+          setRefetching(false);
+        }}
+        justify="center"
+        align="center"
+        style={{
+          position: "absolute",
+          bottom: "10px",
+          left: "10px",
+          background: "var(--accent-9)",
+
+          cursor: "pointer",
+
+          padding: "8px 16px",
+          borderRadius: "20px",
+          border: "1px solid rgba(0, 0, 0, 0.1)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+
+          zIndex: 1000,
+
+          color: "white",
+          fontSize: "0.9rem",
+        }}
+      >
+        {refetching ? "Refetching..." : `${validLocations.length} / ${locations.length} located`}
+      </Flex>
+    </Flex>
+  );
+});

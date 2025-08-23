@@ -47,6 +47,9 @@ export const Header = memo(
           <NavButton disabled={affiliation === "NONE"} to="/putzopticon">
             Putzopticon
           </NavButton>
+          <NavButton disabled={affiliation === "NONE"} to="/putz360">
+            Putz360
+          </NavButton>
           {isAdmin && <NavButton to="/adminpanel">Admin Panel</NavButton>}
         </Flex>
 
