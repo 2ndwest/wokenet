@@ -66,11 +66,25 @@ export const Putz360 = memo(() => {
                   <Popup>
                     <strong>{location.name}</strong>
                     <br />
-                    <span style={{ fontSize: "0.9em", opacity: 0.8 }}>{location.label}</span>
+                    <span style={{ fontSize: "0.9em", opacity: 0.8 }}>
+                      {location.label}{" "}
+                      <span style={{ fontSize: "0.8em", opacity: 0.7 }}>
+                        ±{Math.round(location.accuracy)}m
+                      </span>
+                    </span>
 
                     <br />
                     <span style={{ fontSize: "0.8em", opacity: 0.7 }}>
-                      ±{Math.round(location.accuracy)}m accuracy
+                      Last updated:{" "}
+                      {(() => {
+                        const date = new Date(location.timestamp);
+
+                        // If the date is today, just show the time.
+                        // Otherwise, show the date and the time.
+                        return date.toDateString() === new Date().toDateString()
+                          ? date.toLocaleTimeString()
+                          : date.toLocaleString();
+                      })()}
                     </span>
                   </Popup>
                   <Tooltip
