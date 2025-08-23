@@ -7,7 +7,7 @@ import { MapContainer, TileLayer, Circle, Popup, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
 
-const LOCATION_RADIUS_THRESHOLD = 30;
+const LOCATION_RADIUS_THRESHOLD = 10;
 
 export const Putz360 = memo(() => {
   const locations = useQuery(api.locations.getLocations);
@@ -72,7 +72,9 @@ export const Putz360 = memo(() => {
                     fillOpacity: 0.4,
                     ...(location.accuracy > LOCATION_RADIUS_THRESHOLD
                       ? {
-                          dashArray: "5, 5",
+                          dashArray: `${location.accuracy / LOCATION_RADIUS_THRESHOLD}, ${
+                            location.accuracy / LOCATION_RADIUS_THRESHOLD
+                          }`,
                         }
                       : {}),
                   }}
