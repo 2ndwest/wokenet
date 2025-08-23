@@ -1,7 +1,7 @@
 import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Circle, Popup, Tooltip } from "react-leaflet";
 
 import "leaflet/dist/leaflet.css";
@@ -18,6 +18,20 @@ export const Putz360 = memo(() => {
 
   const [refetching, setRefetching] = useState(false);
   const refetchLocations = useMutation(api.locations.refetchLocations);
+  const refreshLocations = useCallback(async () => {
+    setRefetching(true);
+    await refetchLocations();
+    // To prevent a brief flash that looks unintentional.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    setRefetching(false);
+  }, [refetchLocations]);
+
+  // Auto-refresh locations every 5 seconds.
+  useEffect(() => {
+    refreshLocations();
+    const interval = setInterval(refreshLocations, 5000);
+    return () => clearInterval(interval);
+  }, [refreshLocations]);
 
   if (!locations) return <CenterSpinner />;
 
@@ -113,11 +127,7 @@ export const Putz360 = memo(() => {
 
       {/* User Count */}
       <Flex
-        onClick={async () => {
-          setRefetching(true);
-          await refetchLocations();
-          setRefetching(false);
-        }}
+        onClick={refreshLocations}
         justify="center"
         align="center"
         style={{
