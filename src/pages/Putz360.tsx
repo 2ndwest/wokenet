@@ -2,7 +2,7 @@ import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { memo, useMemo, useState } from "react";
-import { MapContainer, TileLayer, Circle, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Circle, Popup, Tooltip } from "react-leaflet";
 
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
@@ -73,6 +73,24 @@ export const Putz360 = memo(() => {
                       ±{Math.round(location.accuracy)}m accuracy
                     </span>
                   </Popup>
+                  <Tooltip
+                    permanent={true}
+                    direction="center"
+                    offset={[0, 0]}
+                    className="location-label-tooltip"
+                  >
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: "bold",
+                        color: "black",
+                        textShadow: "0 0 2px white",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {location.name}
+                    </div>
+                  </Tooltip>
                 </Circle>
               );
             })}

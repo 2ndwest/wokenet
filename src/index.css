@@ -60,3 +60,9 @@ body {
 .blink {
   animation: blink 2s ease-in-out infinite;
 }
+
+.location-label-tooltip {
+  background-color: transparent;
+  box-shadow: none;
+  border: none;
+}
