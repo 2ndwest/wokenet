@@ -36,7 +36,7 @@ export const Putz360 = memo(() => {
   if (!locations) return <CenterSpinner />;
 
   return (
-    <Flex direction="column" width="100%" height="100vh" style={{ position: "relative" }}>
+    <Flex direction="column" width="100%" height="100%" style={{ position: "relative" }}>
       <Flex width="100%" height="100%">
         <MapContainer
           bounds={[
