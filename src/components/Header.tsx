@@ -71,9 +71,12 @@ export const Header = memo(
 
         {/* Mobile menu (only on mobile after clicking hamburger) */}
         <Flex
-          direction="column"
+          direction="row"
+          wrap="wrap"
+          align="center"
+          justify="center"
           gap="2"
-          display={menuOpen ? "flex" : "none"}
+          display={{ initial: menuOpen ? "flex" : "none", sm: "none" }}
           style={{
             borderBottom: "1px solid var(--gray-3)",
             zIndex: 99999999999,
