@@ -84,8 +84,13 @@ export const Header = memo(
           gap="2"
           display={{ initial: menuOpen ? "flex" : "none", sm: "none" }}
           style={{
-            borderBottom: "1px solid var(--gray-3)",
+            position: "fixed",
+            top: "50px",
+            left: 0,
+            right: 0,
             zIndex: 99999999999,
+            backgroundColor: "var(--gray-1)",
+            borderBottom: "1px solid var(--gray-3)",
           }}
           p="3"
         >
