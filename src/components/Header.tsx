@@ -90,6 +90,7 @@ export const Header = memo(
             right: 0,
             zIndex: 99999999999,
             backgroundColor: "var(--gray-1)",
+            boxShadow: "0 6px 16px rgba(0, 0, 0, 0.12)",
             borderBottom: "1px solid var(--gray-3)",
           }}
           p="3"
