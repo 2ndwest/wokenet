@@ -1,0 +1,17 @@
+{
+  "name": "WOKENET",
+  "short_name": "WOKENET",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111113",
+  "theme_color": "#111113",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
