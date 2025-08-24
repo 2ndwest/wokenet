@@ -28,7 +28,10 @@ export const Header = memo(
       <>
         <Flex
           align="center"
-          justify="between"
+          justify={{
+            initial: !authenticated && !isAuthLoading ? "center" : "between",
+            sm: "between",
+          }}
           px="3"
           py="2"
           style={{
