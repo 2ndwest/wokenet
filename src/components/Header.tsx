@@ -44,7 +44,7 @@ export const Header = memo(
             </IconButton>
           </Flex>
 
-          <NavLink to="/" style={{ textDecoration: "none", marginRight: "12px" }}>
+          <NavLink to="/" style={{ textDecoration: "none" }}>
             <Flex gap="3" align="center" height="100%">
               <PTZIcon height="28px" fill="var(--accent-9)" />
               <Heading
