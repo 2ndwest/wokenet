@@ -1,7 +1,7 @@
 import { Button, Flex, Heading, Spinner, IconButton } from "@radix-ui/themes";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 import { HamburgerIcon, PTZIcon } from "../utils/icons";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { UserButton } from "@clerk/clerk-react";
 import type { Affiliation } from "../../convex/schema";
 
@@ -18,6 +18,12 @@ export const Header = memo(
     isAdmin: boolean;
   }) => {
     const [menuOpen, setMenuOpen] = useState(false);
+
+    // When we navigate to a new page, close the menu if it's open.
+    const location = useLocation();
+    useEffect(() => {
+      setMenuOpen(false);
+    }, [location.pathname]);
     return (
       <>
         <Flex
