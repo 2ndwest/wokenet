@@ -38,11 +38,13 @@ export const Header = memo(
           }}
         >
           {/* Hamburger menu (only on mobile) */}
-          <Flex align="center" display={{ initial: "flex", sm: "none" }}>
-            <IconButton variant="ghost" radius="full" onClick={() => setMenuOpen((v) => !v)}>
-              <HamburgerIcon open={menuOpen} />
-            </IconButton>
-          </Flex>
+          {authenticated && (
+            <Flex align="center" display={{ initial: "flex", sm: "none" }}>
+              <IconButton variant="ghost" radius="full" onClick={() => setMenuOpen((v) => !v)}>
+                <HamburgerIcon open={menuOpen} />
+              </IconButton>
+            </Flex>
+          )}
 
           <NavLink to="/" style={{ textDecoration: "none" }}>
             <Flex gap="3" align="center" height="100%">
