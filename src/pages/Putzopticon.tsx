@@ -18,7 +18,7 @@ export const Putzopticon = memo(() => {
       direction="column"
       width="100%"
       height="100%"
-      gap="2"
+      gap="0.4%"
       px="2"
       py="2"
       overflow="hidden"
@@ -88,7 +88,7 @@ export const PersonRow = memo(
             fontWeight: "bold",
           }}
         >
-          <span style={{ fontSize: "min(85cqh, 28cqw)" }}>{name}</span>
+          <span style={{ fontSize: "min(85cqh, 25cqw)" }}>{name}</span>
         </Flex>
 
         <Flex
