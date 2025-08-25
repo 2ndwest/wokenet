@@ -21,7 +21,7 @@ export const Putzopticon = memo(() => {
       gap="0.4%"
       px="8px"
       pt="8px"
-      pb={{ initial: "34px", xs: "8px" }} // Only for phones: account for bottom safe area.
+      pb={{ initial: "30px", xs: "8px" }} // Only for phones: account for bottom safe area.
       overflow="hidden"
     >
       {data ? (
