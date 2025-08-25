@@ -134,8 +134,8 @@ export const Putz360 = memo(() => {
         align="center"
         style={{
           position: "absolute",
-          bottom: "10px",
-          left: "10px",
+          top: "10px",
+          right: "10px",
           background: "var(--accent-9)",
 
           cursor: "pointer",
