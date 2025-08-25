@@ -20,7 +20,8 @@ export const Putzopticon = memo(() => {
       height="100%"
       gap="0.4%"
       px="8px"
-      py="max(env(safe-area-inset-bottom), 8px)"
+      pt="8px"
+      pb={{ initial: "34px", xs: "8px" }} // Only for phones: account for bottom safe area.
       overflow="hidden"
     >
       {data ? (
