@@ -33,14 +33,16 @@ export const loadLocations = internalAction({
     });
 
     await ctx.runMutation(internal.locations.setLocations, {
-      locations: people.map((person) => ({
-        name: titleCase(person.nickname ?? "Unknown"),
-        latitude: Number(person.latitude ?? -1),
-        longitude: Number(person.longitude ?? -1),
-        providerId: person.id ?? "UNKNOWN_ID",
-        timestamp: Number(person.timestamp ?? 0),
-        accuracy: Number(person.accuracy ?? -1),
-      })),
+      locations: people.map((person) => {
+        return {
+          name: titleCase(person.nickname ?? "Unknown"),
+          latitude: person.latitude ? Number(person.latitude) : undefined,
+          longitude: person.longitude ? Number(person.longitude) : undefined,
+          providerId: person.id ?? "UNKNOWN_ID",
+          timestamp: Number(person.timestamp ?? 0),
+          accuracy: Number(person.accuracy ?? -1),
+        };
+      }),
     });
   },
 });
@@ -60,7 +62,7 @@ export const getLocations = query({
       const [lat, lng] = [location.latitude, location.longitude];
 
       // Invalid location.
-      if (lat == -1 || lng == -1) return { ...location, label: "UNKNOWN", color: "gray" };
+      if (!lat || !lng) return { ...location, label: "UNKNOWN", color: "gray" };
 
       // Check if point is within any of the labeled polygons.
       for (const feature of locationLabels.features.sort((a, b) => {
@@ -96,7 +98,7 @@ export const setLocations = internalMutation({
         .unique();
 
       if (existing) {
-        await ctx.db.patch(existing._id, location);
+        await ctx.db.replace(existing._id, location);
       } else {
         await ctx.db.insert("locations", location);
       }
