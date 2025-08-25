@@ -19,8 +19,8 @@ export const Putzopticon = memo(() => {
       width="100%"
       height="100%"
       gap="0.4%"
-      px="2"
-      py="2"
+      px="8px"
+      py="max(env(safe-area-inset-bottom), 8px)"
       overflow="hidden"
     >
       {data ? (
