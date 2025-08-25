@@ -18,9 +18,9 @@ export const Putzopticon = memo(() => {
       direction="column"
       width="100%"
       height="100%"
-      gap="0.4%"
+      gap="2"
       px="2"
-      py="0.4%"
+      py="2"
       overflow="hidden"
     >
       {data ? (
