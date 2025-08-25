@@ -75,7 +75,7 @@ export const PersonRow = memo(
         width="100%"
         style={{
           // Can't use opacity it messes with the AutoAnimate.
-          filter: label === "UNKNOWN" ? "brightness(0.25)" : "none",
+          filter: label === "UNKNOWN" ? "brightness(0.3)" : "none",
         }}
       >
         <Flex
