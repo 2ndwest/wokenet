@@ -62,7 +62,7 @@ export const getLocations = query({
       const [lat, lng] = [location.latitude, location.longitude];
 
       // Invalid location.
-      if (!lat || !lng) return { ...location, label: "UNKNOWN", color: "gray" };
+      if (!lat || !lng) return { ...location, label: "UNKNOWN", color: "dimgray" };
 
       // Check if point is within any of the labeled polygons.
       for (const feature of locationLabels.features.sort((a, b) => {

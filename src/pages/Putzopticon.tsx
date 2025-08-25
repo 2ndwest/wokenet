@@ -5,7 +5,7 @@ import { memo } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 
-const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red"];
+const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgray"];
 
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
