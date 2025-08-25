@@ -48,7 +48,7 @@ export const setupUser = mutation({
 
     // If it's a new identity, create a new user.
     await ctx.db.insert("users", {
-      name: identity.name ?? "UNKNOWN",
+      name: identity.name ?? identity.email!.split("@")[0], // Use the kerb if the name is not set.
       email: identity.email!,
       affiliation: "NONE",
       isAdmin: false,
