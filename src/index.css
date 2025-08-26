@@ -70,3 +70,16 @@ body {
 .leaflet-control-attribution {
   display: none;
 }
+
+/* iOS Safari height fix using -webkit-fill-available */
+.ios-safari-height {
+  height: -webkit-fill-available;
+  height: 100vh; /* Fallback for non-iOS browsers */
+}
+
+/* Target iOS devices specifically */
+@supports (-webkit-touch-callout: none) {
+  .ios-safari-height {
+    height: -webkit-fill-available;
+  }
+}
