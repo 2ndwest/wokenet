@@ -39,7 +39,8 @@ const App = memo(() => {
   const { isAuthLoading, isAuthenticated, affiliation, isAdmin } = useAuthStatus();
 
   return (
-    <Flex direction="column" width="100%" className="ios-safari-height">
+    <Flex direction="column" width="100%" height="100vh">
+      {/* TODO: pad according to safe area at the app level https://stackoverflow.com/questions/73355967/safe-area-inset-bottom-not-working-on-ios-15-safari*/}
       <Header
         authenticated={isAuthenticated}
         isAuthLoading={isAuthLoading}
