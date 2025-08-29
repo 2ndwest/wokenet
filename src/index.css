@@ -78,4 +78,5 @@ body {
   bottom: env(safe-area-inset-bottom);
   left: env(safe-area-inset-left);
   overflow: auto; /* scroll your content */
+  box-sizing: border-box; /* play nicely with padding */
 }
