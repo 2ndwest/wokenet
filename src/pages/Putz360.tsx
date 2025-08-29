@@ -129,31 +129,38 @@ export const Putz360 = memo(() => {
         </MapContainer>
       </Flex>
 
-      {/* Eye button - navigates to Putzopticon */}
-      <Link to="/putzopticon" style={{ textDecoration: "none" }}>
-        <OrangeButton
-          style={{
-            top: "10px",
-            right: "10px",
-            width: "40px",
-            height: "40px",
-          }}
-        >
-          <EyeIcon height="15px" fill="currentColor" />
-        </OrangeButton>
-      </Link>
-
-      {/* User count */}
-      <OrangeButton
-        onClick={refreshLocations}
+      {/* Button Container */}
+      <Flex
         style={{
+          position: "absolute",
           top: "10px",
-          right: "60px",
-          padding: "8px 16px",
+          right: "10px",
+          zIndex: 1000,
+          gap: "10px",
         }}
       >
-        {refetching ? "Refetching..." : `${validLocations.length} / ${locations.length} located`}
-      </OrangeButton>
+        {/* Eye button - navigates to Putzopticon */}
+        <Link to="/putzopticon" style={{ textDecoration: "none" }}>
+          <OrangeButton
+            style={{
+              width: "40px",
+              height: "40px",
+            }}
+          >
+            <EyeIcon height="15px" fill="currentColor" />
+          </OrangeButton>
+        </Link>
+
+        {/* User count */}
+        <OrangeButton
+          onClick={refreshLocations}
+          style={{
+            padding: "8px 16px",
+          }}
+        >
+          {refetching ? "Refetching..." : `${validLocations.length} / ${locations.length} located`}
+        </OrangeButton>
+      </Flex>
     </Flex>
   );
 });
@@ -169,15 +176,11 @@ const OrangeButton = memo<{
       justify="center"
       align="center"
       style={{
-        position: "absolute",
-        top: "10px",
-        right: "10px",
         background: "var(--accent-9)",
         cursor: "pointer",
         borderRadius: "20px",
         border: "1px solid rgba(0, 0, 0, 0.1)",
         boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
-        zIndex: 1000,
         color: "white",
         fontSize: "0.9rem",
         ...style,
