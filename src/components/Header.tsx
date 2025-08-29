@@ -111,9 +111,6 @@ export const NavButtons = memo(
   ({ affiliation, isAdmin }: { affiliation: Affiliation; isAdmin: boolean }) => {
     return (
       <>
-        <NavButton disabled={affiliation !== "PUTZ"} to="/putzopticon">
-          Putzopticon
-        </NavButton>
         <NavButton disabled={affiliation !== "PUTZ"} to="/putz360">
           Putz360
         </NavButton>

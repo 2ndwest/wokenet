@@ -1,8 +1,10 @@
 import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
 import { MapContainer, TileLayer, Circle, Popup, Tooltip } from "react-leaflet";
+import { Link } from "react-router";
+import { EyeIcon } from "../utils/icons";
 
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
@@ -127,32 +129,61 @@ export const Putz360 = memo(() => {
         </MapContainer>
       </Flex>
 
-      {/* User Count */}
-      <Flex
+      {/* Eye button - navigates to Putzopticon */}
+      <Link to="/putzopticon" style={{ textDecoration: "none" }}>
+        <OrangeButton
+          style={{
+            top: "10px",
+            right: "10px",
+            width: "40px",
+            height: "40px",
+          }}
+        >
+          <EyeIcon height="15px" fill="currentColor" />
+        </OrangeButton>
+      </Link>
+
+      {/* User count */}
+      <OrangeButton
         onClick={refreshLocations}
-        justify="center"
-        align="center"
         style={{
-          position: "absolute",
           top: "10px",
-          right: "10px",
-          background: "var(--accent-9)",
-
-          cursor: "pointer",
-
+          right: "60px",
           padding: "8px 16px",
-          borderRadius: "20px",
-          border: "1px solid rgba(0, 0, 0, 0.1)",
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
-
-          zIndex: 1000,
-
-          color: "white",
-          fontSize: "0.9rem",
         }}
       >
         {refetching ? "Refetching..." : `${validLocations.length} / ${locations.length} located`}
-      </Flex>
+      </OrangeButton>
+    </Flex>
+  );
+});
+
+const OrangeButton = memo<{
+  children: ReactNode;
+  onClick?: () => void;
+  style?: React.CSSProperties;
+}>(({ children, onClick, style }) => {
+  return (
+    <Flex
+      onClick={onClick}
+      justify="center"
+      align="center"
+      style={{
+        position: "absolute",
+        top: "10px",
+        right: "10px",
+        background: "var(--accent-9)",
+        cursor: "pointer",
+        borderRadius: "20px",
+        border: "1px solid rgba(0, 0, 0, 0.1)",
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+        zIndex: 1000,
+        color: "white",
+        fontSize: "0.9rem",
+        ...style,
+      }}
+    >
+      {children}
     </Flex>
   );
 });
