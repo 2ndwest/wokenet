@@ -39,7 +39,7 @@ const App = memo(() => {
   const { isAuthLoading, isAuthenticated, affiliation, isAdmin } = useAuthStatus();
 
   return (
-    <Flex direction="column" width="100%" height="100vh">
+    <Flex direction="column" width="100%" height="100dvh">
       <Header
         authenticated={isAuthenticated}
         isAuthLoading={isAuthLoading}
