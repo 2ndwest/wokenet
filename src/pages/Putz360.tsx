@@ -139,18 +139,6 @@ export const Putz360 = memo(() => {
           gap: "10px",
         }}
       >
-        {/* Eye button - navigates to Putzopticon */}
-        <Link to="/putzopticon" style={{ textDecoration: "none" }}>
-          <OrangeButton
-            style={{
-              width: "40px",
-              height: "40px",
-            }}
-          >
-            <EyeIcon height="15px" fill="currentColor" />
-          </OrangeButton>
-        </Link>
-
         {/* User count */}
         <OrangeButton
           onClick={refreshLocations}
@@ -160,6 +148,18 @@ export const Putz360 = memo(() => {
         >
           {refetching ? "Refetching..." : `${validLocations.length} / ${locations.length} located`}
         </OrangeButton>
+
+        {/* Eye button - navigates to Putzopticon */}
+        <Link to="/putzopticon" style={{ textDecoration: "none" }}>
+          <OrangeButton
+            style={{
+              width: "40px",
+              height: "40px",
+            }}
+          >
+            <EyeIcon height="17px" fill="currentColor" />
+          </OrangeButton>
+        </Link>
       </Flex>
     </Flex>
   );
