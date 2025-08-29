@@ -2,8 +2,8 @@ html,
 body {
   margin: 0;
   height: 100%;
+  background-color: #111113 !important;
   overflow: hidden;
-  background-color: var(--color-background);
 }
 
 @font-face {
