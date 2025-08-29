@@ -2,7 +2,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background-color: var(--color-background) !important;
+  background-color: #111113; /* Sets IOS status bar color in PWA mode */
   overflow: hidden;
 }
 
