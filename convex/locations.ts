@@ -1,4 +1,4 @@
-import { Infer, v } from "convex/values";
+import { v } from "convex/values";
 import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requirePutz } from "./utils/auth";
