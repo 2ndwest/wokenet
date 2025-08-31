@@ -15,7 +15,7 @@ export const Putz360 = memo(() => {
   const locations = useQuery(api.locations.getLocations);
   const validLocations = useMemo(() => {
     if (!locations) return [];
-    return locations.filter((loc) => !!loc.latitude && !!loc.longitude);
+    return locations.filter((loc) => loc.label !== "UNKNOWN");
   }, [locations]);
 
   const [refetching, setRefetching] = useState(false);

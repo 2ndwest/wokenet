@@ -49,11 +49,7 @@ export const loadLocations = internalAction({
 
 export const getLocations = query({
   args: {},
-  handler: async (
-    ctx
-  ): Promise<
-    (Infer<typeof schema.tables.locations.validator> & { label: string; color: string })[]
-  > => {
+  handler: async (ctx) => {
     await requirePutz(ctx);
 
     const locations = await ctx.db.query("locations").collect();
@@ -62,7 +58,13 @@ export const getLocations = query({
       const [lat, lng] = [location.latitude, location.longitude];
 
       // Invalid location.
-      if (!lat || !lng) return { ...location, label: "UNKNOWN", color: "dimgray" };
+      const ONE_HOUR_MS = 1000 * 60 * 60;
+      if (!lat || !lng || location.timestamp < Date.now() - ONE_HOUR_MS)
+        return {
+          ...location,
+          label: "UNKNOWN",
+          color: "dimgray",
+        };
 
       // Check if point is within any of the labeled polygons.
       for (const feature of locationLabels.features.sort((a, b) => {
