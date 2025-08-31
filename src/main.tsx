@@ -13,6 +13,7 @@ import { dark } from "@clerk/themes";
 import { ConvexReactClient } from "convex/react";
 import { ClerkProvider, useAuth } from "@clerk/clerk-react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { AuthProvider } from "./utils/useAuthStatus";
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 createRoot(document.getElementById("root")!).render(
@@ -30,9 +31,11 @@ createRoot(document.getElementById("root")!).render(
         }}
       >
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
+          <AuthProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </AuthProvider>
         </ConvexProviderWithClerk>
       </ClerkProvider>
     </Theme>

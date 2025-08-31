@@ -41,20 +41,22 @@ export const setupUser = mutation({
 
     if (user !== null) {
       // If we've seen this identity before but the name has changed, patch the value.
-      if (identity.name && user.name !== identity.name)
+      if (identity.name && user.name !== identity.name) {
         await ctx.db.patch(user._id, { name: identity.name });
-      return { affiliation: user.affiliation, isAdmin: user.isAdmin };
+        return { ...user, name: identity.name };
+      }
+      return user;
     }
 
     // If it's a new identity, create a new user.
-    await ctx.db.insert("users", {
+    const userid = await ctx.db.insert("users", {
       name: identity.name ?? identity.email!.split("@")[0], // Use the kerb if the name is not set.
       email: identity.email!,
       affiliation: "NONE",
       isAdmin: false,
     });
 
-    return { affiliation: "NONE" as Affiliation, isAdmin: false };
+    return await ctx.db.get(userid);
   },
 });
 
