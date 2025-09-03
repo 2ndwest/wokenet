@@ -15,7 +15,9 @@ import type {
 } from "convex/server";
 import type * as crons from "../crons.js";
 import type * as googleAuth from "../googleAuth.js";
+import type * as http from "../http.js";
 import type * as locations from "../locations.js";
+import type * as shitMyDadSays from "../shitMyDadSays.js";
 import type * as users from "../users.js";
 import type * as utils_auth from "../utils/auth.js";
 import type * as utils_strings from "../utils/strings.js";
@@ -31,7 +33,9 @@ import type * as utils_strings from "../utils/strings.js";
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   googleAuth: typeof googleAuth;
+  http: typeof http;
   locations: typeof locations;
+  shitMyDadSays: typeof shitMyDadSays;
   users: typeof users;
   "utils/auth": typeof utils_auth;
   "utils/strings": typeof utils_strings;

@@ -25,4 +25,11 @@ export default defineSchema({
     affiliation: AFFILIATION_VALIDATOR,
     isAdmin: v.boolean(),
   }).index("by_email", ["email"]),
+
+  shitMyDadSays: defineTable({
+    timestamp: v.number(),
+    sender: v.string(),
+    quoted: v.string(),
+    quote: v.string(),
+  }).index("by_timestamp", ["timestamp"]),
 });

@@ -22,6 +22,7 @@
     "dotenv": "^16.5.0",
     "google-maps-location-sharing-lib-js": "^0.2.0",
     "leaflet": "^1.9.4",
+    "postal-mime": "^2.4.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-leaflet": "^5.0.0",

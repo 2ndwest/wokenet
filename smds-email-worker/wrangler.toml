@@ -1,0 +1,11 @@
+name = "smds-email-worker"
+main = "src/worker.ts"
+compatibility_date = "2025-01-01"
+
+[observability.logs]
+enabled = false
+
+[vars]
+# Set these via `wrangler secret put` for production
+# WEBHOOK_SECRET = ""
+# CONVEX_INGEST_URL = "https://<your>.convex.site/ingest/dad-sayings"
