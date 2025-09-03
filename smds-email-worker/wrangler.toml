@@ -3,7 +3,7 @@ main = "src/worker.ts"
 compatibility_date = "2025-01-01"
 
 [observability.logs]
-enabled = false
+enabled = true
 
 [vars]
 # Set these via `wrangler secret put` for production
