@@ -5,9 +5,10 @@ import PostalMime from "postal-mime";
 import { stripQuotes } from "./utils/strings";
 
 export const ingestDadSaying = httpAction(async (ctx, req) => {
-  // Set this in the Convex dashboard if this error is firing.
-  if (!process.env.SMDS_WEBHOOK_SECRET)
+  if (!process.env.SMDS_WEBHOOK_SECRET) {
+    console.error("Set SMDS_WEBHOOK_SECRET on the Convex dashboard to enable ingestion!");
     return new Response("SMDS_WEBHOOK_SECRET not set on Convex!", { status: 500 });
+  }
 
   if (req.headers.get("x-webhook-secret") !== process.env.SMDS_WEBHOOK_SECRET)
     return new Response("SMDS_WEBHOOK_SECRET mismatch.", { status: 401 });
