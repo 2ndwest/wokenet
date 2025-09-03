@@ -5,6 +5,7 @@ import PostalMime from "postal-mime";
 import { stripQuotes } from "./utils/strings";
 
 export const ingestDadSaying = httpAction(async (ctx, req) => {
+  // Set this in the Convex dashboard if this error is firing.
   if (!process.env.SMDS_WEBHOOK_SECRET)
     return new Response("SMDS_WEBHOOK_SECRET not set on Convex!", { status: 500 });
 
@@ -13,16 +14,22 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
 
   const parsed = await PostalMime.parse(await req.text());
 
-  if (parsed.inReplyTo) {
-    console.log("Got email in reply to:", parsed.inReplyTo, "(ignoring)");
+  console.log("Parsed email:", parsed);
+
+  if (parsed.to?.[0]?.address !== "shit-my-dad-says@mit.edu") {
+    if (parsed.inReplyTo) {
+      console.log("Email in reply to:", parsed.inReplyTo, "(reply, ignoring)");
+    } else {
+      // Only insert root-level emails, not replies.
+      await ctx.runMutation(internal.shitMyDadSays.insertSaying, {
+        timestamp: parsed.date ? new Date(parsed.date).getTime() : Date.now(),
+        sender: parsed.from?.name.trim() ?? "(missing sender)",
+        quoted: parsed.subject?.trim().toLowerCase() ?? "(missing subject)",
+        quote: stripQuotes(parsed.text?.trim() ?? "(no quote)"),
+      });
+    }
   } else {
-    // Only insert root-level emails, not replies.
-    await ctx.runMutation(internal.shitMyDadSays.insertSaying, {
-      timestamp: parsed.date ? new Date(parsed.date).getTime() : Date.now(),
-      sender: parsed.from?.name.trim() ?? "(missing sender)",
-      quoted: parsed.subject?.trim().toLowerCase() ?? "(missing subject)",
-      quote: stripQuotes(parsed.text?.trim() ?? "(no quote)"),
-    });
+    console.log("Email addressed to:", parsed.to?.[0]?.address, "(improper, ignoring)");
   }
 
   return new Response(null, { status: 200 });
