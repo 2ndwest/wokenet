@@ -17,7 +17,7 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
 
   console.log("Parsed email:", parsed);
 
-  if (parsed.to?.[0]?.address !== "shit-my-dad-says@mit.edu") {
+  if (parsed.to?.[0]?.address === "shit-my-dad-says@mit.edu") {
     if (parsed.inReplyTo) {
       console.log("Email in reply to:", parsed.inReplyTo, "(reply, ignoring)");
     } else {
