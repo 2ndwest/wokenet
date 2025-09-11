@@ -26,7 +26,8 @@ export const Unauthorized = memo(({ authenticated }: { authenticated: boolean })
         </Text>
       ) : (
         <Text align="center" size="4">
-          You're not registered as a Putzen.
+          You're not authorized to access this page. Contact an administrator if you think this is
+          an error.
         </Text>
       )}
     </Flex>
