@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import PostalMime from "postal-mime";
-import { stripQuotes } from "./utils/strings";
+import { stripQuotes, stripOutlookSignature } from "./utils/strings";
 
 export const ingestDadSaying = httpAction(async (ctx, req) => {
   if (!process.env.SMDS_WEBHOOK_SECRET) {
@@ -26,7 +26,9 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
         timestamp: parsed.date ? new Date(parsed.date).getTime() : Date.now(),
         sender: parsed.from?.name.trim() ?? "(missing sender)",
         quoted: parsed.subject?.trim().toLowerCase() ?? "(missing subject)",
-        quote: stripQuotes(parsed.text?.trim() ?? "(no quote)"),
+        quote: stripQuotes(
+          stripOutlookSignature((parsed.text ?? "").trim()).trim() || "(no quote)"
+        ),
       });
     }
   } else {

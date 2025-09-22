@@ -20,3 +20,10 @@ export function stripQuotes(q: string): string {
 
   return s;
 }
+
+export function stripOutlookSignature(text: string): string {
+  // Remove everything starting at the first occurrence of "Get Outlook for" (case-insensitive)
+  const idx = text.toLowerCase().indexOf("get outlook for");
+  const withoutSignature = idx >= 0 ? text.slice(0, idx) : text;
+  return withoutSignature.trim();
+}
