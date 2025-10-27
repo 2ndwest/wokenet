@@ -33,9 +33,15 @@ export const Putzopticon = memo(() => {
             };
           })
           .sort((a, b) => {
+            // Sort by, in order:
+            // 1) color (using COLOR_ORDER)
+            // 2) label (alphabetically)
+            // 3) name (alphabetically)
             const aOrder = COLOR_ORDER.indexOf(a.color);
             const bOrder = COLOR_ORDER.indexOf(b.color);
             if (aOrder !== bOrder) return aOrder - bOrder;
+            const labelCompare = a.label.localeCompare(b.label);
+            if (labelCompare !== 0) return labelCompare;
             return a.name.localeCompare(b.name);
           })
           .map((row) => {
