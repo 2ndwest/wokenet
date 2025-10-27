@@ -1,49 +1,17 @@
 import { v } from "convex/values";
-import { internalAction, internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requirePutz } from "./utils/auth";
-import { titleCase } from "./utils/strings";
 import { booleanPointInPolygon } from "@turf/turf";
 import locationLabels from "./utils/location_labels.json"; // Edit this on geojson.io
 import schema from "./schema";
-import { getGoogleMapsSharedPeople } from "google-maps-location-sharing-lib-js";
-import { GOOGLE_AUTH_USER } from "./googleAuth";
 
 export const refetchLocations = mutation({
   args: {},
   handler: async (ctx) => {
-    await requirePutz(ctx); // Avoid spamming Google Maps API.
+    await requirePutz(ctx); // Avoid spamming the location provider.
 
-    await ctx.scheduler.runAfter(0, internal.locations.loadLocations);
-  },
-});
-
-export const loadLocations = internalAction({
-  args: {},
-  handler: async (ctx) => {
-    const cookies = await ctx.runQuery(internal.googleAuth.getGoogleAuthCookies);
-
-    const { people, newCookies } = await getGoogleMapsSharedPeople(
-      new Map(cookies.map((cookie) => [cookie.name, cookie.value])),
-      GOOGLE_AUTH_USER
-    );
-
-    await ctx.runMutation(internal.googleAuth.setGoogleAuthCookies, {
-      cookies: Array.from(newCookies.entries()).map(([name, value]) => ({ name, value })),
-    });
-
-    await ctx.runMutation(internal.locations.setLocations, {
-      locations: people.map((person) => {
-        return {
-          name: titleCase(person.nickname ?? "Unknown"),
-          latitude: person.latitude ? Number(person.latitude) : undefined,
-          longitude: person.longitude ? Number(person.longitude) : undefined,
-          providerId: person.id ?? "UNKNOWN_ID",
-          timestamp: Number(person.timestamp ?? 0),
-          accuracy: Number(person.accuracy ?? -1),
-        };
-      }),
-    });
+    await ctx.scheduler.runAfter(0, internal.loadLocations.loadLocations);
   },
 });
 
