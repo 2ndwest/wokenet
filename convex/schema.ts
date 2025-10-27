@@ -8,8 +8,8 @@ export default defineSchema({
   locations: defineTable({
     name: v.string(),
     providerId: v.string(),
-    latitude: v.optional(v.number()),
-    longitude: v.optional(v.number()),
+    latitude: v.number(),
+    longitude: v.number(),
     timestamp: v.number(),
     accuracy: v.number(),
   }).index("by_providerId", ["providerId"]),
