@@ -17,29 +17,41 @@ export const loadLocations = internalAction({
     if (!response.ok) throw new Error("Failed to fetch location data.");
     const data = (await response.json()) as {
       members: Array<{
-        id?: string;
-        firstName?: string;
-        location?: {
-          latitude?: number;
-          longitude?: number;
-          timestamp?: number;
-          accuracy?: number;
+        id: string;
+        firstName: string;
+        features: {
+          shareLocation: "1" | "0";
+          disconnected: "1" | "0";
+          shareOffTimestamp: string | null;
         };
+        location: {
+          latitude: string;
+          longitude: string;
+          timestamp: string;
+          accuracy: string;
+          battery: string;
+        } | null;
       }>;
     };
 
     // Map raw member data to our locations format.
-    const locations = data.members.map((member) => {
-      const location = member.location;
-      return {
-        name: titleCase(member.firstName || "UNKNOWN_NAME"),
-        latitude: location?.latitude ? Number(location.latitude) : undefined,
-        longitude: location?.longitude ? Number(location.longitude) : undefined,
-        providerId: member.id ?? "UNKNOWN_ID",
-        timestamp: location?.timestamp ? Number(location.timestamp) * 1000 : 0, // Life360 uses seconds, convert to ms
-        accuracy: location?.accuracy ? Number(location.accuracy) : -1,
-      };
-    });
+    const locations = data.members
+      .filter(
+        (member) =>
+          member.location &&
+          member.features.shareLocation === "1" &&
+          member.features.disconnected === "0"
+      )
+      .map(({ location, id, firstName }) => {
+        return {
+          providerId: id,
+          name: titleCase(firstName),
+          latitude: Number(location!.latitude),
+          longitude: Number(location!.longitude),
+          timestamp: Number(location!.timestamp) * 1000, // convert to ms
+          accuracy: Number(location!.accuracy),
+        };
+      });
 
     await ctx.runMutation(internal.locations.setLocations, { locations });
   },

@@ -9,7 +9,7 @@ import { EyeIcon } from "../utils/icons";
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
 
-const LOCATION_RADIUS_THRESHOLD = 30;
+const LOCATION_RADIUS_THRESHOLD = 15;
 
 export const Putz360 = memo(() => {
   const locations = useQuery(api.locations.getLocations);
