@@ -45,7 +45,9 @@ export const loadLocations = internalAction({
       .map(({ location, id, firstName }) => {
         return {
           providerId: id,
-          name: titleCase(firstName),
+          // Split off just the first word in case people
+          // enter their full name in the first name field.
+          name: titleCase(firstName.split(" ")[0]).trim(),
           latitude: Number(location!.latitude),
           longitude: Number(location!.longitude),
           timestamp: Number(location!.timestamp) * 1000, // convert to ms
