@@ -32,9 +32,6 @@ importers:
       dotenv:
         specifier: ^16.5.0
         version: 16.5.0
-      google-maps-location-sharing-lib-js:
-        specifier: ^0.2.0
-        version: 0.2.0
       leaflet:
         specifier: ^1.9.4
         version: 1.9.4
@@ -2182,10 +2179,6 @@ packages:
     resolution: {integrity: sha512-O+7l9tPdHCU320IigZZPj5zmRCFG9xHmx9cU8FqU2Rp+JN714seHV+2S9+JslCpY4gJwU2vOGox0wzgae/MCEg==}
     engines: {node: '>=18'}
 
-  google-maps-location-sharing-lib-js@0.2.0:
-    resolution: {integrity: sha512-wjQ8VBsuHvKiLxEOZQsU2IbTpgnFIpFF16XzUX6EaDKkcWK0R02ClPp9ukSCszAotMIlwscWxumQsM8MJiX3+A==}
-    engines: {node: '>=18'}
-
   graphemer@1.4.0:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
 
@@ -2594,10 +2587,6 @@ packages:
 
   undici-types@7.8.0:
     resolution: {integrity: sha512-9UJ2xGDvQ43tYyVMpuHlsgApydB8ZKfVYTsLDhXkFL/6gfkp+U8xTGdh8pMJv1SpZna0zxG1DwsKZsreLbXBxw==}
-
-  undici@6.21.3:
-    resolution: {integrity: sha512-gBLkYIlEnSp8pFbT64yFgGE6UIB9tAkhukC23PmMDCe5Nd+cRqKxSjw5y54MK2AZMgZfJWMaNE4nYUHgi1XEOw==}
-    engines: {node: '>=18.17'}
 
   update-browserslist-db@1.1.3:
     resolution: {integrity: sha512-UxhIZQ+QInVdunkDAaiazvvT/+fXL5Osr0JZlJulepYu6Jd7qJtDZjlur0emRlT71EN3ScPoE7gvsuIKKNavKw==}
@@ -5514,11 +5503,6 @@ snapshots:
 
   globals@16.2.0: {}
 
-  google-maps-location-sharing-lib-js@0.2.0:
-    dependencies:
-      set-cookie-parser: 2.7.1
-      undici: 6.21.3
-
   graphemer@1.4.0: {}
 
   has-flag@4.0.0: {}
@@ -5923,8 +5907,6 @@ snapshots:
   typescript@5.8.3: {}
 
   undici-types@7.8.0: {}
-
-  undici@6.21.3: {}
 
   update-browserslist-db@1.1.3(browserslist@4.25.0):
     dependencies:
