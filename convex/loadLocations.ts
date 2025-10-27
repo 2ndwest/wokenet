@@ -5,12 +5,13 @@ import { titleCase } from "./utils/strings";
 export const loadLocations = internalAction({
   args: {},
   handler: async (ctx) => {
-    if (!process.env.LOCATION_PROVIDER_URL || !process.env.LOCATION_PROVIDER_FILE_KEY)
-      throw new Error("LOCATION_PROVIDER_URL or LOCATION_PROVIDER_FILE_KEY not set.");
+    if (!process.env.LOCATION_PROVIDER_URL || !process.env.LOCATION_PROVIDER_USERNAME_PASSWORD)
+      throw new Error("LOCATION_PROVIDER_URL or LOCATION_PROVIDER_USERNAME_PASSWORD not set.");
 
     // Fetch location data from the location provider.
     const response = await fetch(process.env.LOCATION_PROVIDER_URL, {
-      headers: { "x-file-key": process.env.LOCATION_PROVIDER_FILE_KEY },
+      // LOCATION_PROVIDER_USERNAME_PASSWORD = username:password (eg. "wokenet:abcd1234")
+      headers: { Authorization: `Basic ${btoa(process.env.LOCATION_PROVIDER_USERNAME_PASSWORD)}` },
     });
 
     if (!response.ok) throw new Error("Failed to fetch location data.");
