@@ -15,7 +15,7 @@ export const ShitMyDadSays = memo(() => {
 
   return (
     <Flex direction="column" width="100%" height="100%" p="5" align="center">
-      <Flex direction="column" width="100%" style={{ maxWidth: 1100 }} gap="5">
+      <Flex direction="column" width="100%" style={{ maxWidth: 1100 }} gap="5" pb="5">
         <Heading size="8">Shit My Dad Says:</Heading>
 
         {sayings === undefined ? (
