@@ -25,7 +25,7 @@ export const getLocations = query({
     return locations.map((location) => {
       const [lat, lng] = [location.latitude, location.longitude];
 
-      // Stale locations get labeled as UNKNOWN.
+      // Stale or invalid locations get labeled as UNKNOWN.
       const THREE_HOURS_MS = 1000 * 60 * 60 * 3;
       if (!lat || !lng || location.timestamp < Date.now() - THREE_HOURS_MS)
         return {
