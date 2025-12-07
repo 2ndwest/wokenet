@@ -14,6 +14,11 @@ setInterval(async () => {
   } catch {}
 }, 30_000);
 
+// Refresh every hour just in case.
+setInterval(() => {
+  location.reload();
+}, 60 * 60_1000);
+
 import "@radix-ui/themes/styles.css";
 import { Theme } from "@radix-ui/themes";
 
