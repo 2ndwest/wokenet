@@ -72,3 +72,15 @@ body {
 .leaflet-control-attribution {
   display: none;
 }
+
+@keyframes locationRefresh {
+  0% {
+    filter: brightness(1) saturate(1);
+  }
+  15% {
+    filter: brightness(1.4) saturate(1.3);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}

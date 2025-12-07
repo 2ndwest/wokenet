@@ -1,16 +1,36 @@
 import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 
 const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgray"];
 
+const SCAN_ANIMATION_DURATION = 600; // ms
+const SCAN_FREQUENCY = 650; // ms
+
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
 
   const [autoAnimate] = useAutoAnimate();
+
+  // Track which person is currently being "scanned" for location refresh effect.
+  const [scanningIndex, setScanningIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!data || data.length === 0) return;
+
+    const interval = setInterval(() => {
+      // Pick a random person.
+      setScanningIndex(Math.floor(Math.random() * data.length));
+
+      // Clear the scanning state after animation completes.
+      setTimeout(() => setScanningIndex(null), SCAN_ANIMATION_DURATION);
+    }, SCAN_FREQUENCY);
+
+    return () => clearInterval(interval);
+  }, [data]);
 
   return (
     <Flex
@@ -52,7 +72,7 @@ export const Putzopticon = memo(() => {
                 color={row.color}
                 label={row.label}
                 height="100%" // Let the CSS engine deal with this.
-                index={index}
+                isScanning={scanningIndex == index}
               />
             );
           })
@@ -69,16 +89,15 @@ export const PersonRow = memo(
     color,
     label,
     height,
-    index = 0,
+    isScanning = false,
   }: {
     name: string;
     color: string;
     label: string;
     height: string;
-    index?: number;
+    isScanning?: boolean;
   }) => {
-    // Suppress unused variable warning for now
-    void index;
+    const isUnknown = label === "UNKNOWN";
 
     return (
       <Flex
@@ -87,7 +106,11 @@ export const PersonRow = memo(
         width="100%"
         style={{
           // Can't use opacity it messes with the AutoAnimate.
-          filter: label === "UNKNOWN" ? "brightness(0.3)" : "none",
+          filter: isUnknown ? "brightness(0.3)" : "none",
+          animation:
+            isScanning && !isUnknown
+              ? `locationRefresh ${SCAN_ANIMATION_DURATION}ms ease-out`
+              : "none",
         }}
       >
         <Flex
