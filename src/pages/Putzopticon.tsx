@@ -44,7 +44,7 @@ export const Putzopticon = memo(() => {
 
   return (
     <Flex direction="column" width="100%" height="100%" overflow="hidden">
-      <SMDSMarquee />
+      <SMDSMarquee height={`${100 / (data ? data.length + 1 : 1)}%`} />
 
       <Flex
         ref={autoAnimate}
@@ -160,7 +160,7 @@ export const PersonRow = memo(
   }
 );
 
-const SMDSMarquee = memo(() => {
+const SMDSMarquee = memo(({ height }: { height: string }) => {
   const sayings = useQuery(api.shitMyDadSays.getSayings);
 
   const latestQuotes = useMemo(() => {
@@ -173,12 +173,14 @@ const SMDSMarquee = memo(() => {
   return (
     <Flex
       width="100%"
-      height="32px"
+      height={height}
       flexShrink="0"
       align="center"
       overflow="hidden"
       style={{
+        containerType: "size",
         backgroundColor: "rgba(255, 102, 0, 0.15)",
+        borderTop: "1px solid rgba(255, 102, 0, 0.3)",
         borderBottom: "1px solid rgba(255, 102, 0, 0.3)",
       }}
     >
@@ -197,7 +199,7 @@ const SMDSMarquee = memo(() => {
               display: "inline-flex",
               alignItems: "center",
               fontFamily: "Mondwest",
-              fontSize: "16px",
+              fontSize: "60cqh",
             }}
           >
             {latestQuotes.map((quote, i) => (
