@@ -189,6 +189,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
           display: "flex",
           whiteSpace: "nowrap",
           animation: "marquee 60s linear infinite",
+          willChange: "transform",
         }}
       >
         {/* Duplicate content for seamless loop */}
