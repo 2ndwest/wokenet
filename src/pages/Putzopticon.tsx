@@ -9,7 +9,7 @@ const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgra
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
-const SMDS_MARQUEE_COUNT = 10; // Number of SMDS quotes to show in marquee
+const SMDS_MARQUEE_COUNT = 15; // n most recent smds
 
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
