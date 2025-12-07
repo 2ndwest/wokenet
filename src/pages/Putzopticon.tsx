@@ -4,12 +4,28 @@ import { useQuery } from "convex/react";
 import { memo, useEffect, useState, useMemo, createElement } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
+import { toMins } from "../utils/time";
 
 const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgray"];
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
 const SMDS_MARQUEE_COUNT = 15; // n most recent smds
+
+// Blackout periods for SMDS marquee (eastern time, 24h format)
+const SMDS_BLACKOUTS = [
+  ["09:00", "11:45"], // facilities
+  ["23:30", "01:00"], // nightwatch sweep 1
+  ["03:00", "06:00"], // nightwatch sweep 2
+];
+
+const isInSMDSBlackout = (): boolean => {
+  const now = new Date().getHours() * 60 + new Date().getMinutes();
+  return SMDS_BLACKOUTS.some(([startStr, endStr]) => {
+    const [start, end] = [toMins(startStr), toMins(endStr)];
+    return end < start ? now >= start || now < end : now >= start && now < end;
+  });
+};
 
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
@@ -168,7 +184,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
     return sayings.slice(0, SMDS_MARQUEE_COUNT);
   }, [sayings]);
 
-  if (latestQuotes.length === 0) return null;
+  if (latestQuotes.length === 0 || isInSMDSBlackout()) return null;
 
   return (
     <Flex
