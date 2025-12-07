@@ -85,8 +85,6 @@ export const PersonRow = memo(
         style={{
           // Can't use opacity it messes with the AutoAnimate.
           filter: label === "UNKNOWN" ? "brightness(0.3)" : "none",
-          animation: "colorPulse 4s ease-in-out infinite",
-          animationDelay: `${(index * 0.3) % 4}s`,
         }}
       >
         <Flex
@@ -99,15 +97,7 @@ export const PersonRow = memo(
             fontWeight: "bold",
           }}
         >
-          <span
-            style={{
-              fontSize: "min(85cqh, 25cqw)",
-              animation: "float 5s ease-in-out infinite",
-              animationDelay: `${(index * 0.7) % 5}s`,
-            }}
-          >
-            {name}
-          </span>
+          <span style={{ fontSize: "min(85cqh, 25cqw)" }}>{name}</span>
         </Flex>
 
         <Flex
