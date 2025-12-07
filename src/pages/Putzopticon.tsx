@@ -7,26 +7,35 @@ import { CenterSpinner } from "../utils/spinner";
 
 const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgray"];
 
-const SCAN_ANIMATION_DURATION = 600; // ms
-const SCAN_FREQUENCY = 650; // ms
+const SCAN_ANIMATION_DURATION = 750; // ms
+const SCAN_FREQUENCY = 200; // ms
 
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
 
   const [autoAnimate] = useAutoAnimate();
 
-  // Track which person is currently being "scanned" for location refresh effect.
-  const [scanningIndex, setScanningIndex] = useState<number | null>(null);
+  // Track which people are currently being "scanned" for location refresh effect.
+  const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!data || data.length === 0) return;
 
     const interval = setInterval(() => {
       // Pick a random person.
-      setScanningIndex(Math.floor(Math.random() * data.length));
+      const randomIndex = Math.floor(Math.random() * data.length);
 
-      // Clear the scanning state after animation completes.
-      setTimeout(() => setScanningIndex(null), SCAN_ANIMATION_DURATION);
+      // Add them to the scanning set.
+      setScanningIndices((prev) => new Set(prev).add(randomIndex));
+
+      // Remove them from the set after animation completes.
+      setTimeout(() => {
+        setScanningIndices((prev) => {
+          const next = new Set(prev);
+          next.delete(randomIndex);
+          return next;
+        });
+      }, SCAN_ANIMATION_DURATION);
     }, SCAN_FREQUENCY);
 
     return () => clearInterval(interval);
@@ -72,7 +81,7 @@ export const Putzopticon = memo(() => {
                 color={row.color}
                 label={row.label}
                 height="100%" // Let the CSS engine deal with this.
-                isScanning={scanningIndex == index}
+                isScanning={scanningIndices.has(index)}
               />
             );
           })
