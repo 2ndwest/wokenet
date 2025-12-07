@@ -44,7 +44,7 @@ export const Putzopticon = memo(() => {
             if (labelCompare !== 0) return labelCompare;
             return a.name.localeCompare(b.name);
           })
-          .map((row) => {
+          .map((row, index) => {
             return (
               <PersonRow
                 key={row.name}
@@ -52,6 +52,7 @@ export const Putzopticon = memo(() => {
                 color={row.color}
                 label={row.label}
                 height="100%" // Let the CSS engine deal with this.
+                index={index}
               />
             );
           })
@@ -68,11 +69,13 @@ export const PersonRow = memo(
     color,
     label,
     height,
+    index = 0,
   }: {
     name: string;
     color: string;
     label: string;
     height: string;
+    index?: number;
   }) => {
     return (
       <Flex
