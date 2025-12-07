@@ -77,6 +77,9 @@ export const PersonRow = memo(
     height: string;
     index?: number;
   }) => {
+    // Suppress unused variable warning for now
+    void index;
+
     return (
       <Flex
         direction="row"

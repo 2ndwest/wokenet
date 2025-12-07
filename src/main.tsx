@@ -4,6 +4,17 @@ import App from "./App.tsx";
 
 import "./index.css";
 
+// Auto refresh on new deployments.
+let buildId: string;
+setInterval(async () => {
+  try {
+    const r = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" });
+    const d = await r.json();
+    if (buildId && d.buildId !== buildId) location.reload();
+    buildId = d.buildId;
+  } catch {}
+}, 30_000);
+
 import "@radix-ui/themes/styles.css";
 import { Theme } from "@radix-ui/themes";
 
