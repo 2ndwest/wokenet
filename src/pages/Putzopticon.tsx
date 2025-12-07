@@ -13,18 +13,20 @@ const SCAN_FREQUENCY = 200; // ms
 const SMDS_MARQUEE_COUNT = 15; // n most recent smds
 
 // Blackout periods for SMDS marquee (eastern time, 24h format)
-const SMDS_BLACKOUTS = [
-  ["09:00", "11:45"], // facilities
-  ["23:30", "01:00"], // nightwatch sweep 1
-  ["03:00", "06:00"], // nightwatch sweep 2
+const SMDS_BLACKOUTS: [string, string, string][] = [
+  ["09:00", "13:00", "Good morning and afternoon Olair! Putz is grateful for your hard work."],
+  ["23:00", "01:00", "Good evening night watch! Thank you for helping keep us safe."],
+  ["03:00", "06:00", "Good morning night watch! Thank you for helping keep us safe."],
 ];
 
-const isInSMDSBlackout = (): boolean => {
+const getSMDSBlackoutMessage = (): string | null => {
   const now = new Date().getHours() * 60 + new Date().getMinutes();
-  return SMDS_BLACKOUTS.some(([startStr, endStr]) => {
+  for (const [startStr, endStr, message] of SMDS_BLACKOUTS) {
     const [start, end] = [toMins(startStr), toMins(endStr)];
-    return end < start ? now >= start || now < end : now >= start && now < end;
-  });
+    const isInRange = end < start ? now >= start || now < end : now >= start && now < end;
+    if (isInRange) return message;
+  }
+  return null;
 };
 
 export const Putzopticon = memo(() => {
@@ -184,7 +186,9 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
     return sayings.slice(0, SMDS_MARQUEE_COUNT);
   }, [sayings]);
 
-  if (latestQuotes.length === 0 || isInSMDSBlackout()) return null;
+  const blackoutMessage = getSMDSBlackoutMessage();
+
+  if (latestQuotes.length === 0 && !blackoutMessage) return null;
 
   return (
     <Flex
@@ -192,6 +196,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
       height={height}
       flexShrink="0"
       align="center"
+      justify="center"
       overflow="hidden"
       style={{
         containerType: "size",
@@ -200,32 +205,45 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
         borderBottom: "1px solid rgba(255, 102, 0, 0.3)",
       }}
     >
-      <Marquee scrollamount={4}>
+      {blackoutMessage ? (
         <span
           style={{
-            display: "inline-flex",
-            alignItems: "center",
             fontFamily: "Mondwest",
             fontSize: "60cqh",
+            textAlign: "center",
           }}
         >
-          {latestQuotes.map((quote, i) => (
-            <span
-              key={i}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "1em",
-                paddingRight: "3em",
-                color: "rgba(255, 102, 0, 0.9)",
-              }}
-            >
-              <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
-              <span style={{ opacity: 0.5 }}>— {quote.quoted}</span>
-            </span>
-          ))}
+          {blackoutMessage}
         </span>
-      </Marquee>
+      ) : (
+        <Marquee scrollamount={4}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              fontFamily: "Mondwest",
+              fontSize: "60cqh",
+            }}
+          >
+            {latestQuotes.map((quote, i) => (
+              <span
+                key={i}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "1em",
+                  paddingRight: "3em",
+                }}
+              >
+                <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
+                <span style={{ opacity: 0.5, color: "rgba(255, 102, 0, 0.9)" }}>
+                  — {quote.quoted}
+                </span>
+              </span>
+            ))}
+          </span>
+        </Marquee>
+      )}
     </Flex>
   );
 });
