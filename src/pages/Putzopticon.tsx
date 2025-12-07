@@ -1,7 +1,7 @@
 import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, useMemo } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 
@@ -9,6 +9,7 @@ const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgra
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
+const SMDS_MARQUEE_COUNT = 10; // Number of SMDS quotes to show in marquee
 
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
@@ -42,52 +43,56 @@ export const Putzopticon = memo(() => {
   }, [data]);
 
   return (
-    <Flex
-      ref={autoAnimate}
-      direction="column"
-      width="100%"
-      height="100%"
-      gap="0.4%"
-      px="8px"
-      py="8px"
-      overflow="hidden"
-    >
-      {data ? (
-        data
-          .map(({ label, color, name }) => {
-            return {
-              name,
-              color,
-              label,
-            };
-          })
-          .sort((a, b) => {
-            // Sort by, in order:
-            // 1) color (using COLOR_ORDER)
-            // 2) label (alphabetically)
-            // 3) name (alphabetically)
-            const aOrder = COLOR_ORDER.indexOf(a.color);
-            const bOrder = COLOR_ORDER.indexOf(b.color);
-            if (aOrder !== bOrder) return aOrder - bOrder;
-            const labelCompare = a.label.localeCompare(b.label);
-            if (labelCompare !== 0) return labelCompare;
-            return a.name.localeCompare(b.name);
-          })
-          .map((row, index) => {
-            return (
-              <PersonRow
-                key={row.name}
-                name={row.name}
-                color={row.color}
-                label={row.label}
-                height="100%" // Let the CSS engine deal with this.
-                isScanning={scanningIndices.has(index)}
-              />
-            );
-          })
-      ) : (
-        <CenterSpinner />
-      )}
+    <Flex direction="column" width="100%" height="100%" overflow="hidden">
+      <SMDSMarquee />
+
+      <Flex
+        ref={autoAnimate}
+        direction="column"
+        width="100%"
+        flexGrow="1"
+        gap="0.4%"
+        px="8px"
+        py="8px"
+        overflow="hidden"
+      >
+        {data ? (
+          data
+            .map(({ label, color, name }) => {
+              return {
+                name,
+                color,
+                label,
+              };
+            })
+            .sort((a, b) => {
+              // Sort by, in order:
+              // 1) color (using COLOR_ORDER)
+              // 2) label (alphabetically)
+              // 3) name (alphabetically)
+              const aOrder = COLOR_ORDER.indexOf(a.color);
+              const bOrder = COLOR_ORDER.indexOf(b.color);
+              if (aOrder !== bOrder) return aOrder - bOrder;
+              const labelCompare = a.label.localeCompare(b.label);
+              if (labelCompare !== 0) return labelCompare;
+              return a.name.localeCompare(b.name);
+            })
+            .map((row, index) => {
+              return (
+                <PersonRow
+                  key={row.name}
+                  name={row.name}
+                  color={row.color}
+                  label={row.label}
+                  height="100%" // Let the CSS engine deal with this.
+                  isScanning={scanningIndices.has(index)}
+                />
+              );
+            })
+        ) : (
+          <CenterSpinner />
+        )}
+      </Flex>
     </Flex>
   );
 });
@@ -154,3 +159,65 @@ export const PersonRow = memo(
     );
   }
 );
+
+const SMDSMarquee = memo(() => {
+  const sayings = useQuery(api.shitMyDadSays.getSayings);
+
+  const latestQuotes = useMemo(() => {
+    if (!sayings || sayings.length === 0) return [];
+    return sayings.slice(0, SMDS_MARQUEE_COUNT);
+  }, [sayings]);
+
+  if (latestQuotes.length === 0) return null;
+
+  return (
+    <Flex
+      width="100%"
+      height="32px"
+      flexShrink="0"
+      align="center"
+      overflow="hidden"
+      style={{
+        backgroundColor: "rgba(255, 102, 0, 0.15)",
+        borderBottom: "1px solid rgba(255, 102, 0, 0.3)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          whiteSpace: "nowrap",
+          animation: "marquee 60s linear infinite",
+        }}
+      >
+        {/* Duplicate content for seamless loop */}
+        {[0, 1].map((dupeIndex) => (
+          <span
+            key={dupeIndex}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              fontFamily: "Mondwest",
+              fontSize: "16px",
+            }}
+          >
+            {latestQuotes.map((quote, i) => (
+              <span
+                key={i}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "1em",
+                  paddingRight: "3em",
+                  color: "rgba(255, 102, 0, 0.9)",
+                }}
+              >
+                <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
+                <span style={{ opacity: 0.5 }}>— {quote.quoted}</span>
+              </span>
+            ))}
+          </span>
+        ))}
+      </div>
+    </Flex>
+  );
+});
