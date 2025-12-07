@@ -1,7 +1,7 @@
 import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo, useEffect, useState, useMemo } from "react";
+import { memo, useEffect, useState, useMemo, createElement } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 
@@ -184,43 +184,45 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
         borderBottom: "1px solid rgba(255, 102, 0, 0.3)",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          whiteSpace: "nowrap",
-          animation: "marquee 60s linear infinite",
-          willChange: "transform",
-        }}
-      >
-        {/* Duplicate content for seamless loop */}
-        {[0, 1].map((dupeIndex) => (
-          <span
-            key={dupeIndex}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              fontFamily: "Mondwest",
-              fontSize: "60cqh",
-            }}
-          >
-            {latestQuotes.map((quote, i) => (
-              <span
-                key={i}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "1em",
-                  paddingRight: "3em",
-                  color: "rgba(255, 102, 0, 0.9)",
-                }}
-              >
-                <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
-                <span style={{ opacity: 0.5 }}>— {quote.quoted}</span>
-              </span>
-            ))}
-          </span>
-        ))}
-      </div>
+      <Marquee scrollamount={4}>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            fontFamily: "Mondwest",
+            fontSize: "60cqh",
+          }}
+        >
+          {latestQuotes.map((quote, i) => (
+            <span
+              key={i}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "1em",
+                paddingRight: "3em",
+                color: "rgba(255, 102, 0, 0.9)",
+              }}
+            >
+              <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
+              <span style={{ opacity: 0.5 }}>— {quote.quoted}</span>
+            </span>
+          ))}
+        </span>
+      </Marquee>
     </Flex>
   );
 });
+
+const Marquee = ({
+  children,
+  scrollamount,
+}: {
+  children: React.ReactNode;
+  scrollamount?: number;
+}) =>
+  createElement(
+    "marquee",
+    { scrollamount, style: { display: "flex", alignItems: "center" } },
+    children
+  );
