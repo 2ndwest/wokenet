@@ -8,8 +8,7 @@ import "./index.css";
 let buildId: string;
 setInterval(async () => {
   try {
-    const r = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" });
-    const d = await r.json();
+    const d = await (await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" })).json();
     if (buildId && d.buildId !== buildId) location.reload();
     buildId = d.buildId;
   } catch {}
