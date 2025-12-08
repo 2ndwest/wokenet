@@ -5,7 +5,7 @@ const crons = cronJobs();
 
 crons.interval(
   "load locations",
-  { minutes: 1 }, // every minute
+  { seconds: 30 }, // every 30 seconds
   internal.loadLocations.loadLocations
 );
 
