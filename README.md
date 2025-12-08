@@ -9,7 +9,7 @@ monorepo for t11s' putz-related web services
 3) Login to/create a convex account (`convex login` and follow the instructions). Create a new project called `wokenet`.
 4) [Create a Clerk account](https://dashboard.clerk.com) if you don't already have one, and make a new application, also called `wokenet`.
 5) Copy env template: `cp .env.example .env.local`.
-6) Go to your Clerk app to get your Frontend API Url and publishable key (Application -> Configure -> API keys). Set them to `VITE_CLERK_FRONTEND_API_URL` and `VITE_CLERK_PUBLISHABLE_KEY` respectively.
+6) Go to your Clerk app to get your frontend api url and publishable key (Application -> Configure -> API keys). Set them to `VITE_CLERK_FRONTEND_API_URL` and `VITE_CLERK_PUBLISHABLE_KEY` respectively.
 7) Setup a JWT template for your Convex project. Go to Application -> Configure -> Sessions -> JWT templates, click "Add new template", title it `convex`, and use the Convex template. Click save.
 7) Open your Convex project and get the development key (in the dropdown next to the project dropdown, of the form `{adjective}-{animal}-###}`). Use that to populate the `CONVEX_DEPLOYMENT` environment variable (`dev:...`)
 8) Install deps: `pnpm install`.
