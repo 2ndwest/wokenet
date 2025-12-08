@@ -16,4 +16,4 @@ monorepo for t11s' putz-related web services
 9) Run Convex backend: `pnpm convex:dev`. If it says you need to add an environment key, click the link and do that. Leave this running.
 10) In another terminal, run the frontend: `pnpm dev` → open http://localhost:5173 and create an account.
 11) By default, this user won't be authorized to view any of the pages. Fix this by modifying your user in the Convex table to have `affiliation` `"PUTZ"` and `isAdmin` `true`. You should now have wokenet up and running locally
-12) If you wanna use test it with live location data talk to ben idk.
+12) If you want to test with live location data, ask t11s.
