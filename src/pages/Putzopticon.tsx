@@ -15,7 +15,7 @@ const SMDS_MARQUEE_COUNT = 50; // n most recent smds
 // Blackout periods for SMDS marquee (eastern time, 24h format)
 const SMDS_BLACKOUTS: [string, string, string][] = [
   ["09:00", "13:00", "Good morning and afternoon Olair! Putz is grateful for your hard work."],
-  ["23:00", "01:00", "Good evening night watch! Thank you for helping keep us safe."],
+  ["23:30", "01:30", "Good evening night watch! Thank you for helping keep us safe."],
   ["03:00", "06:00", "Good morning night watch! Thank you for helping keep us safe."],
 ];
 
@@ -186,7 +186,17 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
     return sayings.slice(0, SMDS_MARQUEE_COUNT);
   }, [sayings]);
 
-  const blackoutMessage = getSMDSBlackoutMessage();
+  // Null if not in a blackout period.
+  const [blackoutMessage, setBlackoutMessage] = useState(getSMDSBlackoutMessage);
+
+  // Update blackout message every couple of minutes.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setBlackoutMessage(getSMDSBlackoutMessage());
+    }, 5 * 60_000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, []);
 
   if (latestQuotes.length === 0 && !blackoutMessage) return null;
 
