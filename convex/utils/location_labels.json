@@ -141,7 +141,8 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Wood"
+        "name": "Wood",
+        "color": "green"
       },
       "geometry": {
         "type": "Polygon",
@@ -171,7 +172,8 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Hayden"
+        "name": "Hayden",
+        "color": "green"
       },
       "geometry": {
         "type": "Polygon",
@@ -201,7 +203,8 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Munroe"
+        "name": "Munroe",
+        "color": "green"
       },
       "geometry": {
         "type": "Polygon",
@@ -231,7 +234,8 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Goodale"
+        "name": "Goodale",
+        "color": "green"
       },
       "geometry": {
         "type": "Polygon",
@@ -247,7 +251,8 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Bemis"
+        "name": "Bemis",
+        "color": "green"
       },
       "geometry": {
         "type": "Polygon",
@@ -263,7 +268,8 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Walcott"
+        "name": "Walcott",
+        "color": "green"
       },
       "geometry": {
         "type": "Polygon",
