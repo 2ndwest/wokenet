@@ -47,11 +47,6 @@ const PersonRows = memo(
   }: {
     data: NonNullable<ReturnType<typeof useQuery<typeof api.locations.getLocations>>>;
   }) => {
-    const [autoAnimate] = useAutoAnimate();
-
-    // Track which people are currently being "scanned" for location refresh effect.
-    const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
-
     const sortedData = useMemo(
       () =>
         data
@@ -70,6 +65,9 @@ const PersonRows = memo(
           }),
       [data]
     );
+
+    // Track which people are currently being "scanned" for location refresh effect.
+    const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
     useEffect(() => {
       if (sortedData.length === 0) return;
@@ -93,6 +91,8 @@ const PersonRows = memo(
 
       return () => clearInterval(interval);
     }, [sortedData]);
+
+    const [autoAnimate] = useAutoAnimate();
 
     return (
       <Flex
