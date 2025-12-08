@@ -2,7 +2,7 @@
 
 monorepo for t11s' putz-related web services
 
-## Quick start
+## quickstart
 
 1) Install: Node 18+ (or 20), `pnpm`, `convex` CLI (`npm i -g convex`).
 2) Wokenet uses Convex for the db and Clerk for auth. You'll need accounts for both.
