@@ -12,7 +12,7 @@ setInterval(async () => {
     if (buildId && d.buildId !== buildId) location.reload();
     buildId = d.buildId;
   } catch {}
-}, 30_000);
+}, 60_000);
 
 // Refresh every 30 minutes just in case.
 setInterval(() => {
