@@ -34,13 +34,8 @@ export const getLocations = query({
           color: "dimgray",
         };
 
-      // Check if point is within any of the labeled polygons.
-      for (const feature of locationLabels.features.sort((a, b) => {
-        // If feature has matchLast: true, sort it to the back.
-        if (a.properties.matchLast && !b.properties.matchLast) return 1;
-        if (!a.properties.matchLast && b.properties.matchLast) return -1;
-        return 0;
-      })) {
+      // Check if point is within any of the labeled polygons (lower id = higher priority).
+      for (const feature of locationLabels.features.sort((a, b) => a.id - b.id)) {
         // Note: GeoJSON uses [lng, lat] ordering.
         if (booleanPointInPolygon([lng, lat], feature as any)) {
           return {
