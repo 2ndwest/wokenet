@@ -9,7 +9,7 @@ import { toMins } from "../utils/time";
 const COLOR_ORDER = [
   "green",
   "darkgreen",
-  "darkorange",
+  "orange",
   "purple",
   "blue",
   "gray",
