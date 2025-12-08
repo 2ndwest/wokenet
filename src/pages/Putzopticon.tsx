@@ -32,38 +32,69 @@ const getSMDSBlackoutMessage = (): string | null => {
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
 
-  const [autoAnimate] = useAutoAnimate();
-
-  // Track which people are currently being "scanned" for location refresh effect.
-  const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    if (!data || data.length === 0) return;
-
-    const interval = setInterval(() => {
-      // Pick a random person.
-      const randomIndex = Math.floor(Math.random() * data.length);
-
-      // Add them to the scanning set.
-      setScanningIndices((prev) => new Set(prev).add(randomIndex));
-
-      // Remove them from the set after animation completes.
-      setTimeout(() => {
-        setScanningIndices((prev) => {
-          const next = new Set(prev);
-          next.delete(randomIndex);
-          return next;
-        });
-      }, SCAN_ANIMATION_DURATION);
-    }, SCAN_FREQUENCY);
-
-    return () => clearInterval(interval);
-  }, [data]);
-
   return (
     <Flex direction="column" width="100%" height="100%" overflow="hidden">
       <SMDSMarquee height={`${100 / (data ? data.length + 1 : 1)}%`} />
 
+      {data ? <PersonRows data={data} /> : <CenterSpinner />}
+    </Flex>
+  );
+});
+
+const PersonRows = memo(
+  ({
+    data,
+  }: {
+    data: NonNullable<ReturnType<typeof useQuery<typeof api.locations.getLocations>>>;
+  }) => {
+    const [autoAnimate] = useAutoAnimate();
+
+    // Track which people are currently being "scanned" for location refresh effect.
+    const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
+
+    const sortedData = useMemo(
+      () =>
+        data
+          .map(({ label, color, name }) => ({ name, color, label }))
+          .sort((a, b) => {
+            // Sort by, in order:
+            // 1) color (using COLOR_ORDER)
+            // 2) label (alphabetically)
+            // 3) name (alphabetically)
+            const aOrder = COLOR_ORDER.indexOf(a.color);
+            const bOrder = COLOR_ORDER.indexOf(b.color);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            const labelCompare = a.label.localeCompare(b.label);
+            if (labelCompare !== 0) return labelCompare;
+            return a.name.localeCompare(b.name);
+          }),
+      [data]
+    );
+
+    useEffect(() => {
+      if (sortedData.length === 0) return;
+
+      const interval = setInterval(() => {
+        // Pick a random person.
+        const randomIndex = Math.floor(Math.random() * sortedData.length);
+
+        // Add them to the scanning set.
+        setScanningIndices((prev) => new Set(prev).add(randomIndex));
+
+        // Remove them from the set after animation completes.
+        setTimeout(() => {
+          setScanningIndices((prev) => {
+            const next = new Set(prev);
+            next.delete(randomIndex);
+            return next;
+          });
+        }, SCAN_ANIMATION_DURATION);
+      }, SCAN_FREQUENCY);
+
+      return () => clearInterval(interval);
+    }, [sortedData]);
+
+    return (
       <Flex
         ref={autoAnimate}
         direction="column"
@@ -74,46 +105,20 @@ export const Putzopticon = memo(() => {
         py="8px"
         overflow="hidden"
       >
-        {data ? (
-          data
-            .map(({ label, color, name }) => {
-              return {
-                name,
-                color,
-                label,
-              };
-            })
-            .sort((a, b) => {
-              // Sort by, in order:
-              // 1) color (using COLOR_ORDER)
-              // 2) label (alphabetically)
-              // 3) name (alphabetically)
-              const aOrder = COLOR_ORDER.indexOf(a.color);
-              const bOrder = COLOR_ORDER.indexOf(b.color);
-              if (aOrder !== bOrder) return aOrder - bOrder;
-              const labelCompare = a.label.localeCompare(b.label);
-              if (labelCompare !== 0) return labelCompare;
-              return a.name.localeCompare(b.name);
-            })
-            .map((row, index) => {
-              return (
-                <PersonRow
-                  key={row.name}
-                  name={row.name}
-                  color={row.color}
-                  label={row.label}
-                  height="100%" // Let the CSS engine deal with this.
-                  isScanning={scanningIndices.has(index)}
-                />
-              );
-            })
-        ) : (
-          <CenterSpinner />
-        )}
+        {sortedData.map((row, index) => (
+          <PersonRow
+            key={row.name}
+            name={row.name}
+            color={row.color}
+            label={row.label}
+            height="100%" // Let the CSS engine deal with this.
+            isScanning={scanningIndices.has(index)}
+          />
+        ))}
       </Flex>
-    </Flex>
-  );
-});
+    );
+  }
+);
 
 export const PersonRow = memo(
   ({
