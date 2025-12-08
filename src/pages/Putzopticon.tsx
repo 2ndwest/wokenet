@@ -6,7 +6,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 import { toMins } from "../utils/time";
 
-const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgray"];
+const COLOR_ORDER = ["green", "darkgreen", "orange", "purple", "blue", "gray", "red", "dimgray"];
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms

@@ -127,7 +127,7 @@
       "type": "Feature",
       "properties": {
         "name": "Bemis",
-        "color": "green"
+        "color": "darkgreen"
       },
       "geometry": {
         "coordinates": [
@@ -147,7 +147,7 @@
       "type": "Feature",
       "properties": {
         "name": "Goodale",
-        "color": "green"
+        "color": "darkgreen"
       },
       "geometry": {
         "coordinates": [
@@ -167,7 +167,7 @@
       "type": "Feature",
       "properties": {
         "name": "Walcott",
-        "color": "green"
+        "color": "darkgreen"
       },
       "geometry": {
         "coordinates": [
