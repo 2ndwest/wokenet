@@ -47,7 +47,7 @@
       "type": "Feature",
       "properties": {
         "name": "Main Group",
-        "color": "orange"
+        "color": "darkorange"
       },
       "geometry": {
         "coordinates": [
@@ -300,7 +300,7 @@
       "type": "Feature",
       "properties": {
         "name": "Stata",
-        "color": "orange"
+        "color": "darkorange"
       },
       "geometry": {
         "coordinates": [
