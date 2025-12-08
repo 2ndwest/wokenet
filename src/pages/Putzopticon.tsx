@@ -10,7 +10,7 @@ const COLOR_ORDER = ["green", "orange", "purple", "blue", "gray", "red", "dimgra
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
-const SMDS_MARQUEE_COUNT = 15; // n most recent smds
+const SMDS_MARQUEE_COUNT = 50; // n most recent smds
 
 // Blackout periods for SMDS marquee (eastern time, 24h format)
 const SMDS_BLACKOUTS: [string, string, string][] = [
