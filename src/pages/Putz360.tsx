@@ -2,14 +2,16 @@ import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { memo, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
-import { MapContainer, TileLayer, Circle, Popup, Tooltip } from "react-leaflet";
+import { MapContainer, TileLayer, Circle, Popup, Tooltip, GeoJSON } from "react-leaflet";
 import { Link } from "react-router";
 import { EyeIcon } from "../utils/icons";
 
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
+import locationLabels from "../../convex/utils/location_labels.json";
 
 const LOCATION_RADIUS_THRESHOLD = 15;
+const SHOW_REGIONS = import.meta.env.VITE_SHOW_REGIONS === "true";
 
 export const Putz360 = memo(() => {
   const locations = useQuery(api.locations.getLocations);
@@ -53,6 +55,19 @@ export const Putz360 = memo(() => {
         >
           {/* Base Map Layer */}
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+          {/* Region polygons (debug-only; enable with VITE_SHOW_REGIONS=true) */}
+          {SHOW_REGIONS && (
+            <GeoJSON
+              data={locationLabels as any}
+              style={(feature) => ({
+                color: feature?.properties?.color ?? "gray",
+                weight: 2,
+                fillColor: feature?.properties?.color ?? "gray",
+                fillOpacity: 0.12,
+              })}
+            />
+          )}
 
           {/* User Location Markers */}
           {validLocations
