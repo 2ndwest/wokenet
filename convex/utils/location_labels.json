@@ -321,7 +321,7 @@
       "type": "Feature",
       "properties": {
         "name": "CIC",
-        "color": "red"
+        "color": "purple"
       },
       "geometry": {
         "coordinates": [
@@ -343,7 +343,7 @@
       "type": "Feature",
       "properties": {
         "name": "N52",
-        "color": "red"
+        "color": "purple"
       },
       "geometry": {
         "coordinates": [

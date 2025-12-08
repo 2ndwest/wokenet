@@ -13,7 +13,6 @@ const COLOR_ORDER = [
   "purple",
   "blue",
   "gray",
-  "red",
   "firebrick",
   "dimgray",
 ];
