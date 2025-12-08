@@ -6,16 +6,19 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 import { toMins } from "../utils/time";
 
-const COLOR_ORDER = [
-  "green",
-  "darkgreen",
-  "darkorange",
-  "purple",
-  "blue",
-  "gray",
-  "firebrick",
-  "dimgray",
+const COLORS: [string, string][] = [
+  ["green", "#00843d"],
+  ["darkgreen", "darkgreen"],
+  ["yellow", "#ed8b00"],
+  ["purple", "#82076c"],
+  ["blue", "#003da5"],
+  ["gray", "#7c878e"],
+  ["red", "#da291c"],
+  ["dimgray", "dimgray"],
 ];
+
+const COLOR_ORDER = COLORS.map(([name]) => name);
+const COLOR_HEX = Object.fromEntries(COLORS);
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
@@ -181,7 +184,7 @@ export const PersonRow = memo(
           pb="0.1em"
           style={{
             containerType: "size", // So we can use cqh units
-            backgroundColor: color,
+            backgroundColor: COLOR_HEX[color] ?? color,
             fontWeight: "bold",
           }}
         >

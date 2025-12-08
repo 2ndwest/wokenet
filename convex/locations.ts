@@ -46,7 +46,7 @@ export const getLocations = query({
         }
       }
 
-      return { ...location, label: "OFF CAMPUS", color: "firebrick" };
+      return { ...location, label: "OFF CAMPUS", color: "red" };
     });
   },
 });
