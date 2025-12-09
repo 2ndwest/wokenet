@@ -62,9 +62,9 @@ export const Putz360 = memo(() => {
             <GeoJSON
               data={locationLabels as any}
               style={(feature) => ({
-                color: feature?.properties?.color ?? "gray",
+                color: COLOR_HEX[feature?.properties?.color] ?? feature?.properties?.color,
                 weight: 2,
-                fillColor: feature?.properties?.color ?? "gray",
+                fillColor: COLOR_HEX[feature?.properties?.color] ?? feature?.properties?.color,
                 fillOpacity: 0.12,
               })}
             />
