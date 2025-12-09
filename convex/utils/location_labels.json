@@ -27,7 +27,7 @@
       "type": "Feature",
       "properties": {
         "name": "Simmons",
-        "color": "purple"
+        "color": "blue"
       },
       "geometry": {
         "coordinates": [
@@ -243,7 +243,7 @@
       "type": "Feature",
       "properties": {
         "name": "Z CENTER",
-        "color": "gray"
+        "color": "blue"
       },
       "geometry": {
         "coordinates": [
@@ -365,6 +365,26 @@
         "type": "Polygon"
       },
       "id": 16
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "IHQ",
+        "color": "purple"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [-71.08609638784351, 42.362310245575344],
+            [-71.0861831836371, 42.36172846220316],
+            [-71.0852656281015, 42.36154980323619],
+            [-71.08521396393833, 42.36224763922405],
+            [-71.08609638784351, 42.362310245575344]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 17
     },
     {
       "type": "Feature",
@@ -536,7 +556,7 @@
         ],
         "type": "MultiPolygon"
       },
-      "id": 17
+      "id": 18
     }
   ]
 }
