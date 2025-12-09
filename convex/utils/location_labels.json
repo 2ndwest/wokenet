@@ -72,6 +72,26 @@
     {
       "type": "Feature",
       "properties": {
+        "name": "EC (Ambiguous)",
+        "color": "darkgreen"
+      },
+      "geometry": {
+        "coordinates": [
+          [
+            [-71.08813495530296, 42.35986067478805],
+            [-71.08799409796134, 42.359904710044674],
+            [-71.08855458404787, 42.360805380187145],
+            [-71.08869224144375, 42.3607633664997],
+            [-71.08813495530296, 42.35986067478805]
+          ]
+        ],
+        "type": "Polygon"
+      },
+      "id": 3
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "name": "Bemis",
         "color": "darkgreen"
       },
@@ -87,7 +107,7 @@
         ],
         "type": "Polygon"
       },
-      "id": 3
+      "id": 4
     },
     {
       "type": "Feature",
@@ -107,7 +127,7 @@
         ],
         "type": "Polygon"
       },
-      "id": 4
+      "id": 5
     },
     {
       "type": "Feature",
@@ -127,7 +147,7 @@
         ],
         "type": "Polygon"
       },
-      "id": 5
+      "id": 6
     },
     {
       "type": "Feature",
@@ -147,7 +167,7 @@
         ],
         "type": "Polygon"
       },
-      "id": 6
+      "id": 7
     },
     {
       "type": "Feature",
@@ -170,7 +190,7 @@
         ],
         "type": "Polygon"
       },
-      "id": 7
+      "id": 8
     },
     {
       "type": "Feature",
@@ -190,7 +210,7 @@
         ],
         "type": "Polygon"
       },
-      "id": 8
+      "id": 9
     },
     {
       "type": "Feature",
