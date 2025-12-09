@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useState, ReactNode } from "reac
 import { MapContainer, TileLayer, Circle, Popup, Tooltip, GeoJSON } from "react-leaflet";
 import { Link } from "react-router";
 import { EyeIcon } from "../utils/icons";
+import { COLOR_HEX } from "../utils/colors";
 
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
@@ -81,11 +82,11 @@ export const Putz360 = memo(() => {
                   center={[location.latitude!, location.longitude!]}
                   radius={radius}
                   pathOptions={{
-                    color: location.color,
+                    color: COLOR_HEX[location.color] ?? location.color,
                     weight: 2,
                     opacity: 0.8,
 
-                    fillColor: location.color,
+                    fillColor: COLOR_HEX[location.color] ?? location.color,
                     fillOpacity: 0.4,
                     ...(location.accuracy > LOCATION_RADIUS_THRESHOLD
                       ? {

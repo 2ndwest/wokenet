@@ -4,21 +4,8 @@ import { useQuery } from "convex/react";
 import { memo, useEffect, useState, useMemo, createElement } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
+import { COLOR_ORDER, COLOR_HEX } from "../utils/colors";
 import { toMins } from "../utils/time";
-
-const COLORS: [string, string][] = [
-  ["green", "#00843d"],
-  ["darkgreen", "darkgreen"],
-  ["yellow", "#ed8b00"],
-  ["purple", "#80276c"],
-  ["blue", "#003da5"],
-  ["gray", "#7c878e"],
-  ["red", "#da291c"],
-  ["dimgray", "dimgray"],
-]; // Note: array order determines display priority!
-
-const COLOR_ORDER = COLORS.map(([name]) => name);
-const COLOR_HEX = Object.fromEntries(COLORS);
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
