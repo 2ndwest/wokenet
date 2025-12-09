@@ -10,7 +10,7 @@ const COLORS: [string, string][] = [
   ["green", "#00843d"],
   ["darkgreen", "darkgreen"],
   ["yellow", "#ed8b00"],
-  ["purple", "#82076c"],
+  ["purple", "#80276c"],
   ["blue", "#003da5"],
   ["gray", "#7c878e"],
   ["red", "#da291c"],
