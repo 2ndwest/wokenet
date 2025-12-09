@@ -22,7 +22,7 @@ const COLOR_HEX = Object.fromEntries(COLORS);
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
-const SMDS_MARQUEE_COUNT = 50; // n most recent smds
+const SMDS_MARQUEE_COUNT = 100; // n most recent smds
 
 // Blackout periods for SMDS marquee (eastern time, 24h format)
 const SMDS_BLACKOUTS: [string, string, string][] = [
@@ -198,9 +198,10 @@ export const PersonRow = memo(
 const SMDSMarquee = memo(({ height }: { height: string }) => {
   const sayings = useQuery(api.shitMyDadSays.getSayings);
 
-  const latestQuotes = useMemo(() => {
+  const shuffledSayings = useMemo(() => {
     if (!sayings || sayings.length === 0) return [];
-    return sayings.slice(0, SMDS_MARQUEE_COUNT);
+    const shuffled = [...sayings].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, SMDS_MARQUEE_COUNT);
   }, [sayings]);
 
   // Null if not in a blackout period.
@@ -215,7 +216,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
     return () => clearInterval(interval);
   }, []);
 
-  if (latestQuotes.length === 0 && !blackoutMessage) return null;
+  if (shuffledSayings.length === 0 && !blackoutMessage) return null;
 
   return (
     <Flex
@@ -252,7 +253,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
               fontSize: "60cqh",
             }}
           >
-            {latestQuotes.map((quote, i) => (
+            {shuffledSayings.map((quote, i) => (
               <span
                 key={i}
                 style={{
