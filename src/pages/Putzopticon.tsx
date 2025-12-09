@@ -272,9 +272,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
                 }}
               >
                 <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
-                <span style={{ opacity: 0.5, color: "rgba(255, 102, 0, 0.9)" }}>
-                  — {quote.quoted}
-                </span>
+                <span style={{ color: "rgba(255, 102, 0, 0.75)" }}>— {quote.quoted}</span>
               </span>
             ))}
           </span>
