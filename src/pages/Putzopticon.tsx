@@ -15,7 +15,7 @@ const COLORS: [string, string][] = [
   ["gray", "#7c878e"],
   ["red", "#da291c"],
   ["dimgray", "dimgray"],
-];
+]; // Note: array order determines display priority!
 
 const COLOR_ORDER = COLORS.map(([name]) => name);
 const COLOR_HEX = Object.fromEntries(COLORS);
