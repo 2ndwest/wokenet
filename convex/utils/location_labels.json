@@ -336,7 +336,7 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "CIC",
+        "name": "Kendall/CIC",
         "color": "purple"
       },
       "geometry": {
