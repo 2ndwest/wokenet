@@ -1,6 +1,6 @@
 // Shorthands for some common fancy colors we use.
 export const COLORS: [string, string][] = [
-  ["green", "#00843d"],
+  ["green", "green"],
   ["darkgreen", "darkgreen"],
   ["yellow", "#ed8b00"],
   ["purple", "#80276c"],
