@@ -21,5 +21,5 @@ putz web services monorepo
 ## adding locations
 
 1. Go to [https://geojson.io](https://geojson.io/#map=9.94/42.3382/-71.112) to construct your polygons.
-2. Once you're done, copy the coordinates and put them in convex/utils/location_labels.json
+2. Once you're done, copy the coordinates and put them in `convex/utils/location_labels.json`.
 3. Test it by setting `VITE_SHOW_REGIONS=true` and spinning up wokenet. Your region should show up where you expect it.
