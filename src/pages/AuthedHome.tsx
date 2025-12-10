@@ -16,7 +16,7 @@ export const AuthedHome = memo(() => {
         here.
         <br />
         <br />
-        Use the menu bar above to navigate. Source available on{" "}
+        Use the menu bar above to navigate. Contribute on{" "}
         <Link style={{ color: "var(--accent-9)" }} href="https://github.com/2ndwest/wokenet">
           Github
         </Link>
