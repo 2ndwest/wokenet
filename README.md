@@ -17,3 +17,9 @@ putz web services monorepo
 11. In another terminal, run the frontend: `pnpm dev` → open http://localhost:5173 and create an account.
 12. By default, this user won't be authorized to view any of the pages. Fix this by modifying your user in the Convex table to have `affiliation` `"PUTZ"` and `isAdmin` `true`. You should now have wokenet up and running locally
 13. If you want to test with live location data, ask t11s.
+
+## adding locations
+
+1. Go to [https://geojson.io](https://geojson.io/#map=9.94/42.3382/-71.112) to construct your polygons.
+2. Once you're done, copy the coordinates and put them in convex/utils/location_labels.json
+3. Test it by setting `VITE_SHOW_REGIONS=true` and spinning up wokenet.
