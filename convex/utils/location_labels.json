@@ -638,7 +638,7 @@
       "type": "Feature",
       "properties": {
         "name": "Oregon",
-        "color": "green"
+        "color": "brown"
       },
       "geometry": {
         "coordinates": [
