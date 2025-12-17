@@ -9,6 +9,7 @@ export const COLORS: [string, string][] = [
   ["crimson", "#a51c30"],
   ["red", "#da291c"],
   ["dimgray", "dimgray"],
+  ["brown", "#7a4b2d"],
 ]; // Note: array order determines display priority!
 
 export const COLOR_ORDER = COLORS.map(([name]) => name);
