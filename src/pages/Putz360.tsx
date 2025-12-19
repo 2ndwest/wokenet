@@ -9,7 +9,7 @@ import { COLOR_HEX } from "../utils/colors";
 
 import "leaflet/dist/leaflet.css";
 import { CenterSpinner } from "../utils/spinner";
-import locationLabels from "../../convex/utils/location_labels.json";
+import locationLabels from "../../convex/utils/location_labels";
 
 const LOCATION_RADIUS_THRESHOLD = 15;
 const SHOW_REGIONS = import.meta.env.VITE_SHOW_REGIONS === "true";

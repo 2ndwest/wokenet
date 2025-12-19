@@ -3,7 +3,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requirePutz } from "./utils/auth";
 import { booleanPointInPolygon } from "@turf/turf";
-import locationLabels from "./utils/location_labels.json"; // Edit this on geojson.io
+import locationLabels from "./utils/location_labels"; // Edit this on geojson.io
 import schema from "./schema";
 
 export const refetchLocations = mutation({

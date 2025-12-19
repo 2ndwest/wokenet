@@ -20,6 +20,7 @@ import type * as locations from "../locations.js";
 import type * as shitMyDadSays from "../shitMyDadSays.js";
 import type * as users from "../users.js";
 import type * as utils_auth from "../utils/auth.js";
+import type * as utils_location_labels from "../utils/location_labels.js";
 import type * as utils_strings from "../utils/strings.js";
 
 /**
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   shitMyDadSays: typeof shitMyDadSays;
   users: typeof users;
   "utils/auth": typeof utils_auth;
+  "utils/location_labels": typeof utils_location_labels;
   "utils/strings": typeof utils_strings;
 }>;
 export declare const api: FilterApi<
