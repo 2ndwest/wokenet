@@ -1,6 +1,11 @@
 import { booleanPointInPolygon } from "@turf/turf";
 import generated from "../location_labels_generated.json";
 
+type FeatureCollection = {
+  type: "FeatureCollection";
+  features: Array<any>;
+};
+
 type LocationLabelArgs = {
   lat: number;
   lng: number;
@@ -19,7 +24,7 @@ export const findLocationLabel = ({
     return { label: "UNKNOWN", color: "dimgray" };
   }
 
-  for (const feature of generated.features) {
+  for (const feature of (generated as FeatureCollection).features) {
     if (booleanPointInPolygon([lng, lat], feature as any)) {
       return {
         label: String(feature.properties?.name ?? "").toUpperCase(),
