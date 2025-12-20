@@ -2,6 +2,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { area } from "@turf/turf";
+import { hash } from "crypto";
 
 const ROOT = process.cwd();
 const INPUT_DIR = "convex/location_labels";
@@ -32,7 +33,7 @@ const main = async () => {
   const withArea = features.map((feature) => {
     const computedArea = feature?.geometry ? area(feature) : 0;
     // calculate id from hashing the coordinates
-    const id = hash(feature.geometry.coordinates);
+    const id = hash("sha256", feature.geometry.coordinates.toString()).slice(0, 8);
     return {
       properties: {
         ...feature.properties,
