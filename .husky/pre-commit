@@ -11,6 +11,6 @@ has_label_changes() {
 
 if has_label_changes --cached || has_label_changes; then
   echo "Regenerating location label areas..."
-  node scripts/gen-location-labels.mjs
+  node scripts/gen_location_labels.mjs
   git add "$GENERATED_FILE"
 fi

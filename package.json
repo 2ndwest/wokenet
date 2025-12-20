@@ -11,7 +11,7 @@
     "test": "vitest run",
     "convex:sandbox": "tsx convex-sandbox.ts",
     "convex:dev": "convex dev",
-    "gen:location-labels": "node scripts/gen-location-labels.mjs",
+    "gen:location-labels": "node scripts/gen_location_labels.mjs",
     "prepare": "husky install"
   },
   "dependencies": {

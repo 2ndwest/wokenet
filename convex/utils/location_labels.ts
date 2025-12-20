@@ -24,6 +24,10 @@ export const findLocationLabel = ({
     return { label: "UNKNOWN", color: "dimgray" };
   }
 
+  // We now check the polygons in the order they're in the generated list, which
+  // is guaranteed to be sorted by area (smallest to largest). This assigns the 
+  // label of the smallest polygon a putzen is in, rather than using some manual
+  // "priority" field.
   for (const feature of (generated as FeatureCollection).features) {
     if (booleanPointInPolygon([lng, lat], feature as any)) {
       return {
