@@ -35,6 +35,7 @@ const main = async () => {
     // calculate id from hashing the coordinates
     const id = hash("sha256", feature.geometry.coordinates.toString()).slice(0, 8);
     return {
+      type: "Feature",
       properties: {
         ...feature.properties,
         area: computedArea,
