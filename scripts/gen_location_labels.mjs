@@ -31,12 +31,15 @@ const main = async () => {
 
   const withArea = features.map((feature) => {
     const computedArea = feature?.geometry ? area(feature) : 0;
+    // calculate id from hashing the coordinates
+    const id = hash(feature.geometry.coordinates);
     return {
-      ...feature,
       properties: {
         ...feature.properties,
         area: computedArea,
       },
+      id: id,
+      geometry: feature.geometry,
     };
   });
 
