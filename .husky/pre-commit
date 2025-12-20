@@ -22,7 +22,8 @@ if has_label_changes --cached || has_label_changes; then
 fi
 
 # run tests if branch is main
-if [ "$GIT_BRANCH" = "main" ]; then
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" = "main" ]; then
   echo "Running tests..."
   pnpm test
 fi
