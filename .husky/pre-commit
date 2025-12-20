@@ -1,6 +1,3 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
 set -e
 
 LABELS_DIR="convex/location_labels"
