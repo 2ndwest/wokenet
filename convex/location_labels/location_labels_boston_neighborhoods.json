@@ -1352,7 +1352,7 @@
             },
             "properties": {
                 "name": "Allston",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -1878,7 +1878,7 @@
             },
             "properties": {
                 "name": "Back Bay",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -2340,7 +2340,7 @@
             },
             "properties": {
                 "name": "Beacon Hill",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -3802,7 +3802,7 @@
             },
             "properties": {
                 "name": "Brighton",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -4884,7 +4884,7 @@
             },
             "properties": {
                 "name": "Charlestown",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -5378,7 +5378,7 @@
             },
             "properties": {
                 "name": "Chinatown",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -7520,7 +7520,7 @@
             },
             "properties": {
                 "name": "Dorchester",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -8708,7 +8708,7 @@
             },
             "properties": {
                 "name": "Downtown",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -10110,7 +10110,7 @@
             },
             "properties": {
                 "name": "East Boston",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -13624,7 +13624,7 @@
             },
             "properties": {
                 "name": "Fenway",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -14668,7 +14668,7 @@
             },
             "properties": {
                 "name": "Harbor Islands",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -17066,7 +17066,7 @@
             },
             "properties": {
                 "name": "Hyde Park",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -20492,7 +20492,7 @@
             },
             "properties": {
                 "name": "Jamaica Plain",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -20938,7 +20938,7 @@
             },
             "properties": {
                 "name": "Longwood",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -22728,7 +22728,7 @@
             },
             "properties": {
                 "name": "Mattapan",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -23474,7 +23474,7 @@
             },
             "properties": {
                 "name": "Mission Hill",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -23780,7 +23780,7 @@
             },
             "properties": {
                 "name": "North End",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -25202,7 +25202,7 @@
             },
             "properties": {
                 "name": "Roslindale",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -27024,7 +27024,7 @@
             },
             "properties": {
                 "name": "Roxbury",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -28070,7 +28070,7 @@
             },
             "properties": {
                 "name": "South Boston",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -28624,7 +28624,7 @@
             },
             "properties": {
                 "name": "South Boston Waterfront",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -29266,7 +29266,7 @@
             },
             "properties": {
                 "name": "South End",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -29940,7 +29940,7 @@
             },
             "properties": {
                 "name": "West End",
-                "color": "gold"
+                "color": "lightblue"
             }
         },
         {
@@ -31890,7 +31890,7 @@
             },
             "properties": {
                 "name": "West Roxbury",
-                "color": "gold"
+                "color": "lightblue"
             }
         }
     ]
