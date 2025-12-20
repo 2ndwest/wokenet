@@ -6,6 +6,7 @@ export const COLORS: [string, string][] = [
   ["purple", "#80276c"],
   ["blue", "#003da5"],
   ["gray", "#7c878e"],
+  ["gold", "#fdbc2e"],
   ["crimson", "#a51c30"],
   ["red", "#da291c"],
   ["brown", "#7a4b2d"],
