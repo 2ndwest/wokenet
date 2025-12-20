@@ -3,7 +3,7 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requirePutz } from "./utils/auth";
 import { booleanPointInPolygon } from "@turf/turf";
-import locationLabels from "./utils/location_labels"; // Edit this on geojson.io
+import locationLabels from "./utils/location_labels"; // Edit these in convex/location_labels/*.json via geojson.io
 import schema from "./schema";
 
 export const refetchLocations = mutation({
@@ -34,8 +34,8 @@ export const getLocations = query({
           color: "dimgray",
         };
 
-      // Check if point is within any of the labeled polygons (lower id = higher priority).
-      for (const feature of locationLabels.features.sort((a, b) => a.id - b.id)) {
+      // Check if point is within any of the labeled polygons (smallest area first).
+      for (const feature of locationLabels.features) {
         // Note: GeoJSON uses [lng, lat] ordering.
         if (booleanPointInPolygon([lng, lat], feature as any)) {
           return {

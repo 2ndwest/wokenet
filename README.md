@@ -14,12 +14,12 @@ putz web services monorepo
 8. Open your Convex project and get the development key (in the dropdown next to the project dropdown, of the form `{adjective}-{animal}-###}`). Use that to populate the `CONVEX_DEPLOYMENT` environment variable (`dev:...`)
 9. Install deps: `pnpm install`.
 10. Run Convex backend: `pnpm convex:dev`. If it says you need to add an environment key, click the link and do that. Leave this running.
-11. In another terminal, run the frontend: `pnpm dev` → open http://localhost:5173 and create an account.
-12. By default, this user won't be authorized to view any of the pages. Fix this by modifying your user in the Convex table to have `affiliation` `"PUTZ"` and `isAdmin` `true`. You should now have wokenet up and running locally
+12. In another terminal, run the frontend: `pnpm dev` → open http://localhost:5173 and create an account.
+13. By default, this user won't be authorized to view any of the pages. Fix this by modifying your user in the Convex table to have `affiliation` `"PUTZ"` and `isAdmin` `true`. You should now have wokenet up and running locally
 13. If you want to test with live location data, ask t11s.
 
 ## adding locations
 
 1. Go to [https://geojson.io](https://geojson.io/#map=9.94/42.3382/-71.112) to construct your polygons.
-2. Once you're done, copy the coordinates into `convex/utils/location_labels_states.json` or `convex/utils/location_labels_misc.json`.
+2. Once you're done, copy the coordinates into `convex/location_labels/location_labels_states.json` or `convex/location_labels/location_labels_misc.json`.
 3. Test it by setting `VITE_SHOW_REGIONS=true` and spinning up wokenet. Your region should show up where you expect it.
