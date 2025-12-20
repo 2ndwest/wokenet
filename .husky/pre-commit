@@ -14,3 +14,7 @@ if has_label_changes --cached || has_label_changes; then
   node scripts/gen_location_labels.mjs
   git add "$GENERATED_FILE"
 fi
+
+# run tests
+echo "Running tests..."
+pnpm test
