@@ -4,9 +4,15 @@ LABELS_DIR="convex/location_labels"
 GENERATED_FILE="convex/location_labels_generated.json"
 
 has_label_changes() {
-  git diff --name-only "$1" -- "$LABELS_DIR" | \
-    grep -E '\.json$' | \
-    grep -v "$(basename "$GENERATED_FILE")" >/dev/null 2>&1
+  if [ -n "$1" ]; then
+    git diff --name-only "$1" -- "$LABELS_DIR" | \
+      grep -E '\.json$' | \
+      grep -v "$(basename "$GENERATED_FILE")" >/dev/null 2>&1
+  else
+    git diff --name-only -- "$LABELS_DIR" | \
+      grep -E '\.json$' | \
+      grep -v "$(basename "$GENERATED_FILE")" >/dev/null 2>&1
+  fi
 }
 
 if has_label_changes --cached || has_label_changes; then
