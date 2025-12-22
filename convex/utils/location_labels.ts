@@ -37,7 +37,7 @@ export const findLocationLabel = ({
     }
   }
 
-  return { label: "OFF CAMPUS", color: "red" };
+  return { label: "INTERNATIONAL", color: "red" };
 };
 
 export default generated;

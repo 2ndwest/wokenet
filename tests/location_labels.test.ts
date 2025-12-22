@@ -22,12 +22,12 @@ describe("location labels", () => {
     expect(match?.label).toBe("UNKNOWN");
   });
 
-  it("assigns OFF CAMPUS when no polygon matches", async () => {
+  it("assigns INTERNATIONAL when no polygon matches", async () => {
     const match = findLocationLabel({
       lat: 0,
       lng: 0,
       timestamp: Date.now(),
     });
-    expect(match?.label).toBe("OFF CAMPUS");
+    expect(match?.label).toBe("INTERNATIONAL");
   });
 });
