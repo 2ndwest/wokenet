@@ -191,7 +191,7 @@ export const PersonRow = memo(
 );
 
 const SMDSMarquee = memo(({ height }: { height: string }) => {
-  const sayings = useQuery(api.shitMyDadSays.getSayings);
+  const sayings = useQuery(api.shitMyDadSays.getSayings, { sortBy: undefined });
 
   const shuffledSayings = useMemo(() => {
     if (!sayings || sayings.length === 0) return [];
