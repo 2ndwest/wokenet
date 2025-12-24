@@ -172,19 +172,11 @@ export const ShitMyDadSays = memo(() => {
                   <Heading size="5">{sortMode === "top" ? "Runner-ups:" : "Previous:"}</Heading>
                 </Box>
 
-                <Box
-                  width="100%"
-                  style={{ columnGap: "16px" }}
-                  className="masonry-grid"
-                >
+                <div className="masonry-grid">
                   {rest.map((item) => (
                     <Card
                       key={item._id}
-                      style={{
-                        position: "relative",
-                        breakInside: "avoid",
-                        marginBottom: "16px",
-                      }}
+                      style={{ position: "relative" }}
                     >
                       <Flex direction="column" gap="2">
                         <Text size="3" style={{ lineHeight: 1.5 }}>
@@ -219,7 +211,7 @@ export const ShitMyDadSays = memo(() => {
                       </Box>
                     </Card>
                   ))}
-                </Box>
+                </div>
               </>
             )}
           </>
