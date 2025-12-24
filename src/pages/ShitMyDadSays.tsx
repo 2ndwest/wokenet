@@ -1,4 +1,4 @@
-import { Badge, Box, Button, Card, Flex, Grid, Heading, IconButton, SegmentedControl, Separator, Text } from "@radix-ui/themes";
+import { Badge, Box, Button, Card, Flex, Heading, IconButton, SegmentedControl, Separator, Text } from "@radix-ui/themes";
 import { memo, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -172,9 +172,20 @@ export const ShitMyDadSays = memo(() => {
                   <Heading size="5">{sortMode === "top" ? "Runner-ups:" : "Previous:"}</Heading>
                 </Box>
 
-                <Grid columns={{ initial: "1", sm: "2", md: "2", lg: "3" }} gap="4" width="100%">
-                  {rest.map((item, index) => (
-                    <Card key={item._id} style={{ position: "relative" }}>
+                <Box
+                  width="100%"
+                  style={{ columnGap: "16px" }}
+                  className="masonry-grid"
+                >
+                  {rest.map((item) => (
+                    <Card
+                      key={item._id}
+                      style={{
+                        position: "relative",
+                        breakInside: "avoid",
+                        marginBottom: "16px",
+                      }}
+                    >
                       <Flex direction="column" gap="2" pr="6">
                         <Text size="3" style={{ lineHeight: 1.5 }}>
                           "{item.quote}"
@@ -200,7 +211,7 @@ export const ShitMyDadSays = memo(() => {
                       </Box>
                     </Card>
                   ))}
-                </Grid>
+                </Box>
               </>
             )}
           </>
