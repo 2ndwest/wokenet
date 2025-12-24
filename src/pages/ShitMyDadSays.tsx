@@ -176,16 +176,9 @@ export const ShitMyDadSays = memo(() => {
                   {rest.map((item, index) => (
                     <Card key={item._id} style={{ position: "relative" }}>
                       <Flex direction="column" gap="2" pr="6">
-                        <Flex justify="between" align="start" gap="2">
-                          <Text size="3" style={{ lineHeight: 1.5, flex: 1 }}>
-                            "{item.quote}"
-                          </Text>
-                          {sortMode === "top" && (
-                            <Badge color="gray" variant="soft" style={{ flexShrink: 0 }}>
-                              #{index + 2}
-                            </Badge>
-                          )}
-                        </Flex>
+                        <Text size="3" style={{ lineHeight: 1.5 }}>
+                          "{item.quote}"
+                        </Text>
                         <Flex direction="column" gap="1">
                           <Text size="2" color="gray">
                             Quoted: {item.quoted}
