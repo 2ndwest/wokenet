@@ -1,4 +1,15 @@
-import { Badge, Box, Button, Card, Flex, Heading, IconButton, SegmentedControl, Separator, Text } from "@radix-ui/themes";
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Flex,
+  Heading,
+  IconButton,
+  SegmentedControl,
+  Separator,
+  Text,
+} from "@radix-ui/themes";
 import { memo, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -83,10 +94,7 @@ export const ShitMyDadSays = memo(() => {
       <Flex direction="column" width="100%" style={{ maxWidth: 1100 }} gap="5" pb="5">
         <Flex justify="between" align="center" wrap="wrap" gap="3">
           <Heading size="8">Shit My Dad Says:</Heading>
-          <SegmentedControl.Root
-            value={sortMode}
-            onValueChange={(v) => setSortMode(v as SortMode)}
-          >
+          <SegmentedControl.Root value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
             <SegmentedControl.Item value="recent">Recent</SegmentedControl.Item>
             <SegmentedControl.Item value="top">Top Rated</SegmentedControl.Item>
           </SegmentedControl.Root>
@@ -174,10 +182,7 @@ export const ShitMyDadSays = memo(() => {
 
                 <div className="masonry-grid">
                   {rest.map((item) => (
-                    <Card
-                      key={item._id}
-                      style={{ position: "relative" }}
-                    >
+                    <Card key={item._id} style={{ position: "relative" }}>
                       <Flex direction="column" gap="2">
                         <Text size="3" style={{ lineHeight: 1.5 }}>
                           "{item.quote}"
@@ -190,11 +195,29 @@ export const ShitMyDadSays = memo(() => {
                           style={{ borderTop: "1px solid var(--gray-a4)" }}
                         >
                           <Text size="1">
-                            <Text style={{ color: "var(--gray-8)", textTransform: "uppercase", fontSize: "0.85em", letterSpacing: "0.05em" }}>Quoted</Text>{" "}
+                            <Text
+                              style={{
+                                color: "var(--gray-8)",
+                                textTransform: "uppercase",
+                                fontSize: "0.85em",
+                                letterSpacing: "0.05em",
+                              }}
+                            >
+                              Quoted
+                            </Text>{" "}
                             <Text style={{ color: "var(--gray-12)" }}>{item.quoted}</Text>
                           </Text>
                           <Text size="1">
-                            <Text style={{ color: "var(--gray-8)", textTransform: "uppercase", fontSize: "0.85em", letterSpacing: "0.05em" }}>From</Text>{" "}
+                            <Text
+                              style={{
+                                color: "var(--gray-8)",
+                                textTransform: "uppercase",
+                                fontSize: "0.85em",
+                                letterSpacing: "0.05em",
+                              }}
+                            >
+                              From
+                            </Text>{" "}
                             <Text style={{ color: "var(--gray-12)" }}>{item.sender}</Text>
                           </Text>
                           <Text size="1" style={{ color: "var(--gray-8)" }}>
@@ -202,7 +225,13 @@ export const ShitMyDadSays = memo(() => {
                           </Text>
                         </Flex>
                       </Flex>
-                      <Box style={{ position: "absolute", bottom: "var(--card-padding)", right: "var(--card-padding)" }}>
+                      <Box
+                        style={{
+                          position: "absolute",
+                          bottom: "var(--card-padding)",
+                          right: "var(--card-padding)",
+                        }}
+                      >
                         <UpvoteButton
                           sayingId={item._id}
                           voteCount={item.voteCount ?? 0}
