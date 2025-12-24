@@ -190,14 +190,22 @@ export const ShitMyDadSays = memo(() => {
                         <Text size="3" style={{ lineHeight: 1.5 }}>
                           "{item.quote}"
                         </Text>
-                        <Flex direction="column" gap="1" pr="6">
-                          <Text size="2" color="gray">
-                            Quoted: {item.quoted}
+                        <Flex
+                          direction="column"
+                          gap="1"
+                          pr="6"
+                          pt="2"
+                          style={{ borderTop: "1px solid var(--gray-a4)" }}
+                        >
+                          <Text size="1">
+                            <Text style={{ color: "var(--gray-8)", textTransform: "uppercase", fontSize: "0.85em", letterSpacing: "0.05em" }}>Quoted</Text>{" "}
+                            <Text style={{ color: "var(--gray-12)" }}>{item.quoted}</Text>
                           </Text>
-                          <Text size="2" color="gray">
-                            From: {item.sender}
+                          <Text size="1">
+                            <Text style={{ color: "var(--gray-8)", textTransform: "uppercase", fontSize: "0.85em", letterSpacing: "0.05em" }}>From</Text>{" "}
+                            <Text style={{ color: "var(--gray-12)" }}>{item.sender}</Text>
                           </Text>
-                          <Text size="2" color="gray">
+                          <Text size="1" style={{ color: "var(--gray-8)" }}>
                             {formatTimestamp(item.timestamp)}
                           </Text>
                         </Flex>
