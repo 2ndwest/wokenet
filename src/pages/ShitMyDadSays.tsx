@@ -186,11 +186,11 @@ export const ShitMyDadSays = memo(() => {
                         marginBottom: "16px",
                       }}
                     >
-                      <Flex direction="column" gap="2" pr="6">
+                      <Flex direction="column" gap="2">
                         <Text size="3" style={{ lineHeight: 1.5 }}>
                           "{item.quote}"
                         </Text>
-                        <Flex direction="column" gap="1">
+                        <Flex direction="column" gap="1" pr="6">
                           <Text size="2" color="gray">
                             Quoted: {item.quoted}
                           </Text>
