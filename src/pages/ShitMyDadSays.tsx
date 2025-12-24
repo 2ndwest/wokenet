@@ -1,11 +1,76 @@
-import { Badge, Box, Card, Flex, Grid, Heading, Separator, Text } from "@radix-ui/themes";
-import { memo, useMemo } from "react";
-import { useQuery } from "convex/react";
+import { Badge, Box, Button, Card, Flex, Grid, Heading, IconButton, SegmentedControl, Separator, Text } from "@radix-ui/themes";
+import { memo, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { formatTimestamp } from "../utils/time";
+import { Id } from "../../convex/_generated/dataModel";
+
+type SortMode = "recent" | "top";
+
+const UpvoteButton = ({
+  sayingId,
+  voteCount,
+  hasVoted,
+  size = "sm",
+}: {
+  sayingId: Id<"shitMyDadSays">;
+  voteCount: number;
+  hasVoted: boolean;
+  size?: "sm" | "lg";
+}) => {
+  const toggleVote = useMutation(api.shitMyDadSays.toggleVote);
+  const [isVoting, setIsVoting] = useState(false);
+
+  const handleVote = async () => {
+    setIsVoting(true);
+    try {
+      await toggleVote({ sayingId });
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
+  if (size === "lg") {
+    return (
+      <Button
+        variant={hasVoted ? "solid" : "soft"}
+        color={hasVoted ? "orange" : "gray"}
+        onClick={handleVote}
+        disabled={isVoting}
+        style={{ cursor: "pointer" }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 4L3 9h3v4h4V9h3L8 4z" />
+        </svg>
+        {voteCount}
+      </Button>
+    );
+  }
+
+  return (
+    <Flex align="center" gap="1">
+      <IconButton
+        size="1"
+        variant={hasVoted ? "solid" : "soft"}
+        color={hasVoted ? "orange" : "gray"}
+        onClick={handleVote}
+        disabled={isVoting}
+        style={{ cursor: "pointer" }}
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 4L3 9h3v4h4V9h3L8 4z" />
+        </svg>
+      </IconButton>
+      <Text size="2" color={hasVoted ? "orange" : "gray"} weight={hasVoted ? "bold" : "regular"}>
+        {voteCount}
+      </Text>
+    </Flex>
+  );
+};
 
 export const ShitMyDadSays = memo(() => {
-  const sayings = useQuery(api.shitMyDadSays.getSayings);
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const sayings = useQuery(api.shitMyDadSays.getSayings, { sortBy: sortMode });
 
   const { latest, rest } = useMemo(() => {
     const list = sayings ?? [];
@@ -16,7 +81,16 @@ export const ShitMyDadSays = memo(() => {
   return (
     <Flex direction="column" width="100%" height="100%" p="5" align="center">
       <Flex direction="column" width="100%" style={{ maxWidth: 1100 }} gap="5" pb="5">
-        <Heading size="8">Shit My Dad Says:</Heading>
+        <Flex justify="between" align="center" wrap="wrap" gap="3">
+          <Heading size="8">Shit My Dad Says:</Heading>
+          <SegmentedControl.Root
+            value={sortMode}
+            onValueChange={(v) => setSortMode(v as SortMode)}
+          >
+            <SegmentedControl.Item value="recent">Recent</SegmentedControl.Item>
+            <SegmentedControl.Item value="top">Top Rated</SegmentedControl.Item>
+          </SegmentedControl.Root>
+        </Flex>
 
         {sayings === undefined ? (
           <Text size="3" color="gray">
@@ -51,22 +125,42 @@ export const ShitMyDadSays = memo(() => {
                     “{latest.quote}”
                   </Text>
 
-                  <Flex align="center" gap="3" wrap="wrap">
-                    <Badge color="orange" variant="soft">
-                      Latest
-                    </Badge>
-                    <Separator orientation="vertical" />
-                    <Text size="3" color="gray">
-                      Quoted: {latest.quoted}
-                    </Text>
-                    <Separator orientation="vertical" />
-                    <Text size="3" color="gray">
-                      From: {latest.sender}
-                    </Text>
-                    <Separator orientation="vertical" />
-                    <Text size="3" color="gray">
-                      {formatTimestamp(latest.timestamp)}
-                    </Text>
+                  <Flex align="center" justify="between" gap="3" wrap="wrap">
+                    <Flex align="center" gap="3" wrap="wrap">
+                      {sortMode === "recent" && (
+                        <>
+                          <Badge color="orange" variant="soft">
+                            Latest
+                          </Badge>
+                          <Separator orientation="vertical" />
+                        </>
+                      )}
+                      {sortMode === "top" && (
+                        <>
+                          <Badge color="orange" variant="soft">
+                            #1
+                          </Badge>
+                          <Separator orientation="vertical" />
+                        </>
+                      )}
+                      <Text size="3" color="gray">
+                        Quoted: {latest.quoted}
+                      </Text>
+                      <Separator orientation="vertical" />
+                      <Text size="3" color="gray">
+                        From: {latest.sender}
+                      </Text>
+                      <Separator orientation="vertical" />
+                      <Text size="3" color="gray">
+                        {formatTimestamp(latest.timestamp)}
+                      </Text>
+                    </Flex>
+                    <UpvoteButton
+                      sayingId={latest._id}
+                      voteCount={latest.voteCount ?? 0}
+                      hasVoted={latest.hasVoted}
+                      size="lg"
+                    />
                   </Flex>
                 </Flex>
               </Card>
@@ -75,30 +169,42 @@ export const ShitMyDadSays = memo(() => {
             {rest.length > 0 && (
               <>
                 <Box pt="2">
-                  <Heading size="5">Previous:</Heading>
+                  <Heading size="5">{sortMode === "top" ? "Runner-ups:" : "Previous:"}</Heading>
                 </Box>
 
                 <Grid columns={{ initial: "1", sm: "2", md: "2", lg: "3" }} gap="4" width="100%">
-                  {rest.map((item) => (
-                    <Card key={item._id}>
-                      <Flex direction="column" gap="2">
-                        <Text size="3" style={{ lineHeight: 1.5 }}>
-                          “{item.quote}”
-                        </Text>
-                        <Flex align="center" gap="2" wrap="wrap">
+                  {rest.map((item, index) => (
+                    <Card key={item._id} style={{ position: "relative" }}>
+                      <Flex direction="column" gap="2" pr="6">
+                        <Flex justify="between" align="start" gap="2">
+                          <Text size="3" style={{ lineHeight: 1.5, flex: 1 }}>
+                            "{item.quote}"
+                          </Text>
+                          {sortMode === "top" && (
+                            <Badge color="gray" variant="soft" style={{ flexShrink: 0 }}>
+                              #{index + 2}
+                            </Badge>
+                          )}
+                        </Flex>
+                        <Flex direction="column" gap="1">
                           <Text size="2" color="gray">
                             Quoted: {item.quoted}
                           </Text>
-                          <Separator orientation="vertical" />
                           <Text size="2" color="gray">
                             From: {item.sender}
                           </Text>
-                          <Separator orientation="vertical" />
                           <Text size="2" color="gray">
                             {formatTimestamp(item.timestamp)}
                           </Text>
                         </Flex>
                       </Flex>
+                      <Box style={{ position: "absolute", bottom: "var(--card-padding)", right: "var(--card-padding)" }}>
+                        <UpvoteButton
+                          sayingId={item._id}
+                          voteCount={item.voteCount ?? 0}
+                          hasVoted={item.hasVoted}
+                        />
+                      </Box>
                     </Card>
                   ))}
                 </Grid>

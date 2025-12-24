@@ -26,5 +26,16 @@ export default defineSchema({
     sender: v.string(),
     quoted: v.string(),
     quote: v.string(),
-  }).index("by_timestamp", ["timestamp"]),
+    voteCount: v.optional(v.number()), // Track total votes for sorting
+  })
+    .index("by_timestamp", ["timestamp"])
+    .index("by_voteCount", ["voteCount"]),
+
+  // Track individual user votes on SMDS quotes
+  smdsVotes: defineTable({
+    sayingId: v.id("shitMyDadSays"),
+    userId: v.id("users"),
+  })
+    .index("by_saying", ["sayingId"])
+    .index("by_user_saying", ["userId", "sayingId"]),
 });
