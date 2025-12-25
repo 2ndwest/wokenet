@@ -31,6 +31,7 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
         ),
       });
     }
+    console.log("Full parsed email contents:", JSON.stringify(parsed, null, 2));
   } else {
     console.log("Email addressed to:", parsed.to?.[0]?.address, "(improper, ignoring)");
   }
