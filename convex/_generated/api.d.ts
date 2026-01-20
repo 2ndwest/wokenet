@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as crons from "../crons.js";
+import type * as doorStates from "../doorStates.js";
 import type * as http from "../http.js";
 import type * as loadLocations from "../loadLocations.js";
 import type * as locations from "../locations.js";
@@ -33,6 +34,7 @@ import type * as utils_strings from "../utils/strings.js";
  */
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
+  doorStates: typeof doorStates;
   http: typeof http;
   loadLocations: typeof loadLocations;
   locations: typeof locations;
