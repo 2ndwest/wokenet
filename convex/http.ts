@@ -4,6 +4,37 @@ import { httpAction } from "./_generated/server";
 import PostalMime from "postal-mime";
 import { stripQuotes, stripOutlookSignature } from "./utils/strings";
 
+export const ingestDoorState = httpAction(async (ctx, req) => {
+  if (!process.env.DOOR_SENSOR_SECRET) {
+    console.error("Set DOOR_SENSOR_SECRET on the Convex dashboard to enable ingestion!");
+    return new Response("DOOR_SENSOR_SECRET not set on Convex!", { status: 500 });
+  }
+
+  if (req.headers.get("x-webhook-secret") !== process.env.DOOR_SENSOR_SECRET)
+    return new Response("DOOR_SENSOR_SECRET mismatch.", { status: 401 });
+
+  let body: { doorId?: string; isOpen?: boolean };
+  try {
+    body = await req.json();
+  } catch {
+    return new Response("Invalid JSON body.", { status: 400 });
+  }
+
+  if (typeof body.doorId !== "string" || typeof body.isOpen !== "boolean") {
+    return new Response("Missing or invalid doorId (string) or isOpen (boolean).", { status: 400 });
+  }
+
+  await ctx.runMutation(internal.doorStates.updateDoorState, {
+    doorId: body.doorId,
+    isOpen: body.isOpen,
+    timestamp: Date.now(),
+  });
+
+  console.log(`Door state updated: ${body.doorId} is now ${body.isOpen ? "OPEN" : "CLOSED"}`);
+
+  return new Response(null, { status: 200 });
+});
+
 export const ingestDadSaying = httpAction(async (ctx, req) => {
   if (!process.env.SMDS_WEBHOOK_SECRET) {
     console.error("Set SMDS_WEBHOOK_SECRET on the Convex dashboard to enable ingestion!");
@@ -45,6 +76,12 @@ router.route({
   pathPrefix: "/ingest-dad-saying/",
   method: "POST",
   handler: ingestDadSaying,
+});
+
+router.route({
+  pathPrefix: "/ingest-door-state/",
+  method: "POST",
+  handler: ingestDoorState,
 });
 
 export default router;

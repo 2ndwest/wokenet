@@ -38,4 +38,11 @@ export default defineSchema({
   })
     .index("by_saying", ["sayingId"])
     .index("by_user_saying", ["userId", "sayingId"]),
+
+  // Door sensor states from embedded devices
+  doorStates: defineTable({
+    doorId: v.string(),
+    isOpen: v.boolean(),
+    timestamp: v.number(),
+  }).index("by_doorId", ["doorId"]),
 });
