@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
+import { requirePutz } from "./utils/auth";
 
 export const updateDoorState = internalMutation({
   args: {
@@ -31,6 +32,8 @@ export const updateDoorState = internalMutation({
 export const getAllDoorStates = query({
   args: {},
   handler: async (ctx) => {
+    await requirePutz(ctx);
+
     return await ctx.db.query("doorStates").collect();
   },
 });
