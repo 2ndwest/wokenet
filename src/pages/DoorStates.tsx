@@ -42,7 +42,7 @@ export const DoorStates = memo(() => {
                   </Text>
                 </Flex>
 
-                <Badge size="2" color="blue" variant="soft">
+                <Badge size="2" color={door.isOpen ? "green" : "blue"} variant="soft">
                   {door.isOpen ? "Open" : "Closed"}
                 </Badge>
               </Flex>
