@@ -1,3 +1,14 @@
+import { useState, useEffect } from "react";
+
+// Force re-render at a given interval (in ms), e.g. to update relative times.
+export const useRerender = (intervalMs: number) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), intervalMs);
+    return () => clearInterval(interval);
+  }, [intervalMs]);
+};
+
 export const formatTimestamp = (ms: number) => {
   try {
     return new Date(ms).toLocaleString();

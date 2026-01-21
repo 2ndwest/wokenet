@@ -1,19 +1,14 @@
 import { Flex, Text, Heading, Card, Badge } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo, useState, useEffect } from "react";
+import { memo } from "react";
 import { CenterSpinner } from "../utils/spinner";
-import { getRelativeTime } from "../utils/time";
+import { getRelativeTime, useRerender } from "../utils/time";
 
 export const DoorStates = memo(() => {
   const doorStates = useQuery(api.doorStates.getAllDoorStates);
 
-  // Force re-render every minute to update relative times.
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  useRerender(15_000); // To update relative times.
 
   if (!doorStates) return <CenterSpinner />;
 
