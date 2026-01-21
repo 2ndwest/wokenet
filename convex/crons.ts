@@ -11,7 +11,7 @@ crons.interval(
 
 crons.interval(
   "reset stale bathroom occupancy",
-  { minutes: 5 }, // check every 5 minutes
+  { minutes: 1 }, // check every minute
   internal.bathrooms.resetStaleBathroomOccupancy
 );
 

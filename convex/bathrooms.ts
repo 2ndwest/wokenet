@@ -59,12 +59,12 @@ export const resetStaleBathroomOccupancy = internalMutation({
   handler: async (ctx) => {
     const bathrooms = await ctx.db.query("bathrooms").collect();
 
-    // Auto-vacate rooms that have been occupied for more than 45 minutes.
+    // Auto-vacate rooms that have been occupied for more than 50 minutes.
     for (const bathroom of bathrooms) {
       if (
         bathroom.isOccupied &&
         bathroom.occupiedSince != null &&
-        Date.now() - bathroom.occupiedSince >= 45 * 60 * 1000 // 45 minutes in ms
+        Date.now() - bathroom.occupiedSince >= 50 * 60 * 1000 // 50 minutes in ms
       ) {
         await ctx.db.patch(bathroom._id, {
           isOccupied: false,
