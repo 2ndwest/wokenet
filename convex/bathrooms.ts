@@ -15,6 +15,12 @@ export const updateLockState = internalMutation({
       .first();
 
     if (existing) {
+      // Sensors sometimes reboot and repost the same state multiple times,
+      // we don't want to update the "last updated" timestamp in this case.
+      if (existing.isLocked === args.isLocked) {
+        console.log(`Bathroom ${args.bathroomId}: state unchanged (${args.isLocked ? "LOCKED" : "UNLOCKED"}), skipping update`);
+        return;
+      }
       await ctx.db.patch(existing._id, {
         isLocked: args.isLocked,
         timestamp: args.timestamp,
