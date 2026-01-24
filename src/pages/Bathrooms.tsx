@@ -38,7 +38,7 @@ export const Bathrooms = memo(() => {
                 </Flex>
 
                 <Badge size="2" color={bathroom.isLocked ? "red" : "green"} variant="soft">
-                  {bathroom.isLocked ? "Occupied" : "Vacant"}
+                  {bathroom.isLocked ? "LOCKED" : "UNLOCKED"}
                 </Badge>
               </Flex>
             </Card>
