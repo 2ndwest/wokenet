@@ -39,13 +39,10 @@ export default defineSchema({
     .index("by_saying", ["sayingId"])
     .index("by_user_saying", ["userId", "sayingId"]),
 
-  // Bathroom occupancy from door sensors
+  // Bathroom occupancy from lock sensors
   bathrooms: defineTable({
-    doorId: v.string(), // The associated door id, which has a sensor
-    isOpen: v.boolean(),
+    bathroomId: v.string(), // The associated bathroom id
+    isLocked: v.boolean(), // Whether the lock is engaged (occupied)
     timestamp: v.number(),
-    // Occupancy tracking: rooms start vacant, toggle on each door open
-    isOccupied: v.optional(v.boolean()),
-    occupiedSince: v.optional(v.number()), // When the room became occupied
-  }).index("by_doorId", ["doorId"]),
+  }).index("by_bathroomId", ["bathroomId"]),
 });

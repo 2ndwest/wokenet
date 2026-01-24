@@ -9,10 +9,4 @@ crons.interval(
   internal.loadLocations.loadLocations
 );
 
-crons.interval(
-  "reset stale bathroom occupancy",
-  { minutes: 1 }, // check every minute
-  internal.bathrooms.resetStaleBathroomOccupancy
-);
-
 export default crons;

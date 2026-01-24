@@ -27,7 +27,7 @@ export const Bathrooms = memo(() => {
               <Flex direction="row" justify="between" align="center">
                 <Flex direction="column" gap="1">
                   <Text weight="bold" size="4">
-                    {bathroom.doorId}
+                    {bathroom.bathroomId}
                   </Text>
                   <Text color="gray" size="2">
                     Last activity: {getRelativeTime(bathroom.timestamp)}
@@ -37,8 +37,8 @@ export const Bathrooms = memo(() => {
                   </Text>
                 </Flex>
 
-                <Badge size="2" color={bathroom.isOccupied ? "red" : "green"} variant="soft">
-                  {bathroom.isOccupied ? "Occupied" : "Vacant"}
+                <Badge size="2" color={bathroom.isLocked ? "red" : "green"} variant="soft">
+                  {bathroom.isLocked ? "Occupied" : "Vacant"}
                 </Badge>
               </Flex>
             </Card>

@@ -39,33 +39,33 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
   return new Response(null, { status: 200 });
 });
 
-export const ingestDoorState = httpAction(async (ctx, req) => {
-  if (!process.env.DOOR_SENSOR_SECRET) {
-    console.error("Set DOOR_SENSOR_SECRET on the Convex dashboard to enable ingestion!");
-    return new Response("DOOR_SENSOR_SECRET not set on Convex!", { status: 500 });
+export const ingestLockState = httpAction(async (ctx, req) => {
+  if (!process.env.LOCK_SENSOR_SECRET) {
+    console.error("Set LOCK_SENSOR_SECRET on the Convex dashboard to enable ingestion!");
+    return new Response("LOCK_SENSOR_SECRET not set on Convex!", { status: 500 });
   }
 
-  if (req.headers.get("x-webhook-secret") !== process.env.DOOR_SENSOR_SECRET)
-    return new Response("DOOR_SENSOR_SECRET mismatch.", { status: 401 });
+  if (req.headers.get("x-webhook-secret") !== process.env.LOCK_SENSOR_SECRET)
+    return new Response("LOCK_SENSOR_SECRET mismatch.", { status: 401 });
 
-  let body: { doorId?: string; isOpen?: boolean };
+  let body: { bathroomId?: string; isLocked?: boolean };
   try {
     body = await req.json();
   } catch {
     return new Response("Invalid JSON body.", { status: 400 });
   }
 
-  if (typeof body.doorId !== "string" || typeof body.isOpen !== "boolean") {
-    return new Response("Missing or invalid doorId (string) or isOpen (boolean).", { status: 400 });
+  if (typeof body.bathroomId !== "string" || typeof body.isLocked !== "boolean") {
+    return new Response("Missing or invalid bathroomId (string) or isLocked (boolean).", { status: 400 });
   }
 
-  await ctx.runMutation(internal.bathrooms.updateBathroom, {
-    doorId: body.doorId,
-    isOpen: body.isOpen,
+  await ctx.runMutation(internal.bathrooms.updateLockState, {
+    bathroomId: body.bathroomId,
+    isLocked: body.isLocked,
     timestamp: Date.now(),
   });
 
-  console.log(`Bathroom updated: ${body.doorId} is now ${body.isOpen ? "OPEN" : "CLOSED"}`);
+  console.log(`Bathroom updated: ${body.bathroomId} is now ${body.isLocked ? "LOCKED" : "UNLOCKED"}`);
 
   return new Response(null, { status: 200 });
 });
@@ -79,9 +79,9 @@ router.route({
 });
 
 router.route({
-  pathPrefix: "/ingest-door-state/",
+  pathPrefix: "/ingest-lock-state/",
   method: "POST",
-  handler: ingestDoorState,
+  handler: ingestLockState,
 });
 
 export default router;
