@@ -13,7 +13,7 @@ export const Bathrooms = memo(() => {
   if (!bathrooms) return <CenterSpinner />;
 
   return (
-    <Flex direction="column" p="6" align="center" width="100%" height="100%">
+    <Flex direction="column" p={{ initial: "3", sm: "6" }} align="center" width="100%" height="100%">
       <Heading size="6" mb="4">
         Bathrooms
       </Heading>
