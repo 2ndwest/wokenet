@@ -9,12 +9,16 @@ import { useAuthStatus } from "../utils/useAuthStatus";
 export const Header = memo(() => {
   const { user, isAuthLoading, isUserReady } = useAuthStatus();
 
-  const [menuOpen, setMenuOpen] = useState(false);
+  // On mobile, start with menu open on the home page
+  const [menuOpen, setMenuOpen] = useState(() => {
+    return window.location.pathname === "/";
+  });
 
-  // When we navigate to a new page, close the menu if it's open.
+  // When we navigate to a new page, close the
+  // menu if it's open (except on the home page)
   const location = useLocation();
   useEffect(() => {
-    setMenuOpen(false);
+    if (location.pathname !== "/") setMenuOpen(false);
   }, [location.pathname]);
   return (
     <>
@@ -114,7 +118,7 @@ export const NavButtons = memo(
         {isAdmin && <NavButton to="/adminpanel">Admin Panel</NavButton>}
       </>
     );
-  }
+  },
 );
 
 export const NavButton = memo(
@@ -133,5 +137,5 @@ export const NavButton = memo(
         )}
       </NavLink>
     );
-  }
+  },
 );
