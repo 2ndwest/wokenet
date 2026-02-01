@@ -9,6 +9,7 @@ export const COLORS: [string, string][] = [
   ["crimson", "#a51c30"],
   ["red", "#da291c"],
   ["brown", "#7a4b2d"],
+  ["lightblue", "#0092ce"],
   ["dimgray", "dimgray"],
 ]; // Note: array order determines display priority!
 

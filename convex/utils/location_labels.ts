@@ -37,7 +37,7 @@ export const findLocationLabel = ({
     }
   }
 
-  return { label: "INTERNATIONAL", color: "brown" };
+  return { label: "INTERNATIONAL", color: "lightblue" };
 };
 
 export default generated;

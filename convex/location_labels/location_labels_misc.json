@@ -675,7 +675,7 @@
       "type": "Feature",
       "properties": {
         "name": "United Kingdom",
-        "color": "brown"
+        "color": "lightblue"
       },
       "geometry": {
         "coordinates": [
