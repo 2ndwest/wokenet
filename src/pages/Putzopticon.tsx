@@ -13,7 +13,7 @@ const SMDS_MARQUEE_COUNT = 100; // n most recent smds
 
 // Blackout periods for SMDS marquee (eastern time, 24h format)
 const SMDS_BLACKOUTS: [string, string, string][] = [
-  ["09:00", "14:00", "Bom dia e boa tarde, Olair! O Putz é grato pelo seu trabalho árduo."],
+  ["09:00", "14:00", "¡Buenos días Nataly! Gracias por mantener limpio a Putz."],
   ["23:30", "01:30", "Good evening night watch! Thank you for helping keep us safe."],
   ["03:00", "06:00", "Good morning night watch! Thank you for helping keep us safe."],
 ];
