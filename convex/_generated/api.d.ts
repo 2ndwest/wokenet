@@ -13,7 +13,6 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as bathrooms from "../bathrooms.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as loadLocations from "../loadLocations.js";
@@ -33,7 +32,6 @@ import type * as utils_strings from "../utils/strings.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  bathrooms: typeof bathrooms;
   crons: typeof crons;
   http: typeof http;
   loadLocations: typeof loadLocations;

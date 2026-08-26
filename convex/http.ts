@@ -39,49 +39,12 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
   return new Response(null, { status: 200 });
 });
 
-export const ingestLockState = httpAction(async (ctx, req) => {
-  if (!process.env.LOCK_SENSOR_SECRET) {
-    console.error("Set LOCK_SENSOR_SECRET on the Convex dashboard to enable ingestion!");
-    return new Response("LOCK_SENSOR_SECRET not set on Convex!", { status: 500 });
-  }
-
-  if (req.headers.get("x-webhook-secret") !== process.env.LOCK_SENSOR_SECRET)
-    return new Response("LOCK_SENSOR_SECRET mismatch.", { status: 401 });
-
-  let body: { bathroomId?: string; isLocked?: boolean };
-  try {
-    body = await req.json();
-  } catch {
-    return new Response("Invalid JSON body.", { status: 400 });
-  }
-
-  if (typeof body.bathroomId !== "string" || typeof body.isLocked !== "boolean") {
-    return new Response("Missing or invalid bathroomId (string) or isLocked (boolean).", { status: 400 });
-  }
-
-  await ctx.runMutation(internal.bathrooms.updateLockState, {
-    bathroomId: body.bathroomId,
-    isLocked: body.isLocked,
-    timestamp: Date.now(),
-  });
-
-  console.log(`Bathroom updated: ${body.bathroomId} is now ${body.isLocked ? "LOCKED" : "UNLOCKED"}`);
-
-  return new Response(null, { status: 200 });
-});
-
 const router = httpRouter();
 
 router.route({
   pathPrefix: "/ingest-dad-saying/",
   method: "POST",
   handler: ingestDadSaying,
-});
-
-router.route({
-  pathPrefix: "/ingest-lock-state/",
-  method: "POST",
-  handler: ingestLockState,
 });
 
 export default router;

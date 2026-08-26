@@ -38,11 +38,4 @@ export default defineSchema({
   })
     .index("by_saying", ["sayingId"])
     .index("by_user_saying", ["userId", "sayingId"]),
-
-  // Bathroom occupancy from lock sensors
-  bathrooms: defineTable({
-    bathroomId: v.string(), // The associated bathroom id
-    isLocked: v.boolean(), // Whether the lock is engaged (occupied)
-    timestamp: v.number(),
-  }).index("by_bathroomId", ["bathroomId"]),
 });
