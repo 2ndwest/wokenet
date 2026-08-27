@@ -17,7 +17,7 @@ export const getSayings = query({
   handler: async (ctx, { sortBy = "recent" }) => {
     const { user } = await requirePutz(ctx);
 
-    const items = await ctx.db.query("shitMyDadSays").collect();
+    const items = (await ctx.db.query("shitMyDadSays").collect()).filter((item) => !item.hidden);
 
     // Get all of the current user's votes in one query
     const userVotes = await ctx.db
@@ -38,6 +38,16 @@ export const getSayings = query({
     }
 
     return sayingsWithVoteStatus.sort((a, b) => b.timestamp - a.timestamp);
+  },
+});
+
+export const setHidden = internalMutation({
+  args: {
+    sayingId: v.id("shitMyDadSays"),
+    hidden: v.boolean(),
+  },
+  handler: async (ctx, { sayingId, hidden }) => {
+    await ctx.db.patch(sayingId, { hidden });
   },
 });
 
