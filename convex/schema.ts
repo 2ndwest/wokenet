@@ -7,6 +7,7 @@ export type Affiliation = Infer<typeof AFFILIATION_VALIDATOR>;
 export default defineSchema({
   locations: defineTable({
     name: v.string(),
+    lastName: v.optional(v.string()), // Used to disambiguate people who share a first name.
     providerId: v.string(),
     latitude: v.number(),
     longitude: v.number(),

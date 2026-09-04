@@ -49,7 +49,7 @@ const PersonRows = memo(
     const sortedData = useMemo(
       () =>
         data
-          .map(({ label, color, name }) => ({ name, color, label }))
+          .map(({ providerId, label, color, name }) => ({ providerId, name, color, label }))
           .sort((a, b) => {
             // Sort by, in order:
             // 1) color (using COLOR_ORDER)
@@ -114,7 +114,7 @@ const PersonRows = memo(
       >
         {sortedData.map((row, index) => (
           <PersonRow
-            key={row.name}
+            key={row.providerId} // Names can collide (two Aidens), providerId is unique.
             name={row.name}
             color={row.color}
             label={row.label}

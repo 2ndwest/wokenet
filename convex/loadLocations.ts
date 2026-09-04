@@ -19,6 +19,7 @@ export const loadLocations = internalAction({
       members: Array<{
         id: string;
         firstName: string;
+        lastName: string | null;
         features: {
           shareLocation: "1" | "0";
           disconnected: "1" | "0";
@@ -42,12 +43,18 @@ export const loadLocations = internalAction({
           member.features.shareLocation === "1" &&
           member.features.disconnected === "0"
       )
-      .map(({ location, id, firstName }) => {
+      .map(({ location, id, firstName, lastName }) => {
+        // Split off just the first word in case people
+        // enter their full name in the first name field.
+        const [first, ...rest] = firstName.trim().split(/\s+/);
+        // Prefer the actual last name field, but fall back to the
+        // remainder of the first name field if it holds a full name.
+        const last = (lastName?.trim() || rest.join(" ")).trim();
+
         return {
           providerId: id,
-          // Split off just the first word in case people
-          // enter their full name in the first name field.
-          name: titleCase(firstName.split(" ")[0]).trim(),
+          name: titleCase(first).trim(),
+          lastName: last ? titleCase(last) : undefined,
           latitude: Number(location!.latitude),
           longitude: Number(location!.longitude),
           timestamp: Number(location!.timestamp) * 1000, // convert to ms

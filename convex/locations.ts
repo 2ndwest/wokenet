@@ -20,6 +20,7 @@ export const getLocations = query({
     await requirePutz(ctx);
 
     const locations = await ctx.db.query("locations").collect();
+    const displayNames = disambiguateNames(locations);
 
     return locations.map((location) => {
       const [lat, lng] = [location.latitude, location.longitude];
@@ -32,6 +33,7 @@ export const getLocations = query({
 
       return {
         ...location,
+        name: displayNames.get(location.providerId) ?? location.name,
         label: match.label,
         color: match.color,
       };
@@ -58,3 +60,32 @@ export const setLocations = internalMutation({
     }
   },
 });
+
+/**
+ * Returns a display name per providerId. People who share a first name get
+ * their last initial appended (e.g. "Aiden S."), and if that still collides,
+ * their full last name (e.g. "Aiden Smith").
+ */
+export function disambiguateNames(
+  locations: Array<{ providerId: string; name: string; lastName?: string }>
+): Map<string, string> {
+  const countBy = (names: string[]) => {
+    const counts = new Map<string, number>();
+    for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+    return counts;
+  };
+
+  const firstNameCounts = countBy(locations.map((l) => l.name));
+  const withInitial = locations.map((l) =>
+    firstNameCounts.get(l.name)! > 1 && l.lastName ? `${l.name} ${l.lastName[0]}.` : l.name
+  );
+
+  const initialCounts = countBy(withInitial);
+  const result = new Map<string, string>();
+  locations.forEach((l, i) => {
+    const collides = initialCounts.get(withInitial[i])! > 1 && withInitial[i] !== l.name;
+    result.set(l.providerId, collides ? `${l.name} ${l.lastName}` : withInitial[i]);
+  });
+
+  return result;
+}
