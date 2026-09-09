@@ -28,7 +28,7 @@ export default defineSchema({
     quoted: v.string(),
     quote: v.string(),
     voteCount: v.optional(v.number()), // Track total votes for sorting
-    hidden: v.optional(v.boolean()), // Hidden quotes are excluded from getSayings
+    hidden: v.optional(v.boolean()), // Currently ignored: getSayings shows every quote
   })
     .index("by_timestamp", ["timestamp"])
     .index("by_voteCount", ["voteCount"]),

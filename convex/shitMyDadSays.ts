@@ -17,7 +17,7 @@ export const getSayings = query({
   handler: async (ctx, { sortBy = "recent" }) => {
     const { user } = await requirePutz(ctx);
 
-    const items = (await ctx.db.query("shitMyDadSays").collect()).filter((item) => !item.hidden);
+    const items = await ctx.db.query("shitMyDadSays").collect();
 
     // Get all of the current user's votes in one query
     const userVotes = await ctx.db
@@ -48,19 +48,6 @@ export const setHidden = internalMutation({
   },
   handler: async (ctx, { sayingId, hidden }) => {
     await ctx.db.patch(sayingId, { hidden });
-  },
-});
-
-// One-shot: clear the hidden flag on every saying so all of them show again.
-// Run with: npx convex run shitMyDadSays:unhideAll
-export const unhideAll = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const hiddenSayings = (await ctx.db.query("shitMyDadSays").collect()).filter((item) => item.hidden);
-    for (const saying of hiddenSayings) {
-      await ctx.db.patch(saying._id, { hidden: false });
-    }
-    return { unhidden: hiddenSayings.length };
   },
 });
 
