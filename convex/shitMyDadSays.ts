@@ -51,6 +51,19 @@ export const setHidden = internalMutation({
   },
 });
 
+// One-shot: clear the hidden flag on every saying so all of them show again.
+// Run with: npx convex run shitMyDadSays:unhideAll
+export const unhideAll = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const hiddenSayings = (await ctx.db.query("shitMyDadSays").collect()).filter((item) => item.hidden);
+    for (const saying of hiddenSayings) {
+      await ctx.db.patch(saying._id, { hidden: false });
+    }
+    return { unhidden: hiddenSayings.length };
+  },
+});
+
 export const toggleVote = mutation({
   args: {
     sayingId: v.id("shitMyDadSays"),
