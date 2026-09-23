@@ -7,8 +7,13 @@ import { COLOR_HEX } from "../utils/colors";
 import { useAuthStatus } from "../utils/useAuthStatus";
 import { PersonBoard, PersonRowData } from "./Putzopticon";
 
+// COLOR_HEX keys shared by the rows and the breakdown bar.
+const KILLERS = "green";
+const NO_KILLS = "yellow"; // COLOR_HEX calls its orange "yellow".
+const DEAD = "red";
+
 // Dead rows shade from the site's red (no kills) to a deep red (the most kills among the dead).
-const DEAD_LIGHT = [1, 3, 5].map((i) => parseInt(COLOR_HEX.red.slice(i, i + 2), 16));
+const DEAD_LIGHT = [1, 3, 5].map((i) => parseInt(COLOR_HEX[DEAD].slice(i, i + 2), 16));
 const DEAD_DARK = [0x4a, 0x0b, 0x08];
 const deadColor = (t: number) =>
   `rgb(${DEAD_LIGHT.map((c, i) => Math.round(c + (DEAD_DARK[i] - c) * t)).join(", ")})`;
@@ -26,7 +31,7 @@ const toRows = ({ alive, dead }: Players) => {
       .map((p) => ({
         key: p._id,
         name: p.name,
-        color: p.kills ? "green" : "yellow", // COLOR_HEX calls its orange "yellow".
+        color: p.kills ? KILLERS : NO_KILLS,
         label: `${status} (${p.kills ? `${p.kills} KILL${p.kills === 1 ? "" : "S"}` : "NO KILLS"})`,
       })),
     ...dead.map((p) => ({
@@ -45,34 +50,32 @@ const BreakdownBar = memo(({ alive, dead }: Players) => {
   const total = alive.length + dead.length;
   const killers = alive.filter((p) => p.kills > 0).length;
   const segments = [
-    { label: "WITH KILLS", count: killers, color: COLOR_HEX.green },
-    { label: "NO KILLS", count: alive.length - killers, color: COLOR_HEX.yellow },
-    { label: "DEAD", count: dead.length, color: COLOR_HEX.red },
+    { label: "WITH KILLS", count: killers, color: KILLERS },
+    { label: "NO KILLS", count: alive.length - killers, color: NO_KILLS },
+    { label: "DEAD", count: dead.length, color: DEAD },
   ].filter((s) => s.count > 0);
 
   return (
-    // Inset within its cell, with equal space above and below, so it doesn't crowd the rows.
-    <Flex height="100%" align="center" style={{ containerType: "size" }}>
-      <Flex height="70%" width="100%" gap="2px">
-        {segments.map((s) => (
-          <Flex
-            key={s.label}
-            align="center"
-            justify="center"
-            px="2"
-            style={{
-              flex: `${s.count} 1 0`,
-              minWidth: "fit-content", // Tiny slices stay readable.
-              backgroundColor: s.color,
-              fontSize: "40cqh",
-              fontWeight: "bold",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {s.count} {s.label} · {Math.round((100 * s.count) / total)}%
-          </Flex>
-        ))}
-      </Flex>
+    // 70% of its cell, centered, so it doesn't crowd the rows around it.
+    <Flex height="70%" gap="2px" style={{ alignSelf: "center", containerType: "size" }}>
+      {segments.map((s) => (
+        <Flex
+          key={s.label}
+          align="center"
+          justify="center"
+          px="2"
+          style={{
+            flex: `${s.count} 1 0`,
+            minWidth: "fit-content", // Tiny slices stay readable.
+            backgroundColor: COLOR_HEX[s.color],
+            fontSize: "57cqh",
+            fontWeight: "bold",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {s.count} {s.label} · {Math.round((100 * s.count) / total)}%
+        </Flex>
+      ))}
     </Flex>
   );
 });

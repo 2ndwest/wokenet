@@ -1,15 +1,7 @@
 import { Box, Flex, Grid } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import {
-  memo,
-  useEffect,
-  useState,
-  useMemo,
-  createElement,
-  useSyncExternalStore,
-  ReactNode,
-} from "react";
+import { memo, useEffect, useState, useMemo, createElement, useSyncExternalStore } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_ORDER, COLOR_HEX } from "../utils/colors";
@@ -98,7 +90,7 @@ type RowsProps = {
   rows: PersonRowData[];
   columns: number;
   rowsPerColumn: number;
-  lastCell?: ReactNode; // Optional row-sized cell placed after the rows (bottom right).
+  lastCell?: React.ReactNode; // Optional row-sized cell placed after the rows (bottom right).
   onRowClick?: (key: string) => void;
 };
 
@@ -107,7 +99,11 @@ export const PersonBoard = memo(
     rows,
     lastCell,
     onRowClick,
-  }: Omit<RowsProps, "rows" | "columns" | "rowsPerColumn"> & { rows: PersonRowData[] | undefined }) => {
+  }: {
+    rows: PersonRowData[] | undefined;
+    lastCell?: React.ReactNode;
+    onRowClick?: (key: string) => void;
+  }) => {
     const columns = useColumnCount();
     const rowsPerColumn = Math.ceil(((rows?.length ?? 0) + (lastCell ? 1 : 0)) / columns);
 
