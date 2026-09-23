@@ -1,3 +1,4 @@
+import { Flex } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -12,8 +13,10 @@ const DEAD_DARK = [0x4a, 0x0b, 0x08];
 const deadColor = (t: number) =>
   `rgb(${DEAD_LIGHT.map((c, i) => Math.round(c + (DEAD_DARK[i] - c) * t)).join(", ")})`;
 
-// Alive (green with kills, most first; gray without), then dead (red, most recent first).
-const toRows = ({ alive, dead }: FunctionReturnType<typeof api.assassins.getPlayers>) => {
+type Players = FunctionReturnType<typeof api.assassins.getPlayers>;
+
+// Alive (green with kills, most first; orange without), then dead (red, most recent first).
+const toRows = ({ alive, dead }: Players) => {
   const status = alive.length === 1 ? "WINNER" : "ALIVE";
   const maxDeadKills = Math.max(1, ...dead.map((p) => p.kills));
 
@@ -23,7 +26,7 @@ const toRows = ({ alive, dead }: FunctionReturnType<typeof api.assassins.getPlay
       .map((p) => ({
         key: p._id,
         name: p.name,
-        color: p.kills ? "green" : "gray",
+        color: p.kills ? "green" : "yellow", // COLOR_HEX calls its orange "yellow".
         label: `${status} (${p.kills ? `${p.kills} KILL${p.kills === 1 ? "" : "S"}` : "NO KILLS"})`,
       })),
     ...dead.map((p) => ({
@@ -36,6 +39,43 @@ const toRows = ({ alive, dead }: FunctionReturnType<typeof api.assassins.getPlay
     })),
   ] satisfies PersonRowData[];
 };
+
+// Row-sized proportional strip: alive with kills, alive without, and dead (killed or disqualified).
+const BreakdownBar = memo(({ alive, dead }: Players) => {
+  const total = alive.length + dead.length;
+  const killers = alive.filter((p) => p.kills > 0).length;
+  const segments = [
+    { label: "WITH KILLS", count: killers, color: COLOR_HEX.green },
+    { label: "NO KILLS", count: alive.length - killers, color: COLOR_HEX.yellow },
+    { label: "DEAD", count: dead.length, color: COLOR_HEX.red },
+  ].filter((s) => s.count > 0);
+
+  return (
+    // Inset within its cell, with equal space above and below, so it doesn't crowd the rows.
+    <Flex height="100%" align="center" style={{ containerType: "size" }}>
+      <Flex height="70%" width="100%" gap="2px">
+        {segments.map((s) => (
+          <Flex
+            key={s.label}
+            align="center"
+            justify="center"
+            px="2"
+            style={{
+              flex: `${s.count} 1 0`,
+              minWidth: "fit-content", // Tiny slices stay readable.
+              backgroundColor: s.color,
+              fontSize: "40cqh",
+              fontWeight: "bold",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {s.count} {s.label} · {Math.round((100 * s.count) / total)}%
+          </Flex>
+        ))}
+      </Flex>
+    </Flex>
+  );
+});
 
 // The Putzopticon, but for the hall's game of Assassins.
 export const Assassins = memo(() => {
@@ -76,5 +116,11 @@ export const Assassins = memo(() => {
     [players, recordKill, undoKill]
   );
 
-  return <PersonBoard rows={rows} onRowClick={user?.isAdmin ? onRowClick : undefined} />;
+  return (
+    <PersonBoard
+      rows={rows}
+      lastCell={players && <BreakdownBar {...players} />}
+      onRowClick={user?.isAdmin ? onRowClick : undefined}
+    />
+  );
 });

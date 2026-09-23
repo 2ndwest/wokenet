@@ -1,7 +1,15 @@
 import { Box, Flex, Grid } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo, useEffect, useState, useMemo, createElement, useSyncExternalStore } from "react";
+import {
+  memo,
+  useEffect,
+  useState,
+  useMemo,
+  createElement,
+  useSyncExternalStore,
+  ReactNode,
+} from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_ORDER, COLOR_HEX } from "../utils/colors";
@@ -90,13 +98,18 @@ type RowsProps = {
   rows: PersonRowData[];
   columns: number;
   rowsPerColumn: number;
+  lastCell?: ReactNode; // Optional row-sized cell placed after the rows (bottom right).
   onRowClick?: (key: string) => void;
 };
 
 export const PersonBoard = memo(
-  ({ rows, onRowClick }: { rows: PersonRowData[] | undefined; onRowClick?: (key: string) => void }) => {
+  ({
+    rows,
+    lastCell,
+    onRowClick,
+  }: Omit<RowsProps, "rows" | "columns" | "rowsPerColumn"> & { rows: PersonRowData[] | undefined }) => {
     const columns = useColumnCount();
-    const rowsPerColumn = Math.ceil((rows?.length ?? 0) / columns);
+    const rowsPerColumn = Math.ceil(((rows?.length ?? 0) + (lastCell ? 1 : 0)) / columns);
 
     return (
       <Flex direction="column" width="100%" height="100%" overflow="hidden">
@@ -107,6 +120,7 @@ export const PersonBoard = memo(
             rows={rows}
             columns={columns}
             rowsPerColumn={rowsPerColumn}
+            lastCell={lastCell}
             onRowClick={onRowClick}
           />
         ) : (
@@ -117,7 +131,7 @@ export const PersonBoard = memo(
   }
 );
 
-const PersonRows = memo(({ rows, columns, rowsPerColumn, onRowClick }: RowsProps) => {
+const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }: RowsProps) => {
   // Track which people are currently being "scanned" for location refresh effect.
   const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
@@ -186,6 +200,7 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, onRowClick }: RowsProps
           onClick={onRowClick}
         />
       ))}
+      {lastCell}
     </Grid>
   );
 });
