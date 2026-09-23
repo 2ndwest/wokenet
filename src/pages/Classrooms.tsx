@@ -1,6 +1,5 @@
 import {
   Box,
-  Card,
   Flex,
   Grid,
   Heading,
@@ -24,8 +23,8 @@ type When = "now" | "today" | "tomorrow";
 type Sort = "building" | "longest";
 type Window = Doc<"roomAvailability">["open"][number];
 
-// A room as seen at the chosen time: either free (until `window.end`) or booked (until `next?.start`).
-type RoomAt = { room: string; building: string; open: Window[]; window?: Window; next?: Window };
+// A room as seen at the chosen time: free until `window.end`, or booked if there's no `window`.
+type RoomAt = { room: string; building: string; open: Window[]; window?: Window };
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -45,20 +44,6 @@ const startOfDay = (ms: number, days = 0) => {
 
 const atTime = (dayStart: number, hours: number, minutes = 0) =>
   new Date(dayStart).setHours(hours, minutes, 0, 0);
-
-const formatTime = (ms: number) => {
-  const d = new Date(ms);
-  if (d.getHours() === 0 && d.getMinutes() === 0) return "midnight";
-  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-};
-
-// "3:00 PM", or "9:00 AM tomorrow" when it's on a later day than `at`. Midnight counts as the day before.
-const formatRelativeTime = (ms: number, at: number) => {
-  const days = Math.round((startOfDay(ms - 1) - startOfDay(at)) / (24 * HOUR));
-  if (days === 0) return formatTime(ms);
-  if (days === 1) return `${formatTime(ms)} tomorrow`;
-  return `${formatTime(ms)} ${new Date(ms - 1).toLocaleDateString([], { weekday: "short" })}`;
-};
 
 // "45m" under an hour, otherwise hours to one decimal, e.g. "1.5h" or "28.3h".
 const formatDuration = (ms: number) => {
@@ -143,87 +128,52 @@ const Timeline = memo(({ open, at }: { open: Window[]; at: number }) => {
   );
 });
 
-const RoomDetails = memo(({ room, at }: { room: RoomAt; at: number }) => {
+// A thin divided row: room on the left, its timeline in the middle, and time left on the right.
+const RoomRow = memo(({ room, at }: { room: RoomAt; at: number }) => {
   const free = !!room.window;
 
   return (
-    <Card style={{ opacity: free ? 1 : 0.6 }}>
-      <Flex direction="column" gap="2">
-        <Flex justify="between" align="baseline" gap="2">
-          <Text size="4" weight="bold">
-            {room.room}
-          </Text>
-          {free && (
-            <Text size="2" style={{ color: colorFor(room.window!, at) }}>
-              {formatDuration(room.window!.end - at)}
-            </Text>
-          )}
-        </Flex>
-        <Text size="2" color={free ? undefined : "gray"}>
-          {free
-            ? `Free until ${formatRelativeTime(room.window!.end, at)}`
-            : room.next
-              ? `Booked, free at ${formatRelativeTime(room.next.start, at)}`
-              : "Booked for the rest of the day"}
-        </Text>
+    <Flex
+      align="center"
+      gap="3"
+      style={{
+        height: "calc(var(--space-6) * 1.25)", // 25% taller than the search box.
+        borderBottom: "1px solid var(--gray-4)",
+        opacity: free ? 1 : 0.6,
+      }}
+    >
+      <Text size="4" style={{ width: "96px", flexShrink: 0, ...GROTESK }}>
+        {room.room}
+      </Text>
+      <Box flexGrow="1">
         <Timeline open={room.open} at={at} />
-      </Flex>
-    </Card>
-  );
-});
-
-const RoomCard = memo(({ room, at }: { room: RoomAt; at: number }) => {
-  const free = !!room.window;
-
-  return (
-    <>
-      {/* Phones get thin divided rows: room on the left, its timeline on the right. */}
-      <Flex
-        display={{ initial: "flex", xs: "none" }}
-        align="center"
-        gap="3"
+      </Box>
+      <Text
+        size="2"
+        align="right"
         style={{
-          height: "calc(var(--space-6) * 1.25)", // 25% taller than the search box.
-          borderBottom: "1px solid var(--gray-4)",
-          opacity: free ? 1 : 0.6,
+          width: "56px",
+          flexShrink: 0,
+          color: free ? colorFor(room.window!, at) : COLOR_HEX.red,
         }}
       >
-        <Text size="4" style={{ width: "96px", flexShrink: 0, ...GROTESK }}>
-          {room.room}
-        </Text>
-        <Box flexGrow="1">
-          <Timeline open={room.open} at={at} />
-        </Box>
-        <Text
-          size="2"
-          align="right"
-          style={{
-            width: "56px",
-            flexShrink: 0,
-            color: free ? colorFor(room.window!, at) : COLOR_HEX.red,
-          }}
-        >
-          {free ? formatDuration(room.window!.end - at) : "N/A"}
-        </Text>
-      </Flex>
-
-      <Box display={{ initial: "none", xs: "block" }}>
-        <RoomDetails room={room} at={at} />
-      </Box>
-    </>
+        {free ? formatDuration(room.window!.end - at) : "N/A"}
+      </Text>
+    </Flex>
   );
 });
 
 const RoomGrid = memo(({ rooms, at }: { rooms: RoomAt[]; at: number }) => (
-  <Grid columns={{ initial: "1", xs: "2", md: "3", lg: "4" }} gap={{ initial: "0", xs: "3" }}>
+  // Wider screens tile the rows into columns so the timelines don't stretch too far.
+  <Grid columns={{ initial: "1", md: "2", lg: "3" }} gapX={{ initial: "0", md: "6" }}>
     {rooms.map((room) => (
-      <RoomCard key={room.room} room={room} at={at} />
+      <RoomRow key={room.room} room={room} at={at} />
     ))}
   </Grid>
 ));
 
 // Which MIT rooms are free now (or at a chosen time today/tomorrow), from nickbot's room sweeps.
-export const Rooms = memo(() => {
+export const Classrooms = memo(() => {
   useRerender(MINUTE);
   const now = Math.floor(Date.now() / MINUTE) * MINUTE;
 
@@ -242,42 +192,45 @@ export const Rooms = memo(() => {
 
   const query = search.replace(/\s/g, "").toUpperCase();
 
+  const searched = useMemo(
+    () => (rooms && query ? searchedBuilding(query, new Set(rooms.map((r) => r.building))) : undefined),
+    [rooms, query]
+  );
+
   const shown = useMemo(() => {
     if (!rooms) return [];
 
     // Searching a building ("W41") puts all its rooms first; with more ("W41-2"), just those rooms,
     // then the rest of the building. Either way, the nearest buildings follow. Other searches just
     // match room names.
-    const building = query ? searchedBuilding(query, new Set(rooms.map((r) => r.building))) : undefined;
     const matches = (r: { room: string; building: string }) =>
       !query ||
-      (building
-        ? query === building
-          ? r.building === building
+      (searched
+        ? query === searched
+          ? r.building === searched
           : r.room.toUpperCase().startsWith(query)
         : r.room.toUpperCase().includes(query));
-    const tier = (r: RoomAt) => (matches(r) ? 0 : r.building === building ? 1 : 2);
+    const tier = (r: RoomAt) => (matches(r) ? 0 : r.building === searched ? 1 : 2);
 
     return rooms
-      .filter((r) => building || matches(r))
+      .filter((r) => searched || matches(r))
       .map((r): RoomAt => ({
         ...r,
         window: r.open.find((w) => w.start <= at && at < w.end),
-        next: r.open.find((w) => w.start > at),
       }))
       .filter((r) => r.window || showBooked)
       .sort(
         (a, b) =>
-          (building
+          (searched
             ? tier(a) - tier(b) ||
-              distance(building, a.building) - distance(building, b.building) ||
+              distance(searched, a.building) - distance(searched, b.building) ||
               byName(a.building, b.building)
             : 0) ||
           (sort === "longest"
             ? (b.window?.end ?? 0) - (a.window?.end ?? 0) || byName(a.room, b.room)
             : byName(a.building, b.building) || byName(a.room, b.room))
       );
-  }, [rooms, query, at, sort, showBooked]);
+  }, [rooms, query, searched, at, sort, showBooked]);
 
   const buildings = useMemo(() => {
     const groups = new Map<string, RoomAt[]>();
@@ -352,7 +305,8 @@ export const Rooms = memo(() => {
           </IconButton>
         </Flex>
 
-        {sort === "longest" ? (
+        {/* Sorting by longest mixes buildings, unless a building search keeps them grouped. */}
+        {sort === "longest" && !searched ? (
           <RoomGrid rooms={shown} at={at} />
         ) : (
           buildings.map(([building, rooms]) => (

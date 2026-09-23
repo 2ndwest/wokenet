@@ -5,7 +5,7 @@ import { Putzopticon } from "./pages/Putzopticon";
 import { Assassins } from "./pages/Assassins";
 import { Putz360 } from "./pages/Putz360";
 import { ShitMyDadSays } from "./pages/ShitMyDadSays";
-import { Rooms } from "./pages/Rooms";
+import { Classrooms } from "./pages/Classrooms";
 import { AuthedHome } from "./pages/AuthedHome";
 import { Unauthorized } from "./pages/Unauthorized";
 import { AdminPanel } from "./pages/AdminPanel";
@@ -31,7 +31,7 @@ const App = memo(() => {
               <Route path="/assassins" element={<Assassins />} />
               <Route path="/putz360" element={<Putz360 />} />
               <Route path="/smds" element={<ShitMyDadSays />} />
-              <Route path="/rooms" element={<Rooms />} />
+              <Route path="/classrooms" element={<Classrooms />} />
               {user!.isAdmin && <Route path="/adminpanel" element={<AdminPanel />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
