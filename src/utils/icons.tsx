@@ -47,3 +47,26 @@ export const HamburgerIcon = ({ open }: { open: boolean }) => {
     </svg>
   );
 };
+
+export const ClockIcon = () => {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+};
+
+// Bars getting shorter, for sorting longest-first.
+export const SortIcon = () => {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18">
+      <path
+        d="M4 6h16M4 12h11M4 18h6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+};
