@@ -76,15 +76,19 @@ export type PersonRowData = {
 };
 
 // SMDS marquee over a full-height stack of name/label rows, in the given order.
-export const PersonBoard = memo(({ rows }: { rows: PersonRowData[] | undefined }) => (
-  <Flex direction="column" width="100%" height="100%" overflow="hidden">
-    <SMDSMarquee height={`${100 / (rows ? rows.length + 1 : 1)}%`} />
+type RowsProps = { rows: PersonRowData[]; onRowClick?: (key: string) => void };
 
-    {rows ? <PersonRows rows={rows} /> : <CenterSpinner />}
-  </Flex>
-));
+export const PersonBoard = memo(
+  ({ rows, onRowClick }: Omit<RowsProps, "rows"> & { rows: PersonRowData[] | undefined }) => (
+    <Flex direction="column" width="100%" height="100%" overflow="hidden">
+      <SMDSMarquee height={`${100 / (rows ? rows.length + 1 : 1)}%`} />
 
-const PersonRows = memo(({ rows }: { rows: PersonRowData[] }) => {
+      {rows ? <PersonRows rows={rows} onRowClick={onRowClick} /> : <CenterSpinner />}
+    </Flex>
+  )
+);
+
+const PersonRows = memo(({ rows, onRowClick }: RowsProps) => {
   // Track which people are currently being "scanned" for location refresh effect.
   const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
@@ -127,12 +131,14 @@ const PersonRows = memo(({ rows }: { rows: PersonRowData[] }) => {
       {rows.map((row, index) => (
         <PersonRow
           key={row.key} // Names can collide (two Aidens), so key on something unique.
+          id={row.key}
           name={row.name}
           color={row.color}
           label={row.label}
           dimmed={row.dimmed}
           height="100%" // Let the CSS engine deal with this.
           isScanning={scanningIndices.has(index)}
+          onClick={onRowClick}
         />
       ))}
     </Flex>
@@ -141,26 +147,32 @@ const PersonRows = memo(({ rows }: { rows: PersonRowData[] }) => {
 
 export const PersonRow = memo(
   ({
+    id,
     name,
     color,
     label,
     height,
     dimmed = false,
     isScanning = false,
+    onClick,
   }: {
+    id: string;
     name: string;
     color: string;
     label: string;
     height: string;
     dimmed?: boolean;
     isScanning?: boolean;
+    onClick?: (id: string) => void;
   }) => {
     return (
       <Flex
         direction="row"
         height={height}
         width="100%"
+        onClick={onClick && (() => onClick(id))}
         style={{
+          cursor: onClick ? "pointer" : undefined,
           // Can't use opacity it messes with the AutoAnimate.
           filter: dimmed ? "brightness(0.3)" : "none",
           animation:

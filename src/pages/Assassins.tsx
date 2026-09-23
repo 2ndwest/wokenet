@@ -1,8 +1,9 @@
 import { api } from "../../convex/_generated/api";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { COLOR_HEX } from "../utils/colors";
+import { useAuthStatus } from "../utils/useAuthStatus";
 import { PersonBoard, PersonRowData } from "./Putzopticon";
 
 // Dead rows shade from the site's red (no kills) to a deep red (the most kills among the dead).
@@ -38,8 +39,42 @@ const toRows = ({ alive, dead }: FunctionReturnType<typeof api.assassins.getPlay
 
 // The Putzopticon, but for the hall's game of Assassins.
 export const Assassins = memo(() => {
+  const { user } = useAuthStatus();
   const players = useQuery(api.assassins.getPlayers);
   const rows = useMemo(() => players && toRows(players), [players]);
 
-  return <PersonBoard rows={rows} />;
+  const recordKill = useMutation(api.assassins.recordKill);
+  const undoKill = useMutation(api.assassins.undoKill);
+
+  // Admins click a living player to record who killed them, or a dead one to undo.
+  const onRowClick = useCallback(
+    (id: string) => {
+      if (!players) return;
+
+      const dead = players.dead.find((p) => p._id === id);
+      if (dead) {
+        if (confirm(`Undo ${dead.name}'s death?`)) undoKill({ victimId: dead._id }).catch(alert);
+        return;
+      }
+
+      const victim = players.alive.find((p) => p._id === id)!;
+      const input = prompt(`Who killed ${victim.name}? (or "GM" to disqualify)`)?.trim();
+      if (!input) return;
+
+      const killer =
+        input.toLowerCase() === "gm"
+          ? null
+          : players.alive.find(
+              (p) => p._id !== victim._id && p.name.toLowerCase() === input.toLowerCase()
+            );
+      if (killer === undefined) return alert(`No living player named "${input}".`);
+
+      const question = killer ? `${killer.name} killed ${victim.name}?` : `Disqualify ${victim.name}?`;
+      if (confirm(question))
+        recordKill({ victimId: victim._id, killerId: killer?._id ?? null }).catch(alert);
+    },
+    [players, recordKill, undoKill]
+  );
+
+  return <PersonBoard rows={rows} onRowClick={user?.isAdmin ? onRowClick : undefined} />;
 });
