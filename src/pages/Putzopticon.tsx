@@ -1,7 +1,7 @@
-import { Flex } from "@radix-ui/themes";
+import { Flex, Grid } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo, useEffect, useState, useMemo, createElement } from "react";
+import { memo, useEffect, useState, useMemo, createElement, useSyncExternalStore } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_ORDER, COLOR_HEX } from "../utils/colors";
@@ -76,19 +76,48 @@ export type PersonRowData = {
 };
 
 // SMDS marquee over a full-height stack of name/label rows, in the given order.
-type RowsProps = { rows: PersonRowData[]; onRowClick?: (key: string) => void };
+// Landscape screens (desktops) get two columns; the portrait hall TV and phones get one.
+const WIDE_QUERY = "(orientation: landscape) and (min-width: 768px)";
+const subscribeToWide = (onChange: () => void) => {
+  const media = matchMedia(WIDE_QUERY);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+};
+const useColumnCount = () =>
+  useSyncExternalStore(subscribeToWide, () => matchMedia(WIDE_QUERY).matches) ? 2 : 1;
+
+type RowsProps = {
+  rows: PersonRowData[];
+  columns: number;
+  rowsPerColumn: number;
+  onRowClick?: (key: string) => void;
+};
 
 export const PersonBoard = memo(
-  ({ rows, onRowClick }: Omit<RowsProps, "rows"> & { rows: PersonRowData[] | undefined }) => (
-    <Flex direction="column" width="100%" height="100%" overflow="hidden">
-      <SMDSMarquee height={`${100 / (rows ? rows.length + 1 : 1)}%`} />
+  ({ rows, onRowClick }: { rows: PersonRowData[] | undefined; onRowClick?: (key: string) => void }) => {
+    const columns = useColumnCount();
+    const rowsPerColumn = Math.ceil((rows?.length ?? 0) / columns);
 
-      {rows ? <PersonRows rows={rows} onRowClick={onRowClick} /> : <CenterSpinner />}
-    </Flex>
-  )
+    return (
+      <Flex direction="column" width="100%" height="100%" overflow="hidden">
+        <SMDSMarquee height={`${100 / (rowsPerColumn + 1)}%`} />
+
+        {rows ? (
+          <PersonRows
+            rows={rows}
+            columns={columns}
+            rowsPerColumn={rowsPerColumn}
+            onRowClick={onRowClick}
+          />
+        ) : (
+          <CenterSpinner />
+        )}
+      </Flex>
+    );
+  }
 );
 
-const PersonRows = memo(({ rows, onRowClick }: RowsProps) => {
+const PersonRows = memo(({ rows, columns, rowsPerColumn, onRowClick }: RowsProps) => {
   // Track which people are currently being "scanned" for location refresh effect.
   const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
@@ -118,12 +147,16 @@ const PersonRows = memo(({ rows, onRowClick }: RowsProps) => {
   const [autoAnimate] = useAutoAnimate();
 
   return (
-    <Flex
+    // Fills each column top to bottom, then moves on to the next.
+    <Grid
       ref={autoAnimate}
-      direction="column"
+      flow="column"
+      rows={`repeat(${rowsPerColumn}, 1fr)`}
+      columns={`repeat(${columns}, 1fr)`}
       width="100%"
       flexGrow="1"
-      gap="0.4%"
+      gapX="5"
+      gapY="0.4%"
       px="8px"
       py="8px"
       overflow="hidden"
@@ -141,7 +174,7 @@ const PersonRows = memo(({ rows, onRowClick }: RowsProps) => {
           onClick={onRowClick}
         />
       ))}
-    </Flex>
+    </Grid>
   );
 });
 
