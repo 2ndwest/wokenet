@@ -2,6 +2,7 @@ import { Flex } from "@radix-ui/themes";
 import { Routes, Route, Navigate } from "react-router";
 import { Header } from "./components/Header";
 import { Putzopticon } from "./pages/Putzopticon";
+import { Assassins } from "./pages/Assassins";
 import { Putz360 } from "./pages/Putz360";
 import { ShitMyDadSays } from "./pages/ShitMyDadSays";
 import { AuthedHome } from "./pages/AuthedHome";
@@ -26,6 +27,7 @@ const App = memo(() => {
             <Routes>
               <Route path="/" element={<AuthedHome />} />
               <Route path="/putzopticon" element={<Putzopticon />} />
+              <Route path="/assassins" element={<Assassins />} />
               <Route path="/putz360" element={<Putz360 />} />
               <Route path="/smds" element={<ShitMyDadSays />} />
               {user!.isAdmin && <Route path="/adminpanel" element={<AdminPanel />} />}

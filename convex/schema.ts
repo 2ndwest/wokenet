@@ -33,6 +33,13 @@ export default defineSchema({
     .index("by_timestamp", ["timestamp"])
     .index("by_voteCount", ["voteCount"]),
 
+  // Assassins: who killed whom. Every PUTZ user is playing.
+  assassinsKills: defineTable({
+    victimId: v.id("users"),
+    killerId: v.union(v.id("users"), v.null()), // null = disqualified by the game master.
+    timestamp: v.number(),
+  }).index("by_victimId", ["victimId"]),
+
   // Track individual user votes on SMDS quotes
   smdsVotes: defineTable({
     sayingId: v.id("shitMyDadSays"),

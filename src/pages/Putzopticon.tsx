@@ -31,101 +31,113 @@ const getSMDSBlackoutMessage = (): string | null => {
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
 
-  return (
-    <Flex direction="column" width="100%" height="100%" overflow="hidden">
-      <SMDSMarquee height={`${100 / (data ? data.length + 1 : 1)}%`} />
+  const rows = useMemo(
+    () =>
+      data
+        ?.map(({ providerId, label, color, name }) => ({
+          key: providerId,
+          name,
+          color,
+          label,
+          dimmed: label === "UNKNOWN",
+        }))
+        .sort((a, b) => {
+          // Sort by, in order:
+          // 1) color (using COLOR_ORDER)
+          // 2) label length (alternating longer/shorter first per color)
+          // 3) label (alphabetically)
+          // 4) name (alphabetically)
+          const aOrder = COLOR_ORDER.indexOf(a.color);
+          const bOrder = COLOR_ORDER.indexOf(b.color);
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          // Alternate: even color indices sorted longer
+          // first, odd color indices sorted shorter first.
+          const longerFirst = aOrder % 2 === 0;
+          const labelLengthCompare = longerFirst
+            ? b.label.length - a.label.length
+            : a.label.length - b.label.length;
+          if (labelLengthCompare !== 0) return labelLengthCompare;
+          const labelCompare = a.label.localeCompare(b.label);
+          if (labelCompare !== 0) return labelCompare;
+          return a.name.localeCompare(b.name);
+        }),
+    [data]
+  );
 
-      {data ? <PersonRows data={data} /> : <CenterSpinner />}
+  return <PersonBoard rows={rows} />;
+});
+
+export type PersonRowData = {
+  key: string;
+  name: string;
+  color: string;
+  label: string;
+  dimmed?: boolean;
+};
+
+// SMDS marquee over a full-height stack of name/label rows, in the given order.
+export const PersonBoard = memo(({ rows }: { rows: PersonRowData[] | undefined }) => (
+  <Flex direction="column" width="100%" height="100%" overflow="hidden">
+    <SMDSMarquee height={`${100 / (rows ? rows.length + 1 : 1)}%`} />
+
+    {rows ? <PersonRows rows={rows} /> : <CenterSpinner />}
+  </Flex>
+));
+
+const PersonRows = memo(({ rows }: { rows: PersonRowData[] }) => {
+  // Track which people are currently being "scanned" for location refresh effect.
+  const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+
+    const interval = setInterval(() => {
+      // Pick a random person.
+      const randomIndex = Math.floor(Math.random() * rows.length);
+
+      // Add them to the scanning set.
+      setScanningIndices((prev) => new Set(prev).add(randomIndex));
+
+      // Remove them from the set after animation completes.
+      setTimeout(() => {
+        setScanningIndices((prev) => {
+          const next = new Set(prev);
+          next.delete(randomIndex);
+          return next;
+        });
+      }, SCAN_ANIMATION_DURATION);
+    }, SCAN_FREQUENCY);
+
+    return () => clearInterval(interval);
+  }, [rows]);
+
+  const [autoAnimate] = useAutoAnimate();
+
+  return (
+    <Flex
+      ref={autoAnimate}
+      direction="column"
+      width="100%"
+      flexGrow="1"
+      gap="0.4%"
+      px="8px"
+      py="8px"
+      overflow="hidden"
+    >
+      {rows.map((row, index) => (
+        <PersonRow
+          key={row.key} // Names can collide (two Aidens), so key on something unique.
+          name={row.name}
+          color={row.color}
+          label={row.label}
+          dimmed={row.dimmed}
+          height="100%" // Let the CSS engine deal with this.
+          isScanning={scanningIndices.has(index)}
+        />
+      ))}
     </Flex>
   );
 });
-
-const PersonRows = memo(
-  ({
-    data,
-  }: {
-    data: NonNullable<ReturnType<typeof useQuery<typeof api.locations.getLocations>>>;
-  }) => {
-    const sortedData = useMemo(
-      () =>
-        data
-          .map(({ providerId, label, color, name }) => ({ providerId, name, color, label }))
-          .sort((a, b) => {
-            // Sort by, in order:
-            // 1) color (using COLOR_ORDER)
-            // 2) label length (alternating longer/shorter first per color)
-            // 3) label (alphabetically)
-            // 4) name (alphabetically)
-            const aOrder = COLOR_ORDER.indexOf(a.color);
-            const bOrder = COLOR_ORDER.indexOf(b.color);
-            if (aOrder !== bOrder) return aOrder - bOrder;
-            // Alternate: even color indices sorted longer
-            // first, odd color indices sorted shorter first.
-            const longerFirst = aOrder % 2 === 0;
-            const labelLengthCompare = longerFirst
-              ? b.label.length - a.label.length
-              : a.label.length - b.label.length;
-            if (labelLengthCompare !== 0) return labelLengthCompare;
-            const labelCompare = a.label.localeCompare(b.label);
-            if (labelCompare !== 0) return labelCompare;
-            return a.name.localeCompare(b.name);
-          }),
-      [data]
-    );
-
-    // Track which people are currently being "scanned" for location refresh effect.
-    const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
-
-    useEffect(() => {
-      if (sortedData.length === 0) return;
-
-      const interval = setInterval(() => {
-        // Pick a random person.
-        const randomIndex = Math.floor(Math.random() * sortedData.length);
-
-        // Add them to the scanning set.
-        setScanningIndices((prev) => new Set(prev).add(randomIndex));
-
-        // Remove them from the set after animation completes.
-        setTimeout(() => {
-          setScanningIndices((prev) => {
-            const next = new Set(prev);
-            next.delete(randomIndex);
-            return next;
-          });
-        }, SCAN_ANIMATION_DURATION);
-      }, SCAN_FREQUENCY);
-
-      return () => clearInterval(interval);
-    }, [sortedData]);
-
-    const [autoAnimate] = useAutoAnimate();
-
-    return (
-      <Flex
-        ref={autoAnimate}
-        direction="column"
-        width="100%"
-        flexGrow="1"
-        gap="0.4%"
-        px="8px"
-        py="8px"
-        overflow="hidden"
-      >
-        {sortedData.map((row, index) => (
-          <PersonRow
-            key={row.providerId} // Names can collide (two Aidens), providerId is unique.
-            name={row.name}
-            color={row.color}
-            label={row.label}
-            height="100%" // Let the CSS engine deal with this.
-            isScanning={scanningIndices.has(index)}
-          />
-        ))}
-      </Flex>
-    );
-  }
-);
 
 export const PersonRow = memo(
   ({
@@ -133,16 +145,16 @@ export const PersonRow = memo(
     color,
     label,
     height,
+    dimmed = false,
     isScanning = false,
   }: {
     name: string;
     color: string;
     label: string;
     height: string;
+    dimmed?: boolean;
     isScanning?: boolean;
   }) => {
-    const isUnknown = label === "UNKNOWN";
-
     return (
       <Flex
         direction="row"
@@ -150,9 +162,9 @@ export const PersonRow = memo(
         width="100%"
         style={{
           // Can't use opacity it messes with the AutoAnimate.
-          filter: isUnknown ? "brightness(0.3)" : "none",
+          filter: dimmed ? "brightness(0.3)" : "none",
           animation:
-            isScanning && !isUnknown
+            isScanning && !dimmed
               ? `locationRefresh ${SCAN_ANIMATION_DURATION}ms ease-out`
               : "none",
         }}
