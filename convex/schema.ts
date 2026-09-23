@@ -40,6 +40,14 @@ export default defineSchema({
     timestamp: v.number(),
   }).index("by_victimId", ["victimId"]),
 
+  // Pushed by nickbot after each sweep of MIT's room bookings (plus Hydrant's class schedule).
+  roomAvailability: defineTable({
+    room: v.string(), // e.g. "W41-1119"
+    building: v.string(), // e.g. "W41" (wings like "14N" are folded into "14")
+    open: v.array(v.object({ start: v.number(), end: v.number() })), // ms timestamps, today and tomorrow
+    updatedAt: v.number(),
+  }).index("by_room", ["room"]),
+
   // Track individual user votes on SMDS quotes
   smdsVotes: defineTable({
     sayingId: v.id("shitMyDadSays"),

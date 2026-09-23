@@ -18,6 +18,7 @@ import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as loadLocations from "../loadLocations.js";
 import type * as locations from "../locations.js";
+import type * as roomAvailability from "../roomAvailability.js";
 import type * as shitMyDadSays from "../shitMyDadSays.js";
 import type * as users from "../users.js";
 import type * as utils_auth from "../utils/auth.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   loadLocations: typeof loadLocations;
   locations: typeof locations;
+  roomAvailability: typeof roomAvailability;
   shitMyDadSays: typeof shitMyDadSays;
   users: typeof users;
   "utils/auth": typeof utils_auth;

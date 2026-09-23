@@ -39,12 +39,39 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
   return new Response(null, { status: 200 });
 });
 
+export const ingestRoomAvailability = httpAction(async (ctx, req) => {
+  if (!process.env.ROOMS_WEBHOOK_SECRET) {
+    console.error("Set ROOMS_WEBHOOK_SECRET on the Convex dashboard to enable ingestion!");
+    return new Response("ROOMS_WEBHOOK_SECRET not set on Convex!", { status: 500 });
+  }
+
+  if (req.headers.get("x-webhook-secret") !== process.env.ROOMS_WEBHOOK_SECRET)
+    return new Response("ROOMS_WEBHOOK_SECRET mismatch.", { status: 401 });
+
+  const { rooms } = (await req.json()) as {
+    rooms: Array<{ room: string; building: string; open: Array<{ start: number; end: number }> }>;
+  };
+
+  const updatedAt = Date.now();
+  await ctx.runMutation(internal.roomAvailability.setRoomAvailability, {
+    rooms: rooms.map((room) => ({ ...room, updatedAt })),
+  });
+
+  return new Response(null, { status: 200 });
+});
+
 const router = httpRouter();
 
 router.route({
   pathPrefix: "/ingest-dad-saying/",
   method: "POST",
   handler: ingestDadSaying,
+});
+
+router.route({
+  path: "/ingest-room-availability",
+  method: "POST",
+  handler: ingestRoomAvailability,
 });
 
 export default router;
