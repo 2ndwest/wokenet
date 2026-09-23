@@ -1,4 +1,4 @@
-import { Flex, Grid } from "@radix-ui/themes";
+import { Box, Flex, Grid } from "@radix-ui/themes";
 import { api } from "../../convex/_generated/api";
 import { useQuery } from "convex/react";
 import { memo, useEffect, useState, useMemo, createElement, useSyncExternalStore } from "react";
@@ -155,12 +155,24 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, onRowClick }: RowsProps
       columns={`repeat(${columns}, 1fr)`}
       width="100%"
       flexGrow="1"
-      gapX="5"
+      gapX="8"
       gapY="0.4%"
       px="8px"
       py="8px"
       overflow="hidden"
+      position="relative"
     >
+      {columns > 1 && (
+        // Thin line down the middle of the gap so the columns read as separate lists.
+        <Box
+          position="absolute"
+          top="8px"
+          bottom="8px"
+          left="50%"
+          width="1px"
+          style={{ backgroundColor: "var(--gray-5)" }}
+        />
+      )}
       {rows.map((row, index) => (
         <PersonRow
           key={row.key} // Names can collide (two Aidens), so key on something unique.
