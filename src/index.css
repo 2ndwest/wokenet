@@ -5,6 +5,8 @@ body {
   /* Sets IOS status bar color in PWA mode (can't use var(--color-background) because it's not set in the root element) */
   background-color: #111113;
   overflow: hidden;
+  /* No double-tap to zoom (and no tap delay waiting for a second tap). */
+  touch-action: manipulation;
 }
 
 @font-face {
