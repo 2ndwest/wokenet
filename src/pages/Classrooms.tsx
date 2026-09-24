@@ -126,18 +126,31 @@ const distance = (from: number[] | undefined, building: string) => {
 const useLocation = () => {
   const [here, setHere] = useState<number[]>();
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    const geo = navigator.geolocation;
+    if (!geo) return;
+
     const round = (deg: number) => Math.round(deg / 0.0005) * 0.0005;
-    const id = navigator.geolocation.watchPosition(
-      ({ coords }) =>
-        setHere((prev) => {
-          const next = [round(coords.latitude), round(coords.longitude)];
-          return prev && prev[0] === next[0] && prev[1] === next[1] ? prev : next;
-        }),
-      () => {}, // Denied or unavailable: stay in building order.
-      { maximumAge: 60_000 }
-    );
-    return () => navigator.geolocation.clearWatch(id);
+    const update = ({ coords }: GeolocationPosition) =>
+      setHere((prev) => {
+        const next = [round(coords.latitude), round(coords.longitude)];
+        return prev && prev[0] === next[0] && prev[1] === next[1] ? prev : next;
+      });
+    const ignore = () => {}; // Denied or unavailable: stay in building order.
+
+    const id = geo.watchPosition(update, ignore, { maximumAge: 60_000 });
+
+    // The watch pauses in the background and doesn't always resume (especially in iOS home-screen
+    // apps), so ask again whenever the page comes back into view.
+    const onVisible = () => {
+      if (document.visibilityState === "visible")
+        geo.getCurrentPosition(update, ignore, { maximumAge: 30_000 });
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      geo.clearWatch(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
   return here;
 };
