@@ -22,6 +22,7 @@ import { CenterSpinner } from "../utils/spinner";
 import { COLOR_HEX } from "../utils/colors";
 import { BookedIcon, ClockIcon, SortIcon, WarningIcon } from "../utils/icons";
 import BUILDING_COORDS from "../utils/building_coords.json";
+import { useGeolocation } from "../utils/useGeolocation";
 
 type When = "now" | "today" | "tomorrow";
 type Sort = "building" | "longest";
@@ -119,40 +120,6 @@ const distance = (from: number[] | undefined, building: string) => {
   const to = COORDS[building];
   if (!from || !to) return Infinity;
   return Math.hypot(from[0] - to[0], (from[1] - to[1]) * Math.cos((from[0] * Math.PI) / 180));
-};
-
-// The viewer's [lat, lng], if they allow it, so the nearest buildings come first. It never leaves the
-// browser. Rounded to ~50m so the list doesn't reshuffle with every step.
-const useLocation = () => {
-  const [here, setHere] = useState<number[]>();
-  useEffect(() => {
-    const geo = navigator.geolocation;
-    if (!geo) return;
-
-    const round = (deg: number) => Math.round(deg / 0.0005) * 0.0005;
-    const update = ({ coords }: GeolocationPosition) =>
-      setHere((prev) => {
-        const next = [round(coords.latitude), round(coords.longitude)];
-        return prev && prev[0] === next[0] && prev[1] === next[1] ? prev : next;
-      });
-    const ignore = () => {}; // Denied or unavailable: stay in building order.
-
-    const id = geo.watchPosition(update, ignore, { maximumAge: 60_000 });
-
-    // The watch pauses in the background and doesn't always resume (especially in iOS home-screen
-    // apps), so ask again whenever the page comes back into view.
-    const onVisible = () => {
-      if (document.visibilityState === "visible")
-        geo.getCurrentPosition(update, ignore, { maximumAge: 30_000 });
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      geo.clearWatch(id);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, []);
-  return here;
 };
 
 // The building a search is for: "W41" or "W41-2" -> "W41". Wings fold in like the data: "14N-1" -> "14".
@@ -503,7 +470,7 @@ export const Classrooms = memo(() => {
   const now = Math.floor(Date.now() / TICK) * TICK;
 
   const rooms = useQuery(api.classroomAvailability.getClassroomAvailability);
-  const here = useLocation();
+  const here = useGeolocation(); // Nearest buildings first, if the viewer allows it.
 
   const [when, setWhen] = useState<When>("now");
   const [time, setTime] = useState(() => `${String((new Date().getHours() + 1) % 24).padStart(2, "0")}:00`);
