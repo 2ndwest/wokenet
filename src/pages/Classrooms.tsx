@@ -113,11 +113,33 @@ const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric
 // [lat, lng] per building, pulled once from MIT's campus map (whereis.mit.edu).
 const COORDS: Record<string, number[] | undefined> = BUILDING_COORDS;
 
-// Rough distance between two buildings. Ones missing from the map (e.g. NE46) count as farthest.
-const distance = (a: string, b: string) => {
-  const [p, q] = [COORDS[a], COORDS[b]];
-  if (!p || !q) return Infinity;
-  return Math.hypot(p[0] - q[0], (p[1] - q[1]) * Math.cos((p[0] * Math.PI) / 180));
+// Rough distance from a [lat, lng] to a building. Buildings missing from the map (e.g. NE46), or no
+// starting point at all, count as farthest.
+const distance = (from: number[] | undefined, building: string) => {
+  const to = COORDS[building];
+  if (!from || !to) return Infinity;
+  return Math.hypot(from[0] - to[0], (from[1] - to[1]) * Math.cos((from[0] * Math.PI) / 180));
+};
+
+// The viewer's [lat, lng], if they allow it, so the nearest buildings come first. It never leaves the
+// browser. Rounded to ~50m so the list doesn't reshuffle with every step.
+const useLocation = () => {
+  const [here, setHere] = useState<number[]>();
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const round = (deg: number) => Math.round(deg / 0.0005) * 0.0005;
+    const id = navigator.geolocation.watchPosition(
+      ({ coords }) =>
+        setHere((prev) => {
+          const next = [round(coords.latitude), round(coords.longitude)];
+          return prev && prev[0] === next[0] && prev[1] === next[1] ? prev : next;
+        }),
+      () => {}, // Denied or unavailable: stay in building order.
+      { maximumAge: 60_000 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+  return here;
 };
 
 // The building a search is for: "W41" or "W41-2" -> "W41". Wings fold in like the data: "14N-1" -> "14".
@@ -468,6 +490,7 @@ export const Classrooms = memo(() => {
   const now = Math.floor(Date.now() / TICK) * TICK;
 
   const rooms = useQuery(api.classroomAvailability.getClassroomAvailability);
+  const here = useLocation();
 
   const [when, setWhen] = useState<When>("now");
   const [time, setTime] = useState(() => `${String((new Date().getHours() + 1) % 24).padStart(2, "0")}:00`);
@@ -513,7 +536,7 @@ export const Classrooms = memo(() => {
 
     // Searching a building ("W41") puts all its rooms first; with more ("W41-2"), just those rooms,
     // then the rest of the building. Either way, the nearest buildings follow. Other searches just
-    // match room names.
+    // match room names. With no search, buildings go nearest-first from wherever you are.
     const matches = (r: { room: string; building: string }) =>
       !query ||
       (searched
@@ -522,6 +545,9 @@ export const Classrooms = memo(() => {
           : r.room.toUpperCase().startsWith(query)
         : r.room.toUpperCase().includes(query));
     const tier = (r: RoomAt) => (matches(r) ? 0 : r.building === searched ? 1 : 2);
+    const origin = searched ? COORDS[searched] : query ? undefined : here;
+    const byDistance = (a: RoomAt, b: RoomAt) =>
+      distance(origin, a.building) - distance(origin, b.building) || byName(a.building, b.building);
 
     return rooms
       .filter((r) => searched || matches(r))
@@ -529,16 +555,13 @@ export const Classrooms = memo(() => {
       .filter((r) => (r.window || showBooked) && (showLectureHalls || !isLectureHall(r)))
       .sort(
         (a, b) =>
-          (searched
-            ? tier(a) - tier(b) ||
-              distance(searched, a.building) - distance(searched, b.building) ||
-              byName(a.building, b.building)
-            : 0) ||
+          (searched ? tier(a) - tier(b) || byDistance(a, b) : 0) ||
+          (!query && sort === "building" && here ? byDistance(a, b) : 0) ||
           (sort === "longest"
             ? (b.window?.end ?? 0) - (a.window?.end ?? 0) || byName(a.room, b.room)
             : byName(a.building, b.building) || byName(a.room, b.room))
       );
-  }, [rooms, query, searched, at, sort, showBooked, showLectureHalls]);
+  }, [rooms, query, searched, here, at, sort, showBooked, showLectureHalls]);
 
   const buildings = useMemo(() => {
     const groups = new Map<string, RoomAt[]>();
@@ -578,7 +601,7 @@ export const Classrooms = memo(() => {
 
         <Flex gap="2" align="center">
           <TextField.Root
-            placeholder="Search buildings, e.g. 26"
+            placeholder="Search buildings"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ flexGrow: 1 }}
