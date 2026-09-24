@@ -10,6 +10,7 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import { memo, useMemo, useState } from "react";
+import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
@@ -29,6 +30,7 @@ type RoomAt = { room: string; building: string; open: Window[]; window?: Window 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const STALE_AFTER = 3 * HOUR; // nickbot pushes about hourly.
+const TICK = 30_000; // How often times and bars move along with the clock.
 // Bars show a rolling window around the chosen time, mostly looking ahead.
 const TIMELINE_BEFORE = 1 * HOUR;
 const TIMELINE_AFTER = 3 * HOUR;
@@ -111,6 +113,7 @@ const Timeline = memo(({ open, at }: { open: Window[]; at: number }) => {
               left: `${pct(w.start)}%`,
               width: `${pct(w.end) - pct(w.start)}%`,
               backgroundColor: windowColor(w, at),
+              transition: "left 1s linear, width 1s linear", // Glide as the clock ticks.
             }}
           />
         ))}
@@ -163,19 +166,28 @@ const RoomRow = memo(({ room, at }: { room: RoomAt; at: number }) => {
   );
 });
 
-const RoomGrid = memo(({ rooms, at }: { rooms: RoomAt[]; at: number }) => (
-  // Wider screens tile the rows into columns so the timelines don't stretch too far.
-  <Grid columns={{ initial: "1", md: "2", lg: "3" }} gapX={{ initial: "0", md: "6" }}>
-    {rooms.map((room) => (
-      <RoomRow key={room.room} room={room} at={at} />
-    ))}
-  </Grid>
-));
+const RoomGrid = memo(({ rooms, at }: { rooms: RoomAt[]; at: number }) => {
+  // Rooms freeing up or getting booked slide in and out instead of jumping the list.
+  const [autoAnimate] = useAutoAnimate();
+
+  return (
+    // Wider screens tile the rows into columns so the timelines don't stretch too far.
+    <Grid
+      ref={autoAnimate}
+      columns={{ initial: "1", md: "2", lg: "3" }}
+      gapX={{ initial: "0", md: "6" }}
+    >
+      {rooms.map((room) => (
+        <RoomRow key={room.room} room={room} at={at} />
+      ))}
+    </Grid>
+  );
+});
 
 // Which MIT rooms are free now (or at a chosen time today/tomorrow), from nickbot's room sweeps.
 export const Classrooms = memo(() => {
-  useRerender(MINUTE);
-  const now = Math.floor(Date.now() / MINUTE) * MINUTE;
+  useRerender(TICK);
+  const now = Math.floor(Date.now() / TICK) * TICK;
 
   const rooms = useQuery(api.roomAvailability.getRoomAvailability);
 
