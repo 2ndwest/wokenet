@@ -25,16 +25,42 @@ type Sort = "building" | "longest";
 type Window = Doc<"classroomAvailability">["open"][number];
 
 // A room as seen at the chosen time: free until `window.end`, or booked if there's no `window`.
-type RoomAt = { room: string; building: string; open: Window[]; window?: Window };
+type RoomAt = { room: string; building: string; capacity?: number; open: Window[]; window?: Window };
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const STALE_AFTER = 3 * HOUR; // nickbot pushes about hourly.
+const STALE_AFTER = 6 * HOUR; // nickbot pushes about hourly, so this means several missed pushes.
 const TICK = 30_000; // How often times and bars move along with the clock.
 // Bars show a rolling window around the chosen time, mostly looking ahead.
 const TIMELINE_BEFORE = 1 * HOUR;
 const TIMELINE_AFTER = 3 * HOUR;
 const GROTESK = { fontFamily: "Non Natural Grotesk", fontWeight: 700 }; // For room and building names.
+const LECTURE_HALL_SEATS = 60;
+// Every row lays out the same, so their timelines line up down the list.
+const NAME_WIDTH = "120px";
+const TIME_LEFT_WIDTH = "56px";
+const GRID_COLUMNS = { initial: "1", md: "2", lg: "3" } as const;
+const GRID_GAP_X = { initial: "0", md: "6" } as const;
+
+const isLectureHall = (r: { capacity?: number }) => (r.capacity ?? 0) >= LECTURE_HALL_SEATS;
+
+// A small "LH" chip marking lecture halls next to their room number.
+const LectureHallTag = ({ title }: { title?: string }) => (
+  <Text
+    title={title}
+    style={{
+      ...GROTESK,
+      fontSize: "11px",
+      lineHeight: "17px",
+      padding: "0 4px",
+      backgroundColor: "var(--gray-4)",
+      borderRadius: "var(--radius-1)",
+      color: "var(--gray-11)",
+    }}
+  >
+    LH
+  </Text>
+);
 
 // Midnight at the start of `ms`'s day, shifted by `days`.
 const startOfDay = (ms: number, days = 0) => {
@@ -145,9 +171,12 @@ const RoomRow = memo(({ room, at }: { room: RoomAt; at: number }) => {
         opacity: free ? 1 : 0.6,
       }}
     >
-      <Text size="4" style={{ width: "96px", flexShrink: 0, ...GROTESK }}>
-        {room.room}
-      </Text>
+      <Flex align="center" gap="2" style={{ width: NAME_WIDTH, flexShrink: 0 }}>
+        <Text size="4" style={{ ...GROTESK, whiteSpace: "nowrap" }}>
+          {room.room}
+        </Text>
+        {isLectureHall(room) && <LectureHallTag title={`${room.capacity} seats`} />}
+      </Flex>
       <Box flexGrow="1">
         <Timeline open={room.open} at={at} />
       </Box>
@@ -155,7 +184,7 @@ const RoomRow = memo(({ room, at }: { room: RoomAt; at: number }) => {
         size="2"
         align="right"
         style={{
-          width: "56px",
+          width: TIME_LEFT_WIDTH,
           flexShrink: 0,
           color: free ? colorFor(room.window!, at) : COLOR_HEX.red,
         }}
@@ -172,11 +201,7 @@ const RoomGrid = memo(({ rooms, at }: { rooms: RoomAt[]; at: number }) => {
 
   return (
     // Wider screens tile the rows into columns so the timelines don't stretch too far.
-    <Grid
-      ref={autoAnimate}
-      columns={{ initial: "1", md: "2", lg: "3" }}
-      gapX={{ initial: "0", md: "6" }}
-    >
+    <Grid ref={autoAnimate} columns={GRID_COLUMNS} gapX={GRID_GAP_X}>
       {rooms.map((room) => (
         <RoomRow key={room.room} room={room} at={at} />
       ))}
@@ -196,6 +221,7 @@ export const Classrooms = memo(() => {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("building");
   const [showBooked, setShowBooked] = useState(false);
+  const [showLectureHalls, setShowLectureHalls] = useState(true);
 
   const at =
     when === "now"
@@ -230,7 +256,7 @@ export const Classrooms = memo(() => {
         ...r,
         window: r.open.find((w) => w.start <= at && at < w.end),
       }))
-      .filter((r) => r.window || showBooked)
+      .filter((r) => (r.window || showBooked) && (showLectureHalls || !isLectureHall(r)))
       .sort(
         (a, b) =>
           (searched
@@ -242,7 +268,7 @@ export const Classrooms = memo(() => {
             ? (b.window?.end ?? 0) - (a.window?.end ?? 0) || byName(a.room, b.room)
             : byName(a.building, b.building) || byName(a.room, b.room))
       );
-  }, [rooms, query, searched, at, sort, showBooked]);
+  }, [rooms, query, searched, at, sort, showBooked, showLectureHalls]);
 
   const buildings = useMemo(() => {
     const groups = new Map<string, RoomAt[]>();
@@ -314,6 +340,17 @@ export const Classrooms = memo(() => {
             onClick={() => setShowBooked((b) => !b)}
           >
             <EyeIcon height="18px" fill="currentColor" />
+          </IconButton>
+
+          {/* Filled in when lecture halls (60+ seats) are included, which they are by default. */}
+          <IconButton
+            variant={showLectureHalls ? "solid" : "surface"}
+            aria-label="Include lecture halls"
+            onClick={() => setShowLectureHalls((b) => !b)}
+          >
+            <Text size="2" style={GROTESK}>
+              LH
+            </Text>
           </IconButton>
         </Flex>
 
