@@ -70,3 +70,18 @@ export const SortIcon = () => {
     </svg>
   );
 };
+
+// A triangle with an exclamation mark, for rooms people have reported.
+export const WarningIcon = ({ size = 18 }: { size?: number }) => {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none">
+      <path
+        d="M10.3 4.2 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M12 9.5v4.5M12 17.5h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+};

@@ -23,6 +23,20 @@ export const getMyReports = query({
   },
 });
 
+// How many people have reported each reported room, so the page can flag them. Just counts: who
+// reported and what they said is for admins.
+export const getReportCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePutz(ctx);
+
+    const counts = new Map<string, number>();
+    for (const { room } of await ctx.db.query("classroomReports").collect())
+      counts.set(room, (counts.get(room) ?? 0) + 1);
+    return [...counts].map(([room, count]) => ({ room, count }));
+  },
+});
+
 // Reports a room as unusable, with a short note on why. Reporting it again just replaces the note.
 export const reportClassroom = mutation({
   args: { room: v.string(), note: v.string() },
@@ -84,9 +98,9 @@ export const getReports = query({
   },
 });
 
-// Clears a room's reports once it's dealt with (e.g. dropped from the availability scraper's room list,
+// Permanently deletes a room's reports once it's dealt with (e.g. dropped from the availability scraper's room list,
 // or it was fine).
-export const dismissReports = mutation({
+export const deleteReports = mutation({
   args: { room: v.string() },
   handler: async (ctx, { room }) => {
     await requireAdmin(ctx);

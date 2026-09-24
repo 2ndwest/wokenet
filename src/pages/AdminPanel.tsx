@@ -97,10 +97,10 @@ export const AdminPanel = memo(() => {
 });
 
 // Rooms people reported as unusable on the Classrooms page. Drop real problems from the availability
-// scraper's room list, then dismiss their reports here.
+// scraper's room list, then delete their reports here.
 const ClassroomReports = memo(() => {
   const reports = useQuery(api.classroomReports.getReports);
-  const dismissReports = useMutation(api.classroomReports.dismissReports);
+  const deleteReports = useMutation(api.classroomReports.deleteReports);
 
   return (
     <>
@@ -144,13 +144,13 @@ const ClassroomReports = memo(() => {
                 <Table.Cell>
                   <Button
                     variant="soft"
-                    color="gray"
+                    color="red"
                     onClick={() => {
-                      if (confirm(`Dismiss all reports for ${room}?`))
-                        dismissReports({ room }).catch(alert);
+                      if (confirm(`Delete all reports for ${room}?`))
+                        deleteReports({ room }).catch(alert);
                     }}
                   >
-                    Dismiss
+                    Delete
                   </Button>
                 </Table.Cell>
               </Table.Row>

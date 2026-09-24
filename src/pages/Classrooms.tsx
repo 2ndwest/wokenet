@@ -20,7 +20,7 @@ import { Doc } from "../../convex/_generated/dataModel";
 import { getRelativeTime, toMins, useRerender } from "../utils/time";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_HEX } from "../utils/colors";
-import { ClockIcon, EyeIcon, SortIcon } from "../utils/icons";
+import { ClockIcon, EyeIcon, SortIcon, WarningIcon } from "../utils/icons";
 import BUILDING_COORDS from "../utils/building_coords.json";
 
 type When = "now" | "today" | "tomorrow";
@@ -48,6 +48,10 @@ const GRID_COLUMNS = { initial: "1", md: "2", lg: "3" } as const;
 const GRID_GAP_X = { initial: "0", md: "6" } as const;
 
 const isLectureHall = (r: { capacity?: number }) => (r.capacity ?? 0) >= LECTURE_HALL_SEATS;
+
+// Amber, like "under 30 minutes", but only ever on the warning icon.
+const REPORTED_COLOR = COLOR_HEX.yellow;
+const reportedBy = (count: number) => `Reported by ${count} ${count === 1 ? "person" : "people"}`;
 
 // A small "LH" chip marking lecture halls next to their room number.
 const LectureHallTag = ({ title }: { title?: string }) => (
@@ -185,11 +189,12 @@ type RoomRowProps = {
   room: RoomAt;
   at: number;
   reported: boolean;
+  reportCount: number; // How many people have reported it.
   onSelect: (room: string) => void;
 };
 
 // Tapping one opens its details sheet. Rooms you've reported are faded.
-const RoomRow = memo(({ room, at, reported, onSelect }: RoomRowProps) => {
+const RoomRow = memo(({ room, at, reported, reportCount, onSelect }: RoomRowProps) => {
   const free = !!room.window;
 
   return (
@@ -220,17 +225,16 @@ const RoomRow = memo(({ room, at, reported, onSelect }: RoomRowProps) => {
       <Box flexGrow="1">
         <Timeline open={room.open} at={at} />
       </Box>
-      <Text
-        size="2"
-        align="right"
-        style={{
-          width: TIME_LEFT_WIDTH,
-          flexShrink: 0,
-          color: free ? colorFor(room.window!, at) : COLOR_HEX.red,
-        }}
-      >
-        {free ? formatDuration(room.window!.end - at) : "N/A"}
-      </Text>
+      <Flex align="center" justify="end" gap="1" style={{ width: TIME_LEFT_WIDTH, flexShrink: 0 }}>
+        {reportCount > 0 && (
+          <Flex title={reportedBy(reportCount)} style={{ color: REPORTED_COLOR }}>
+            <WarningIcon size={12} />
+          </Flex>
+        )}
+        <Text size="2" style={{ color: free ? colorFor(room.window!, at) : COLOR_HEX.red }}>
+          {free ? formatDuration(room.window!.end - at) : "N/A"}
+        </Text>
+      </Flex>
     </Flex>
   );
 });
@@ -239,10 +243,11 @@ type RoomGridProps = {
   rooms: RoomAt[];
   at: number;
   myReports: Map<string, string>; // Room -> your note on it.
+  reportCounts: Map<string, number>; // Room -> how many people reported it.
   onSelect: (room: string) => void;
 };
 
-const RoomGrid = memo(({ rooms, at, myReports, onSelect }: RoomGridProps) => {
+const RoomGrid = memo(({ rooms, at, myReports, reportCounts, onSelect }: RoomGridProps) => {
   // Rooms freeing up or getting booked slide in and out instead of jumping the list.
   const [autoAnimate] = useAutoAnimate();
 
@@ -255,6 +260,7 @@ const RoomGrid = memo(({ rooms, at, myReports, onSelect }: RoomGridProps) => {
           room={room}
           at={at}
           reported={myReports.has(room.room)}
+          reportCount={reportCounts.get(room.room) ?? 0}
           onSelect={onSelect}
         />
       ))}
@@ -263,7 +269,17 @@ const RoomGrid = memo(({ rooms, at, myReports, onSelect }: RoomGridProps) => {
 });
 
 // A room's details: when it's free, its seats, and reporting it as unusable (undone with one tap).
-const RoomDetails = ({ room, at, myNote }: { room: RoomAt; at: number; myNote?: string }) => {
+const RoomDetails = ({
+  room,
+  at,
+  myNote,
+  reportCount,
+}: {
+  room: RoomAt;
+  at: number;
+  myNote?: string;
+  reportCount: number;
+}) => {
   const [reporting, setReporting] = useState(false);
   const [note, setNote] = useState("");
   const noteRef = useRef<HTMLInputElement>(null);
@@ -304,6 +320,12 @@ const RoomDetails = ({ room, at, myNote }: { room: RoomAt; at: number; myNote?: 
             Updated {getRelativeTime(room.updatedAt)}
           </Text>
         </Text>
+        {reportCount > 0 && (
+          <Flex align="center" gap="1" style={{ color: REPORTED_COLOR }}>
+            <WarningIcon size={14} />
+            <Text size="2">{reportedBy(reportCount)}</Text>
+          </Flex>
+        )}
       </Flex>
 
       <Timeline open={room.open} at={at} />
@@ -386,12 +408,14 @@ const RoomSheet = memo(
     open,
     onOpenChange,
     myNote,
+    reportCount,
   }: {
     room?: RoomAt;
     at: number;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     myNote?: string;
+    reportCount: number;
   }) => {
     const keyboardInset = useKeyboardInset();
 
@@ -405,7 +429,15 @@ const RoomSheet = memo(
           style={{ "--keyboard-inset": `${keyboardInset}px` } as React.CSSProperties}
         >
           {/* Keyed so the report step starts over for each room. */}
-          {room && <RoomDetails key={room.room} room={room} at={at} myNote={myNote} />}
+          {room && (
+            <RoomDetails
+              key={room.room}
+              room={room}
+              at={at}
+              myNote={myNote}
+              reportCount={reportCount}
+            />
+          )}
         </Dialog.Content>
       </Dialog.Root>
     );
@@ -435,6 +467,12 @@ export const Classrooms = memo(() => {
   }, []);
 
   const myReports = useQuery(api.classroomReports.getMyReports);
+  const reportCountsList = useQuery(api.classroomReports.getReportCounts);
+  const reportCounts = useMemo(
+    () => new Map(reportCountsList?.map(({ room, count }) => [room, count])),
+    [reportCountsList]
+  );
+
   const myReportNotes = useMemo(
     () => new Map(myReports?.map(({ room, note }) => [room, note])),
     [myReports]
@@ -586,14 +624,26 @@ export const Classrooms = memo(() => {
 
         {/* Sorting by longest mixes buildings, unless a building search keeps them grouped. */}
         {sort === "longest" && !searched ? (
-          <RoomGrid rooms={shown} at={at} myReports={myReportNotes} onSelect={onSelect} />
+          <RoomGrid
+            rooms={shown}
+            at={at}
+            myReports={myReportNotes}
+            reportCounts={reportCounts}
+            onSelect={onSelect}
+          />
         ) : (
           buildings.map(([building, rooms]) => (
             <Flex key={building} direction="column" gap="2">
               <Heading size="5" style={GROTESK}>
                 Building {building}
               </Heading>
-              <RoomGrid rooms={rooms} at={at} myReports={myReportNotes} onSelect={onSelect} />
+              <RoomGrid
+                rooms={rooms}
+                at={at}
+                myReports={myReportNotes}
+                reportCounts={reportCounts}
+                onSelect={onSelect}
+              />
             </Flex>
           ))
         )}
@@ -605,6 +655,7 @@ export const Classrooms = memo(() => {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         myNote={selected ? myReportNotes.get(selected) : undefined}
+        reportCount={selected ? (reportCounts.get(selected) ?? 0) : 0}
       />
     </Flex>
   );
