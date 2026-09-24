@@ -1,5 +1,7 @@
 import {
   Box,
+  Button,
+  Dialog,
   Flex,
   Grid,
   Heading,
@@ -9,9 +11,10 @@ import {
   Text,
   TextField,
 } from "@radix-ui/themes";
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Doc } from "../../convex/_generated/dataModel";
 import { getRelativeTime, toMins, useRerender } from "../utils/time";
@@ -29,7 +32,7 @@ type RoomAt = { room: string; building: string; capacity?: number; open: Window[
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const STALE_AFTER = 6 * HOUR; // nickbot pushes about hourly, so this means several missed pushes.
+const STALE_AFTER = 8 * HOUR; // nickbot refreshes each room every ~6 hours, so this means a missed refresh.
 const TICK = 30_000; // How often times and bars move along with the clock.
 // Bars show a rolling window around the chosen time, mostly looking ahead.
 const TIMELINE_BEFORE = 1 * HOUR;
@@ -79,6 +82,24 @@ const formatDuration = (ms: number) => {
   if (mins < 60) return `${mins}m`;
   return `${Number((mins / 60).toFixed(1))}h`;
 };
+
+// "4:30 PM", or "9:00 AM tomorrow" when it's on a later day than `at`. Midnight counts as the day before.
+const formatUntil = (ms: number, at: number) => {
+  const d = new Date(ms);
+  const time =
+    d.getHours() === 0 && d.getMinutes() === 0
+      ? "midnight"
+      : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = Math.round((startOfDay(ms - 1) - startOfDay(at)) / (24 * HOUR));
+  if (days === 0) return time;
+  if (days === 1) return `${time} tomorrow`;
+  return `${time} ${new Date(ms - 1).toLocaleDateString([], { weekday: "short" })}`;
+};
+
+const withWindow = (r: Doc<"classroomAvailability">, at: number): RoomAt => ({
+  ...r,
+  window: r.open.find((w) => w.start <= at && at < w.end),
+});
 
 const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 
@@ -158,21 +179,38 @@ const Timeline = memo(({ open, at }: { open: Window[]; at: number }) => {
 });
 
 // A thin divided row: room on the left, its timeline in the middle, and time left on the right.
-const RoomRow = memo(({ room, at }: { room: RoomAt; at: number }) => {
+type RoomRowProps = {
+  room: RoomAt;
+  at: number;
+  reported: boolean;
+  onSelect: (room: string) => void;
+};
+
+// Tapping one opens its details sheet. Rooms you've reported are faded.
+const RoomRow = memo(({ room, at, reported, onSelect }: RoomRowProps) => {
   const free = !!room.window;
 
   return (
     <Flex
       align="center"
       gap="3"
+      role="button"
+      tabIndex={0}
+      onClick={() => onSelect(room.room)}
+      onKeyDown={(e) => e.key === "Enter" && onSelect(room.room)}
       style={{
         height: "calc(var(--space-6) * 1.25)", // 25% taller than the search box.
         borderBottom: "1px solid var(--gray-4)",
         opacity: free ? 1 : 0.6,
+        cursor: "pointer",
       }}
     >
       <Flex align="center" gap="2" style={{ width: NAME_WIDTH, flexShrink: 0 }}>
-        <Text size="4" style={{ ...GROTESK, whiteSpace: "nowrap" }}>
+        <Text
+          size="4"
+          title={reported ? "You reported this room" : undefined}
+          style={{ ...GROTESK, whiteSpace: "nowrap", color: reported ? "var(--gray-9)" : undefined }}
+        >
           {room.room}
         </Text>
         {isLectureHall(room) && <LectureHallTag title={`${room.capacity} seats`} />}
@@ -195,7 +233,14 @@ const RoomRow = memo(({ room, at }: { room: RoomAt; at: number }) => {
   );
 });
 
-const RoomGrid = memo(({ rooms, at }: { rooms: RoomAt[]; at: number }) => {
+type RoomGridProps = {
+  rooms: RoomAt[];
+  at: number;
+  myReports: Map<string, string>; // Room -> your note on it.
+  onSelect: (room: string) => void;
+};
+
+const RoomGrid = memo(({ rooms, at, myReports, onSelect }: RoomGridProps) => {
   // Rooms freeing up or getting booked slide in and out instead of jumping the list.
   const [autoAnimate] = useAutoAnimate();
 
@@ -203,11 +248,166 @@ const RoomGrid = memo(({ rooms, at }: { rooms: RoomAt[]; at: number }) => {
     // Wider screens tile the rows into columns so the timelines don't stretch too far.
     <Grid ref={autoAnimate} columns={GRID_COLUMNS} gapX={GRID_GAP_X}>
       {rooms.map((room) => (
-        <RoomRow key={room.room} room={room} at={at} />
+        <RoomRow
+          key={room.room}
+          room={room}
+          at={at}
+          reported={myReports.has(room.room)}
+          onSelect={onSelect}
+        />
       ))}
     </Grid>
   );
 });
+
+// A room's details: when it's free, its seats, and reporting it as unusable (undone with one tap).
+const RoomDetails = ({ room, at, myNote }: { room: RoomAt; at: number; myNote?: string }) => {
+  const [reporting, setReporting] = useState(false);
+  const [note, setNote] = useState("");
+  const noteRef = useRef<HTMLInputElement>(null);
+  const report = useMutation(api.classroomReports.reportClassroom);
+  const unreport = useMutation(api.classroomReports.unreportClassroom);
+  const next = room.open.find((w) => w.start > at);
+
+  // Phones only raise the keyboard for a focus made during the tap itself, so render the box and
+  // focus it right here instead of on the next render.
+  const startReport = () => {
+    flushSync(() => setReporting(true));
+    noteRef.current?.focus();
+  };
+
+  const send = () => {
+    if (note.trim()) report({ room: room.room, note }).catch(alert);
+  };
+
+  return (
+    <Flex direction="column" gap="4">
+      <Flex direction="column" gap="1">
+        <Flex align="center" gap="2">
+          <Dialog.Title size="7" mb="0" style={GROTESK}>
+            {room.room}
+          </Dialog.Title>
+          {isLectureHall(room) && <LectureHallTag />}
+        </Flex>
+        <Text size="3" style={{ color: room.window ? colorFor(room.window, at) : COLOR_HEX.red }}>
+          {room.window
+            ? `Free until ${formatUntil(room.window.end, at)}`
+            : next
+              ? `Booked until ${formatUntil(next.start, at)}`
+              : "Booked through tomorrow"}
+        </Text>
+        {room.capacity !== undefined && (
+          <Text size="2" color="gray">
+            {room.capacity} seats
+          </Text>
+        )}
+      </Flex>
+
+      <Timeline open={room.open} at={at} />
+
+      {myNote ? (
+        <Flex align="center" justify="between" gap="3">
+          <Text size="2" color="gray">
+            Reported. Thanks!
+          </Text>
+          <Button
+            variant="soft"
+            color="gray"
+            onClick={() => unreport({ room: room.room }).catch(alert)}
+          >
+            Undo
+          </Button>
+        </Flex>
+      ) : reporting ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <Flex gap="2">
+            <TextField.Root
+              ref={noteRef}
+              size="3"
+              placeholder="What's wrong with it?"
+              enterKeyHint="send"
+              maxLength={500}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              style={{ flexGrow: 1 }}
+            />
+            <Button type="submit" size="3" variant="soft">
+              Send
+            </Button>
+          </Flex>
+        </form>
+      ) : (
+        <Button
+          variant="soft"
+          color="gray"
+          style={{ alignSelf: "flex-start" }}
+          onClick={startReport}
+        >
+          Report a problem
+        </Button>
+      )}
+    </Flex>
+  );
+};
+
+// How much of the bottom of the screen the on-screen keyboard covers. iOS lays it over fixed elements
+// instead of shrinking the page, so the sheet lifts itself by this much.
+const useKeyboardInset = () => {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const update = () =>
+      setInset(Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop));
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+    };
+  }, []);
+  return inset;
+};
+
+// A sheet floating near the bottom on phones (see .classroom-sheet in index.css), where thumbs can
+// reach it, and a small dialog on wider screens. Tapping outside closes it.
+const RoomSheet = memo(
+  ({
+    room,
+    at,
+    open,
+    onOpenChange,
+    myNote,
+  }: {
+    room?: RoomAt;
+    at: number;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    myNote?: string;
+  }) => {
+    const keyboardInset = useKeyboardInset();
+
+    return (
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Content
+          className="classroom-sheet"
+          size="3"
+          maxWidth={{ initial: "100%", xs: "380px" }}
+          aria-describedby={undefined}
+          style={{ "--keyboard-inset": `${keyboardInset}px` } as React.CSSProperties}
+        >
+          {/* Keyed so the report step starts over for each room. */}
+          {room && <RoomDetails key={room.room} room={room} at={at} myNote={myNote} />}
+        </Dialog.Content>
+      </Dialog.Root>
+    );
+  }
+);
 
 // Which MIT rooms are free now (or at a chosen time today/tomorrow), from nickbot's room sweeps.
 export const Classrooms = memo(() => {
@@ -222,6 +422,20 @@ export const Classrooms = memo(() => {
   const [sort, setSort] = useState<Sort>("building");
   const [showBooked, setShowBooked] = useState(false);
   const [showLectureHalls, setShowLectureHalls] = useState(true);
+
+  // The room whose sheet is open, kept while it animates closed.
+  const [selected, setSelected] = useState<string>();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const onSelect = useCallback((room: string) => {
+    setSelected(room);
+    setSheetOpen(true);
+  }, []);
+
+  const myReports = useQuery(api.classroomReports.getMyReports);
+  const myReportNotes = useMemo(
+    () => new Map(myReports?.map(({ room, note }) => [room, note])),
+    [myReports]
+  );
 
   const at =
     when === "now"
@@ -252,10 +466,7 @@ export const Classrooms = memo(() => {
 
     return rooms
       .filter((r) => searched || matches(r))
-      .map((r): RoomAt => ({
-        ...r,
-        window: r.open.find((w) => w.start <= at && at < w.end),
-      }))
+      .map((r) => withWindow(r, at))
       .filter((r) => (r.window || showBooked) && (showLectureHalls || !isLectureHall(r)))
       .sort(
         (a, b) =>
@@ -275,6 +486,11 @@ export const Classrooms = memo(() => {
     for (const room of shown) groups.set(room.building, [...(groups.get(room.building) ?? []), room]);
     return [...groups];
   }, [shown]);
+
+  const selectedRoom = useMemo(() => {
+    const room = rooms?.find((r) => r.room === selected);
+    return room && withWindow(room, at);
+  }, [rooms, selected, at]);
 
   if (!rooms) return <CenterSpinner />;
 
@@ -356,18 +572,26 @@ export const Classrooms = memo(() => {
 
         {/* Sorting by longest mixes buildings, unless a building search keeps them grouped. */}
         {sort === "longest" && !searched ? (
-          <RoomGrid rooms={shown} at={at} />
+          <RoomGrid rooms={shown} at={at} myReports={myReportNotes} onSelect={onSelect} />
         ) : (
           buildings.map(([building, rooms]) => (
             <Flex key={building} direction="column" gap="2">
               <Heading size="5" style={GROTESK}>
                 Building {building}
               </Heading>
-              <RoomGrid rooms={rooms} at={at} />
+              <RoomGrid rooms={rooms} at={at} myReports={myReportNotes} onSelect={onSelect} />
             </Flex>
           ))
         )}
       </Flex>
+
+      <RoomSheet
+        room={selectedRoom}
+        at={at}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        myNote={selected ? myReportNotes.get(selected) : undefined}
+      />
     </Flex>
   );
 });

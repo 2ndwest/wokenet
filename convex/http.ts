@@ -48,18 +48,20 @@ export const ingestClassroomAvailability = httpAction(async (ctx, req) => {
   if (req.headers.get("x-webhook-secret") !== process.env.CLASSROOMS_WEBHOOK_SECRET)
     return new Response("CLASSROOMS_WEBHOOK_SECRET mismatch.", { status: 401 });
 
-  const { classrooms } = (await req.json()) as {
+  const { classrooms, tracked } = (await req.json()) as {
     classrooms: Array<{
       room: string;
       building: string;
       capacity?: number;
+      updatedAt: number; // When nickbot fetched this room's bookings (ms).
       open: Array<{ start: number; end: number }>;
     }>;
+    tracked: string[];
   };
 
-  const updatedAt = Date.now();
-  await ctx.runMutation(internal.classroomAvailability.setClassroomAvailability, {
-    classrooms: classrooms.map((classroom) => ({ ...classroom, updatedAt })),
+  await ctx.runMutation(internal.classroomAvailability.updateClassroomAvailability, {
+    classrooms,
+    tracked,
   });
 
   return new Response(null, { status: 200 });

@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 
 import { Affiliation, AFFILIATION_VALIDATOR } from "../../convex/schema";
 import { CenterSpinner } from "../utils/spinner";
+import { getRelativeTime } from "../utils/time";
 
 export const AdminPanel = memo(() => {
   const users = useQuery(api.users.listUsers);
@@ -88,7 +89,75 @@ export const AdminPanel = memo(() => {
         ) : (
           <CenterSpinner />
         )}
+
+        <ClassroomReports />
       </Box>
     </Flex>
+  );
+});
+
+// Rooms people reported as unusable on the Classrooms page. Drop real problems from nickbot's
+// commands/mit_rooms.h, then dismiss their reports here.
+const ClassroomReports = memo(() => {
+  const reports = useQuery(api.classroomReports.getReports);
+  const dismissReports = useMutation(api.classroomReports.dismissReports);
+
+  return (
+    <>
+      <Heading size="8" mt="6" mb="4">
+        Classroom reports
+      </Heading>
+
+      {!reports ? (
+        <CenterSpinner />
+      ) : reports.length === 0 ? (
+        <Text color="gray">No reports.</Text>
+      ) : (
+        <Table.Root variant="surface">
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell>Room</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Reports</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Latest</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell />
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {reports.map(({ room, reports, latest }) => (
+              <Table.Row key={room} align="center">
+                <Table.RowHeaderCell>{room}</Table.RowHeaderCell>
+                <Table.Cell>
+                  <Flex direction="column" gap="2">
+                    {reports.map((r) => (
+                      <Text key={`${r.name}-${r.timestamp}`} size="2">
+                        {r.note}{" "}
+                        <Text color="gray">
+                          — {r.name}, {getRelativeTime(r.timestamp)}
+                        </Text>
+                      </Text>
+                    ))}
+                  </Flex>
+                </Table.Cell>
+                <Table.Cell>
+                  <Text color="gray">{getRelativeTime(latest)}</Text>
+                </Table.Cell>
+                <Table.Cell>
+                  <Button
+                    variant="soft"
+                    color="gray"
+                    onClick={() => {
+                      if (confirm(`Dismiss all reports for ${room}?`))
+                        dismissReports({ room }).catch(alert);
+                    }}
+                  >
+                    Dismiss
+                  </Button>
+                </Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Root>
+      )}
+    </>
   );
 });

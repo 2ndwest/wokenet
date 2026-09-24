@@ -106,3 +106,39 @@ body {
 .rt-Card {
   --backdrop-filter-panel: none;
 }
+
+/* Classroom details float near the bottom on phones, within thumb reach, lifted above the keyboard
+   (Radix's dialog rules use :where, so these win). */
+@media (max-width: 519px) {
+  .rt-BaseDialogScrollPadding:has(> .classroom-sheet) {
+    display: flex;
+    align-items: flex-end;
+    margin: 0;
+    padding: var(--space-3);
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  }
+
+  .classroom-sheet {
+    margin: 0 0 var(--keyboard-inset, 0px);
+  }
+
+  .classroom-sheet[data-state="open"] {
+    animation: sheet-up 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .classroom-sheet[data-state="closed"] {
+    animation: sheet-down 150ms ease-in;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(calc(100% + var(--space-3)));
+  }
+}
+
+@keyframes sheet-down {
+  to {
+    transform: translateY(calc(100% + var(--space-3)));
+  }
+}
