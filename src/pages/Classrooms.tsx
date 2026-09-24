@@ -260,7 +260,7 @@ export const Classrooms = memo(() => {
         <Flex direction="column" gap="1">
           <Heading size="8">Classrooms</Heading>
           <Text size="2" color={now - updatedAt > STALE_AFTER ? "red" : "gray"}>
-            {rooms.length === 0 ? "No room data yet." : `Updated ${getRelativeTime(updatedAt)}.`}
+            {rooms.length === 0 ? "No classroom data yet." : `Updated ${getRelativeTime(updatedAt)}.`}
           </Text>
         </Flex>
 
