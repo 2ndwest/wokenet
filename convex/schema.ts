@@ -41,9 +41,10 @@ export default defineSchema({
   }).index("by_victimId", ["victimId"]),
 
   // Pushed by nickbot after each sweep of MIT's room bookings (plus Hydrant's class schedule).
-  roomAvailability: defineTable({
+  classroomAvailability: defineTable({
     room: v.string(), // e.g. "W41-1119"
     building: v.string(), // e.g. "W41" (wings like "14N" are folded into "14")
+    capacity: v.optional(v.number()), // Seats: registrar count, or estimated from floor area; >= 60 ≈ lecture hall
     open: v.array(v.object({ start: v.number(), end: v.number() })), // ms timestamps, today and tomorrow
     updatedAt: v.number(),
   }).index("by_room", ["room"]),

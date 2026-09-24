@@ -39,22 +39,27 @@ export const ingestDadSaying = httpAction(async (ctx, req) => {
   return new Response(null, { status: 200 });
 });
 
-export const ingestRoomAvailability = httpAction(async (ctx, req) => {
-  if (!process.env.ROOMS_WEBHOOK_SECRET) {
-    console.error("Set ROOMS_WEBHOOK_SECRET on the Convex dashboard to enable ingestion!");
-    return new Response("ROOMS_WEBHOOK_SECRET not set on Convex!", { status: 500 });
+export const ingestClassroomAvailability = httpAction(async (ctx, req) => {
+  if (!process.env.CLASSROOMS_WEBHOOK_SECRET) {
+    console.error("Set CLASSROOMS_WEBHOOK_SECRET on the Convex dashboard to enable ingestion!");
+    return new Response("CLASSROOMS_WEBHOOK_SECRET not set on Convex!", { status: 500 });
   }
 
-  if (req.headers.get("x-webhook-secret") !== process.env.ROOMS_WEBHOOK_SECRET)
-    return new Response("ROOMS_WEBHOOK_SECRET mismatch.", { status: 401 });
+  if (req.headers.get("x-webhook-secret") !== process.env.CLASSROOMS_WEBHOOK_SECRET)
+    return new Response("CLASSROOMS_WEBHOOK_SECRET mismatch.", { status: 401 });
 
-  const { rooms } = (await req.json()) as {
-    rooms: Array<{ room: string; building: string; open: Array<{ start: number; end: number }> }>;
+  const { classrooms } = (await req.json()) as {
+    classrooms: Array<{
+      room: string;
+      building: string;
+      capacity?: number;
+      open: Array<{ start: number; end: number }>;
+    }>;
   };
 
   const updatedAt = Date.now();
-  await ctx.runMutation(internal.roomAvailability.setRoomAvailability, {
-    rooms: rooms.map((room) => ({ ...room, updatedAt })),
+  await ctx.runMutation(internal.classroomAvailability.setClassroomAvailability, {
+    classrooms: classrooms.map((classroom) => ({ ...classroom, updatedAt })),
   });
 
   return new Response(null, { status: 200 });
@@ -69,9 +74,9 @@ router.route({
 });
 
 router.route({
-  path: "/ingest-room-availability",
+  path: "/ingest-classroom-availability",
   method: "POST",
-  handler: ingestRoomAvailability,
+  handler: ingestClassroomAvailability,
 });
 
 export default router;

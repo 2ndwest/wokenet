@@ -22,7 +22,7 @@ import BUILDING_COORDS from "../utils/building_coords.json";
 
 type When = "now" | "today" | "tomorrow";
 type Sort = "building" | "longest";
-type Window = Doc<"roomAvailability">["open"][number];
+type Window = Doc<"classroomAvailability">["open"][number];
 
 // A room as seen at the chosen time: free until `window.end`, or booked if there's no `window`.
 type RoomAt = { room: string; building: string; open: Window[]; window?: Window };
@@ -189,7 +189,7 @@ export const Classrooms = memo(() => {
   useRerender(TICK);
   const now = Math.floor(Date.now() / TICK) * TICK;
 
-  const rooms = useQuery(api.roomAvailability.getRoomAvailability);
+  const rooms = useQuery(api.classroomAvailability.getClassroomAvailability);
 
   const [when, setWhen] = useState<When>("now");
   const [time, setTime] = useState(() => `${String((new Date().getHours() + 1) % 24).padStart(2, "0")}:00`);
