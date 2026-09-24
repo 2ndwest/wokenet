@@ -28,7 +28,7 @@ type Sort = "building" | "longest";
 type Window = Doc<"classroomAvailability">["open"][number];
 
 // A room as seen at the chosen time: free until `window.end`, or booked if there's no `window`.
-type RoomAt = { room: string; building: string; capacity?: number; open: Window[]; window?: Window };
+type RoomAt = Doc<"classroomAvailability"> & { window?: Window };
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -298,11 +298,12 @@ const RoomDetails = ({ room, at, myNote }: { room: RoomAt; at: number; myNote?: 
               ? `Booked until ${formatUntil(next.start, at)}`
               : "Booked through tomorrow"}
         </Text>
-        {room.capacity !== undefined && (
-          <Text size="2" color="gray">
-            {room.capacity} seats
+        <Text size="2" color="gray">
+          {room.capacity !== undefined ? `${room.capacity} seats` : "Seats unknown"} ·{" "}
+          <Text color={Date.now() - room.updatedAt > STALE_AFTER ? "red" : undefined}>
+            Updated {getRelativeTime(room.updatedAt)}
           </Text>
-        )}
+        </Text>
       </Flex>
 
       <Timeline open={room.open} at={at} />
