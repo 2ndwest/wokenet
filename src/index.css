@@ -61,6 +61,12 @@ body {
   }
 }
 
+/* Set by useIdleCursor. Beats the rows' inline pointer cursor. */
+.cursor-idle,
+.cursor-idle * {
+  cursor: none !important;
+}
+
 .blink {
   animation: blink 2s ease-in-out infinite;
 }

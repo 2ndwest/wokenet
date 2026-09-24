@@ -6,6 +6,7 @@ import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_ORDER, COLOR_HEX } from "../utils/colors";
 import { toMins } from "../utils/time";
+import { useIdleCursor } from "../utils/useIdleCursor";
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
@@ -104,6 +105,7 @@ export const PersonBoard = memo(
     lastCell?: React.ReactNode;
     onRowClick?: (key: string) => void;
   }) => {
+    useIdleCursor();
     const columns = useColumnCount();
     const rowsPerColumn = Math.ceil(((rows?.length ?? 0) + (lastCell ? 1 : 0)) / columns);
 
