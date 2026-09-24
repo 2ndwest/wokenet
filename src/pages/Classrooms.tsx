@@ -32,7 +32,9 @@ type RoomAt = { room: string; building: string; capacity?: number; open: Window[
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-const STALE_AFTER = 8 * HOUR; // nickbot refreshes each room every ~6 hours, so this means a missed refresh.
+// A room not refreshed in this long is stale. The availability scraper refreshes each room every
+// ~6 hours, so this means a missed refresh.
+const STALE_AFTER = 8 * HOUR;
 const TICK = 30_000; // How often times and bars move along with the clock.
 // Bars show a rolling window around the chosen time, mostly looking ahead.
 const TIMELINE_BEFORE = 1 * HOUR;
@@ -409,7 +411,7 @@ const RoomSheet = memo(
   }
 );
 
-// Which MIT rooms are free now (or at a chosen time today/tomorrow), from nickbot's room sweeps.
+// Which MIT rooms are free now (or at a chosen time today/tomorrow), from the availability scraper.
 export const Classrooms = memo(() => {
   useRerender(TICK);
   const now = Math.floor(Date.now() / TICK) * TICK;
@@ -495,6 +497,9 @@ export const Classrooms = memo(() => {
   if (!rooms) return <CenterSpinner />;
 
   const updatedAt = Math.max(0, ...rooms.map((r) => r.updatedAt));
+  const staleCount = rooms.filter((r) => now - r.updatedAt > STALE_AFTER).length;
+  const staleRooms = staleCount === 1 ? "1 room hasn't" : `${staleCount} rooms haven't`;
+  const staleTitle = `${staleRooms} been refreshed in over ${STALE_AFTER / HOUR} hours`;
 
   return (
     <Flex direction="column" width="100%" p="5" align="center">
@@ -502,7 +507,15 @@ export const Classrooms = memo(() => {
         <Flex direction="column" gap="1">
           <Heading size="8">Classrooms</Heading>
           <Text size="2" color={now - updatedAt > STALE_AFTER ? "red" : "gray"}>
-            {rooms.length === 0 ? "No classroom data yet." : `Updated ${getRelativeTime(updatedAt)}.`}
+            {rooms.length === 0
+              ? "No classroom data yet."
+              : `Updated ${getRelativeTime(updatedAt)}${staleCount > 0 ? "" : "."}`}
+            {staleCount > 0 && (
+              <Text color="red" title={staleTitle}>
+                {" "}
+                · {staleCount} stale
+              </Text>
+            )}
           </Text>
         </Flex>
 

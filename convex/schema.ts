@@ -40,16 +40,18 @@ export default defineSchema({
     timestamp: v.number(),
   }).index("by_victimId", ["victimId"]),
 
-  // Pushed by nickbot as it refreshes each room's MIT room bookings (plus Hydrant's class schedule), every ~6 hours.
+  // Pushed by the availability scraper as it refreshes each room's MIT room bookings (plus Hydrant's
+  // class schedule), every ~6 hours.
   classroomAvailability: defineTable({
     room: v.string(), // e.g. "W41-1119"
     building: v.string(), // e.g. "W41" (wings like "14N" are folded into "14")
     capacity: v.optional(v.number()), // Seats: registrar count, or estimated from floor area; >= 60 ≈ lecture hall
     open: v.array(v.object({ start: v.number(), end: v.number() })), // ms timestamps, today and tomorrow
-    updatedAt: v.number(), // When nickbot fetched this room's bookings (ms)
+    updatedAt: v.number(), // When the availability scraper fetched this room's bookings (ms)
   }).index("by_room", ["room"]),
 
-  // Classrooms people couldn't use, for admins to review and drop from nickbot's list. One per person per room.
+  // Classrooms people couldn't use, for admins to review and drop from the availability scraper's list.
+  // One per person per room.
   classroomReports: defineTable({
     room: v.string(),
     userId: v.id("users"),

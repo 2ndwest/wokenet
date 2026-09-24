@@ -3,7 +3,8 @@ import { internalMutation, query } from "./_generated/server";
 import { requirePutz } from "./utils/auth";
 import schema from "./schema";
 
-// Every classroom's open windows for today and tomorrow, as last pushed by nickbot (each refreshed every ~6 hours).
+// Every classroom's open windows for today and tomorrow, as last pushed by the availability scraper
+// (each refreshed every ~6 hours).
 export const getClassroomAvailability = query({
   args: {},
   handler: async (ctx) => {
@@ -13,11 +14,12 @@ export const getClassroomAvailability = query({
   },
 });
 
-// Upserts the classrooms nickbot just refreshed, and deletes any classroom it no longer tracks.
+// Upserts the classrooms the availability scraper just refreshed, and deletes any classroom it no
+// longer tracks.
 export const updateClassroomAvailability = internalMutation({
   args: {
     classrooms: v.array(schema.tables.classroomAvailability.validator),
-    tracked: v.array(v.string()), // Every room nickbot tracks, refreshed or not.
+    tracked: v.array(v.string()), // Every room the scraper tracks, refreshed or not.
   },
   handler: async (ctx, args) => {
     const existing = new Map(

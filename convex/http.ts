@@ -53,7 +53,7 @@ export const ingestClassroomAvailability = httpAction(async (ctx, req) => {
       room: string;
       building: string;
       capacity?: number;
-      updatedAt: number; // When nickbot fetched this room's bookings (ms).
+      updatedAt: number; // When the availability scraper fetched this room's bookings (ms).
       open: Array<{ start: number; end: number }>;
     }>;
     tracked: string[];

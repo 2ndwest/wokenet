@@ -84,7 +84,8 @@ export const getReports = query({
   },
 });
 
-// Clears a room's reports once it's dealt with (e.g. dropped from nickbot's mit_rooms.h, or it was fine).
+// Clears a room's reports once it's dealt with (e.g. dropped from the availability scraper's room list,
+// or it was fine).
 export const dismissReports = mutation({
   args: { room: v.string() },
   handler: async (ctx, { room }) => {

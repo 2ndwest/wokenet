@@ -96,8 +96,8 @@ export const AdminPanel = memo(() => {
   );
 });
 
-// Rooms people reported as unusable on the Classrooms page. Drop real problems from nickbot's
-// commands/mit_rooms.h, then dismiss their reports here.
+// Rooms people reported as unusable on the Classrooms page. Drop real problems from the availability
+// scraper's room list, then dismiss their reports here.
 const ClassroomReports = memo(() => {
   const reports = useQuery(api.classroomReports.getReports);
   const dismissReports = useMutation(api.classroomReports.dismissReports);
