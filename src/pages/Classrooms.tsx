@@ -266,7 +266,7 @@ export const Classrooms = memo(() => {
 
         <Flex gap="2" align="center">
           <TextField.Root
-            placeholder="Search rooms, e.g. 32-1"
+            placeholder="Search buildings, e.g. 26"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ flexGrow: 1 }}
