@@ -474,7 +474,7 @@ export const Classrooms = memo(() => {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("building");
   const [showBooked, setShowBooked] = useState(false);
-  const [showLectureHalls, setShowLectureHalls] = useState(true);
+  const [showLectureHalls, setShowLectureHalls] = useState(false);
 
   // The room whose sheet is open, kept while it animates closed.
   const [selected, setSelected] = useState<string>();
@@ -633,7 +633,7 @@ export const Classrooms = memo(() => {
             <BookedIcon />
           </ToggleButton>
 
-          {/* Lecture halls (60+ seats) are shown by default. */}
+          {/* Lecture halls (60+ seats) are hidden by default. */}
           <ToggleButton
             on={showLectureHalls}
             onToggle={() => setShowLectureHalls((b) => !b)}
