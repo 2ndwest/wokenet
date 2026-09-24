@@ -57,15 +57,16 @@ export const ClockIcon = () => {
   );
 };
 
-// Bars getting shorter, for sorting longest-first.
+// A down arrow beside bars getting shorter: sorting longest-first. After Lucide's arrow-down-wide-narrow.
 export const SortIcon = () => {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
       <path
-        d="M4 6h16M4 12h11M4 18h6"
+        d="m3 16 4 4 4-4M7 20V4M11 4h10M11 8h7M11 12h4"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -82,6 +83,26 @@ export const WarningIcon = ({ size = 18 }: { size?: number }) => {
         strokeLinejoin="round"
       />
       <path d="M12 9.5v4.5M12 17.5h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+};
+
+// An eye with an X for a pupil: showing the rooms you can't use (booked ones).
+export const BookedIcon = () => {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+      <path
+        d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.75 9.75l4.5 4.5M14.25 9.75l-4.5 4.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 };

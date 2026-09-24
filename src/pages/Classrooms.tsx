@@ -20,7 +20,7 @@ import { Doc } from "../../convex/_generated/dataModel";
 import { getRelativeTime, toMins, useRerender } from "../utils/time";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_HEX } from "../utils/colors";
-import { ClockIcon, EyeIcon, SortIcon, WarningIcon } from "../utils/icons";
+import { BookedIcon, ClockIcon, SortIcon, WarningIcon } from "../utils/icons";
 import BUILDING_COORDS from "../utils/building_coords.json";
 
 type When = "now" | "today" | "tomorrow";
@@ -445,6 +445,23 @@ const RoomSheet = memo(
   }
 );
 
+// An icon button for an on/off filter, filled in when on.
+const ToggleButton = ({
+  on,
+  onToggle,
+  label,
+  children,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <IconButton variant={on ? "solid" : "surface"} aria-label={label} aria-pressed={on} onClick={onToggle}>
+    {children}
+  </IconButton>
+);
+
 // Which MIT rooms are free now (or at a chosen time today/tomorrow), from the availability scraper.
 export const Classrooms = memo(() => {
   useRerender(TICK);
@@ -593,34 +610,39 @@ export const Classrooms = memo(() => {
             </Popover.Content>
           </Popover.Root>
 
-          {/* Filled in when sorted by longest free instead of grouped by building. */}
-          <IconButton
-            variant={sort === "longest" ? "solid" : "surface"}
-            aria-label="Sort by longest free"
-            onClick={() => setSort((s) => (s === "longest" ? "building" : "longest"))}
-          >
-            <SortIcon />
-          </IconButton>
+          {/* Filled in when sorted some way other than by building. */}
+          <Popover.Root>
+            <Popover.Trigger>
+              <IconButton variant={sort === "building" ? "surface" : "solid"} aria-label="Sort">
+                <SortIcon />
+              </IconButton>
+            </Popover.Trigger>
+            <Popover.Content size="1" align="end">
+              <SegmentedControl.Root value={sort} onValueChange={(v) => setSort(v as Sort)}>
+                <SegmentedControl.Item value="building">By building</SegmentedControl.Item>
+                <SegmentedControl.Item value="longest">By time available</SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </Popover.Content>
+          </Popover.Root>
 
-          {/* Filled in when booked rooms are shown too. */}
-          <IconButton
-            variant={showBooked ? "solid" : "surface"}
-            aria-label="Show booked rooms"
-            onClick={() => setShowBooked((b) => !b)}
+          <ToggleButton
+            on={showBooked}
+            onToggle={() => setShowBooked((b) => !b)}
+            label="Show booked rooms"
           >
-            <EyeIcon height="18px" fill="currentColor" />
-          </IconButton>
+            <BookedIcon />
+          </ToggleButton>
 
-          {/* Filled in when lecture halls (60+ seats) are included, which they are by default. */}
-          <IconButton
-            variant={showLectureHalls ? "solid" : "surface"}
-            aria-label="Include lecture halls"
-            onClick={() => setShowLectureHalls((b) => !b)}
+          {/* Lecture halls (60+ seats) are shown by default. */}
+          <ToggleButton
+            on={showLectureHalls}
+            onToggle={() => setShowLectureHalls((b) => !b)}
+            label="Show lecture halls"
           >
             <Text size="2" style={GROTESK}>
               LH
             </Text>
-          </IconButton>
+          </ToggleButton>
         </Flex>
 
         {/* Sorting by longest mixes buildings, unless a building search keeps them grouped. */}
