@@ -51,7 +51,8 @@ const isLectureHall = (r: { capacity?: number }) => (r.capacity ?? 0) >= LECTURE
 
 // Amber, like "under 30 minutes", but only ever on the warning icon.
 const REPORTED_COLOR = COLOR_HEX.yellow;
-const reportedBy = (count: number) => `Reported by ${count} ${count === 1 ? "person" : "people"}`;
+const reportedBy = (count: number) =>
+  `${count} ${count === 1 ? "person" : "people"} had trouble with this room`;
 
 // A small "LH" chip marking lecture halls next to their room number.
 const LectureHallTag = ({ title }: { title?: string }) => (
