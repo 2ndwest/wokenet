@@ -21,8 +21,10 @@ import { getRelativeTime, toMins, useRerender } from "../utils/time";
 import { CenterSpinner } from "../utils/spinner";
 import { COLOR_HEX } from "../utils/colors";
 import { BookedIcon, ClockIcon, SortIcon, WarningIcon } from "../utils/icons";
-import BUILDING_COORDS from "../utils/building_coords.json";
 import { useGeolocation } from "../utils/useGeolocation";
+import { byName, coordsOf, distance, searchedBuilding } from "../utils/buildings";
+import { Tag, ToggleButton } from "../components/RoomList";
+import { GROTESK } from "../utils/fonts";
 
 type When = "now" | "today" | "tomorrow";
 type Sort = "building" | "longest";
@@ -40,7 +42,6 @@ const TICK = 30_000; // How often times and bars move along with the clock.
 // Bars show a rolling window around the chosen time, mostly looking ahead.
 const TIMELINE_BEFORE = 1 * HOUR;
 const TIMELINE_AFTER = 3 * HOUR;
-const GROTESK = { fontFamily: "Non Natural Grotesk", fontWeight: 700 }; // For room and building names.
 const LECTURE_HALL_SEATS = 60;
 // Every row lays out the same, so their timelines line up down the list.
 const NAME_WIDTH = "120px";
@@ -56,22 +57,7 @@ const reportedBy = (count: number) =>
   `${count} ${count === 1 ? "person" : "people"} had trouble with this room`;
 
 // A small "LH" chip marking lecture halls next to their room number.
-const LectureHallTag = ({ title }: { title?: string }) => (
-  <Text
-    title={title}
-    style={{
-      ...GROTESK,
-      fontSize: "11px",
-      lineHeight: "17px",
-      padding: "0 4px",
-      backgroundColor: "var(--gray-4)",
-      borderRadius: "var(--radius-1)",
-      color: "var(--gray-11)",
-    }}
-  >
-    LH
-  </Text>
-);
+const LectureHallTag = ({ title }: { title?: string }) => <Tag title={title}>LH</Tag>;
 
 // Midnight at the start of `ms`'s day, shifted by `days`.
 const startOfDay = (ms: number, days = 0) => {
@@ -108,26 +94,6 @@ const withWindow = (r: Doc<"classroomAvailability">, at: number): RoomAt => ({
   ...r,
   window: r.open.find((w) => w.start <= at && at < w.end),
 });
-
-const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
-
-// [lat, lng] per building, pulled once from MIT's campus map (whereis.mit.edu).
-const COORDS: Record<string, number[] | undefined> = BUILDING_COORDS;
-
-// Rough distance from a [lat, lng] to a building. Buildings missing from the map (e.g. NE46), or no
-// starting point at all, count as farthest.
-const distance = (from: number[] | undefined, building: string) => {
-  const to = COORDS[building];
-  if (!from || !to) return Infinity;
-  return Math.hypot(from[0] - to[0], (from[1] - to[1]) * Math.cos((from[0] * Math.PI) / 180));
-};
-
-// The building a search is for: "W41" or "W41-2" -> "W41". Wings fold in like the data: "14N-1" -> "14".
-const searchedBuilding = (query: string, buildings: Set<string>) => {
-  const head = query.split("-")[0];
-  const unwinged = head.replace(/^(\d+)[NSEW]$/, "$1");
-  return [head, unwinged].find((b) => buildings.has(b) || COORDS[b]);
-};
 
 // How long an open stretch lasts from the chosen time: under 30m yellow, under an hour blue, else green.
 const colorFor = (w: Window, at: number) => {
@@ -447,23 +413,6 @@ const RoomSheet = memo(
   }
 );
 
-// An icon button for an on/off filter, filled in when on.
-const ToggleButton = ({
-  on,
-  onToggle,
-  label,
-  children,
-}: {
-  on: boolean;
-  onToggle: () => void;
-  label: string;
-  children: React.ReactNode;
-}) => (
-  <IconButton variant={on ? "solid" : "surface"} aria-label={label} aria-pressed={on} onClick={onToggle}>
-    {children}
-  </IconButton>
-);
-
 // Which MIT rooms are free now (or at a chosen time today/tomorrow), from the availability scraper.
 export const Classrooms = memo(() => {
   useRerender(TICK);
@@ -525,7 +474,7 @@ export const Classrooms = memo(() => {
           : r.room.toUpperCase().startsWith(query)
         : r.room.toUpperCase().includes(query));
     const tier = (r: RoomAt) => (matches(r) ? 0 : r.building === searched ? 1 : 2);
-    const origin = searched ? COORDS[searched] : query ? undefined : here;
+    const origin = searched ? coordsOf(searched) : query ? undefined : here;
     const byDistance = (a: RoomAt, b: RoomAt) =>
       distance(origin, a.building) - distance(origin, b.building) || byName(a.building, b.building);
 
