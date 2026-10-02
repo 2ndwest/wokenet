@@ -115,7 +115,7 @@ export const Bathrooms = memo(() => {
         <Flex direction="column" gap="1">
           <Heading size="8">Bathrooms</Heading>
           <Text size="2" color="gray">
-            Updated 10/1/26 · There may be inaccuracies!
+            Updated 10/1/26 · May be inaccuracies!
           </Text>
         </Flex>
 
