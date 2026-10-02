@@ -62,7 +62,11 @@ const RestroomRow = memo(({ restroom }: { restroom: Restroom }) => (
       {restroom.room}
     </Text>
     <Flex gap="1" flexShrink="0">
-      {restroom.single && <Tag title="Estimated from floor area">Single stall</Tag>}
+      {restroom.single && (
+        <Tag title="Estimated from floor area" accent>
+          Single stall
+        </Tag>
+      )}
       <Tag>{KIND_LABEL[restroom.kind]}</Tag>
     </Flex>
   </Flex>

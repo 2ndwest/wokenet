@@ -3,8 +3,16 @@ import { GROTESK } from "../utils/fonts";
 
 // Shared bits of the room lists (Classrooms, Bathrooms).
 
-// A small chip next to a room number, e.g. "LH" for lecture halls.
-export const Tag = ({ title, children }: { title?: string; children: React.ReactNode }) => (
+// A small chip next to a room number, e.g. "LH" for lecture halls. Gray, or orange (the accent) to stand out.
+export const Tag = ({
+  title,
+  accent,
+  children,
+}: {
+  title?: string;
+  accent?: boolean;
+  children: React.ReactNode;
+}) => (
   <Text
     title={title}
     style={{
@@ -13,9 +21,9 @@ export const Tag = ({ title, children }: { title?: string; children: React.React
       lineHeight: "17px",
       padding: "0 4px",
       whiteSpace: "nowrap",
-      backgroundColor: "var(--gray-4)",
+      backgroundColor: accent ? "var(--accent-4)" : "var(--gray-4)",
       borderRadius: "var(--radius-1)",
-      color: "var(--gray-11)",
+      color: accent ? "var(--accent-11)" : "var(--gray-11)",
     }}
   >
     {children}
