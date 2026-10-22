@@ -210,14 +210,36 @@ const DRAG_TRACKS = "application/x-wokenet-tracks";
 /** How many genre chips fit on one line before we collapse the rest. */
 const COLLAPSED_GENRE_COUNT = 8;
 
-type SortMode = "alphabetical" | "bpm" | "key" | "dj" | "genre";
+type SortMode = "alphabetical" | "added" | "bpm" | "key" | "dj" | "genre";
+type SortDir = "asc" | "desc";
 
 const SORT_LABELS: Record<SortMode, string> = {
   alphabetical: "Alphabetical",
+  added: "Date added",
   bpm: "BPM",
   key: "Key",
   dj: "DJ",
   genre: "Genre",
+};
+
+/** What each direction means per mode, so the label isn't just asc/desc. */
+const DIRECTION_LABELS: Record<SortMode, { asc: string; desc: string }> = {
+  alphabetical: { asc: "A–Z", desc: "Z–A" },
+  added: { asc: "Oldest", desc: "Newest" },
+  bpm: { asc: "Slowest", desc: "Fastest" },
+  key: { asc: "1A–12B", desc: "12B–1A" },
+  dj: { asc: "A–Z", desc: "Z–A" },
+  genre: { asc: "A–Z", desc: "Z–A" },
+};
+
+/** Newest-first is the useful default for dates; everything else reads up. */
+const DEFAULT_DIRECTION: Record<SortMode, SortDir> = {
+  alphabetical: "asc",
+  added: "desc",
+  bpm: "asc",
+  key: "asc",
+  dj: "asc",
+  genre: "asc",
 };
 
 /**
@@ -241,7 +263,7 @@ export function alphaKey(title: string): string {
  * neighbouring keys end up next to each other, which is the point of sorting
  * by key at all. Anything unparsed sorts last.
  */
-function camelotOrder(key: string | undefined): number {
+export function camelotOrder(key: string | undefined): number {
   const m = /^(\d{1,2})([ab])$/i.exec((key ?? "").trim());
   if (!m) return Infinity;
   return Number(m[1]) * 2 + (m[2].toLowerCase() === "b" ? 1 : 0);
@@ -252,31 +274,42 @@ function camelotOrder(key: string | undefined): number {
  * stable rather than shuffling around within equal values, and anything
  * missing the sort field sinks to the bottom instead of leading the list.
  */
-function sortTracks(tracks: Track[], mode: SortMode): Track[] {
+function sortTracks(tracks: Track[], mode: SortMode, dir: SortDir): Track[] {
   const byTitle = (a: Track, b: Track) => alphaKey(a.title).localeCompare(alphaKey(b.title));
-  const sorted = [...tracks];
 
-  switch (mode) {
-    case "bpm":
-      return sorted.sort(
-        (a, b) => (a.bpm ?? Infinity) - (b.bpm ?? Infinity) || byTitle(a, b),
-      );
-    case "key":
-      return sorted.sort(
-        (a, b) => camelotOrder(a.musicalKey) - camelotOrder(b.musicalKey) || byTitle(a, b),
-      );
-    case "dj":
-      return sorted.sort((a, b) => a.djDisplay.localeCompare(b.djDisplay) || byTitle(a, b));
-    case "genre":
-      return sorted.sort((a, b) => {
-        // Untagged tracks last, rather than sorting as an empty string first.
-        const ga = a.genres[0] ?? "￿";
-        const gb = b.genres[0] ?? "￿";
-        return ga.localeCompare(gb) || byTitle(a, b);
-      });
-    default:
-      return sorted.sort(byTitle);
-  }
+  /** True when a track has nothing to sort on in this mode. */
+  const missing = (t: Track): boolean => {
+    if (mode === "bpm") return t.bpm === undefined;
+    if (mode === "key") return camelotOrder(t.musicalKey) === Infinity;
+    if (mode === "genre") return t.genres.length === 0;
+    return false; // every track has a title, a DJ and an upload time
+  };
+
+  /** Ascending comparator for tracks that do have a value. */
+  const compare = (a: Track, b: Track): number => {
+    switch (mode) {
+      case "added":
+        return a.uploadedAt - b.uploadedAt || byTitle(a, b);
+      case "bpm":
+        return (a.bpm ?? 0) - (b.bpm ?? 0) || byTitle(a, b);
+      case "key":
+        return camelotOrder(a.musicalKey) - camelotOrder(b.musicalKey) || byTitle(a, b);
+      case "dj":
+        return a.djDisplay.localeCompare(b.djDisplay) || byTitle(a, b);
+      case "genre":
+        return a.genres[0].localeCompare(b.genres[0]) || byTitle(a, b);
+      default:
+        return byTitle(a, b);
+    }
+  };
+
+  // Tracks with nothing to sort on stay at the bottom in both directions --
+  // reversing the whole list would otherwise lead with the untagged ones.
+  const present = tracks.filter((t) => !missing(t)).sort(compare);
+  if (dir === "desc") present.reverse();
+  const absent = tracks.filter(missing).sort(byTitle);
+
+  return [...present, ...absent];
 }
 
 const toggleIn = <T,>(set: Set<T>, value: T): Set<T> => {
@@ -368,6 +401,7 @@ export const DJs = memo(() => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [shuffle, setShuffle] = useState(false);
   const [sortBy, setSortBy] = useState<SortMode>("alphabetical");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   // Mirrored from the <audio> element so the seek slider can drive it.
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -485,7 +519,10 @@ export const DJs = memo(() => {
   ]);
 
   /** Filtering decides what's shown; this decides the order it's shown in. */
-  const ordered = useMemo(() => sortTracks(filtered, sortBy), [filtered, sortBy]);
+  const ordered = useMemo(
+    () => sortTracks(filtered, sortBy, sortDir),
+    [filtered, sortBy, sortDir],
+  );
 
   /** Only show BPM buckets that something actually falls into. */
   const availableBpmBuckets = useMemo(() => {
@@ -1377,7 +1414,15 @@ export const DJs = memo(() => {
                   <Text size="1" color="gray">
                     Sort by
                   </Text>
-                  <Select.Root value={sortBy} onValueChange={(v) => setSortBy(v as SortMode)}>
+                  <Select.Root
+                    value={sortBy}
+                    onValueChange={(v) => {
+                      const mode = v as SortMode;
+                      setSortBy(mode);
+                      // Dates read newest-first; everything else reads up.
+                      setSortDir(DEFAULT_DIRECTION[mode]);
+                    }}
+                  >
                     <Select.Trigger variant="surface" radius="full" />
                     <Select.Content>
                       {(Object.keys(SORT_LABELS) as SortMode[]).map((m) => (
@@ -1387,6 +1432,15 @@ export const DJs = memo(() => {
                       ))}
                     </Select.Content>
                   </Select.Root>
+                  <Button
+                    size="1"
+                    radius="full"
+                    variant="surface"
+                    onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    title="Reverse the order"
+                  >
+                    {sortDir === "asc" ? "↑" : "↓"} {DIRECTION_LABELS[sortBy][sortDir]}
+                  </Button>
                 </Flex>
                 <Button
                   size="1"
