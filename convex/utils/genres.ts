@@ -434,10 +434,11 @@ export function normalizeUserGenre(raw: string | undefined | null): string[] {
   const known = ALIASES[base];
   if (known) return [known];
 
-  // For anything we don't recognize, respect how it was typed: SHOUTING is a
-  // deliberate choice on a custom tag, not something to tidy away.
+  // For anything we don't recognize, respect how it was typed: any capital
+  // ("PUTZ PARTY", "BIG Room", "hElO") is a deliberate choice on a custom tag,
+  // not something to tidy away. Only all-lowercase gets title-cased.
   const trimmed = raw.trim().replace(/\s+/g, " ");
-  if (/[A-Z]/.test(trimmed) && trimmed === trimmed.toUpperCase()) return [trimmed];
+  if (/[A-Z]/.test(trimmed)) return [trimmed];
 
   return [titleCase(base)];
 }
