@@ -9,6 +9,13 @@ body {
   touch-action: manipulation;
 }
 
+/* Display settings set data-appearance on <html>; dark stays the default so
+   nothing changes for anyone who hasn't picked a mode. */
+html[data-appearance="light"],
+html[data-appearance="light"] body {
+  background-color: #ffffff;
+}
+
 @font-face {
   font-family: Mondwest;
   src: url("./fonts/Mondwest-Regular.woff2") format("woff2");

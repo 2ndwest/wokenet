@@ -1,13 +1,93 @@
-import { Button, Flex, Heading, Spinner, IconButton } from "@radix-ui/themes";
+import {
+  Button,
+  Dialog,
+  Flex,
+  Heading,
+  IconButton,
+  SegmentedControl,
+  Spinner,
+  Text,
+} from "@radix-ui/themes";
 import { NavLink, useLocation } from "react-router";
 import { HamburgerIcon, PTZIcon } from "../utils/icons";
 import { memo, useEffect, useState } from "react";
 import { UserButton } from "@clerk/clerk-react";
 import type { Affiliation } from "../../convex/schema";
 import { useAuthStatus } from "../utils/useAuthStatus";
+import {
+  useDisplaySettings,
+  type Accent,
+  type Appearance,
+} from "../utils/useDisplaySettings";
+
+/** Half-filled circle, the usual shorthand for appearance settings. */
+const DisplayIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+    <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 1.5V13.5a5.5 5.5 0 010-11z" />
+  </svg>
+);
+
+/** Light/dark and accent, kept out of the database so it applies instantly. */
+const DisplaySettingsDialog = memo(
+  ({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) => {
+    const { appearance, accent, setAppearance, setAccent } = useDisplaySettings();
+
+    return (
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Content maxWidth="400px">
+          <Dialog.Title>Display</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="4">
+            Applies to this browser only.
+          </Dialog.Description>
+
+          <Flex direction="column" gap="4">
+            <Flex direction="column" gap="2">
+              <Text size="2" weight="bold">
+                Appearance
+              </Text>
+              <SegmentedControl.Root
+                value={appearance}
+                onValueChange={(v) => setAppearance(v as Appearance)}
+              >
+                <SegmentedControl.Item value="light">Light</SegmentedControl.Item>
+                <SegmentedControl.Item value="dark">Dark</SegmentedControl.Item>
+                <SegmentedControl.Item value="system">System</SegmentedControl.Item>
+              </SegmentedControl.Root>
+              <Text size="1" color="gray">
+                System follows whatever your device is set to, and switches with it.
+              </Text>
+            </Flex>
+
+            <Flex direction="column" gap="2">
+              <Text size="2" weight="bold">
+                Theme
+              </Text>
+              <SegmentedControl.Root
+                value={accent}
+                onValueChange={(v) => setAccent(v as Accent)}
+              >
+                <SegmentedControl.Item value="orange">Orange</SegmentedControl.Item>
+                <SegmentedControl.Item value="purple">Purple</SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </Flex>
+          </Flex>
+
+          <Flex justify="end" mt="4">
+            <Dialog.Close>
+              <Button size="1" variant="soft" color="gray">
+                Done
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+    );
+  },
+);
 
 export const Header = memo(() => {
   const { user, isAuthLoading, isUserReady } = useAuthStatus();
+  const [displayOpen, setDisplayOpen] = useState(false);
 
   // On mobile, start with menu open on the home page
   const [menuOpen, setMenuOpen] = useState(() => {
@@ -71,9 +151,19 @@ export const Header = memo(() => {
           </Flex>
         ) : isUserReady ? (
           <Flex width="28px" height="28px">
-            <UserButton />
+            <UserButton>
+              <UserButton.MenuItems>
+                <UserButton.Action
+                  label="Display"
+                  labelIcon={<DisplayIcon />}
+                  onClick={() => setDisplayOpen(true)}
+                />
+              </UserButton.MenuItems>
+            </UserButton>
           </Flex>
         ) : null}
+
+        <DisplaySettingsDialog open={displayOpen} onOpenChange={setDisplayOpen} />
       </Flex>
 
       {/* Mobile menu (only on mobile after clicking hamburger) */}
@@ -120,6 +210,9 @@ export const NavButtons = memo(
         </NavButton>
         <NavButton disabled={affiliation !== "PUTZ"} to="/bathrooms">
           Bathrooms
+        </NavButton>
+        <NavButton disabled={affiliation !== "PUTZ"} to="/djs">
+          DJs
         </NavButton>
         {isAdmin && <NavButton to="/adminpanel">Admin Panel</NavButton>}
       </>

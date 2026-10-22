@@ -67,7 +67,137 @@ export const ingestClassroomAvailability = httpAction(async (ctx, req) => {
   return new Response(null, { status: 200 });
 });
 
+/**
+ * Endpoints for the DJ rip helper.
+ *
+ * Serverless can't run yt-dlp or ffmpeg, so a script on a DJ's own machine
+ * polls for rip requests, does the work, and posts results back. It can't hold
+ * a Clerk session, so it authenticates with a shared secret the same way the
+ * email and classroom ingests do.
+ */
+const ripperSecretOk = (req: Request): Response | null => {
+  if (!process.env.DJ_RIPPER_SECRET) {
+    console.error("Set DJ_RIPPER_SECRET on the Convex dashboard to enable the DJ rip helper!");
+    return new Response("DJ_RIPPER_SECRET not set on Convex!", { status: 500 });
+  }
+  if (req.headers.get("x-webhook-secret") !== process.env.DJ_RIPPER_SECRET)
+    return new Response("DJ_RIPPER_SECRET mismatch.", { status: 401 });
+  return null;
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+/** Hand the helper the next queued rip, marking it claimed. */
+export const claimRip = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const { claimedBy } = (await req.json()) as { claimedBy?: string };
+  const claimed = await ctx.runMutation(internal.djs.claimNextRipRequest, {
+    claimedBy: (claimedBy ?? "unknown").toLowerCase(),
+  });
+
+  return json(claimed ?? null);
+});
+
+/** An upload URL for pushing a ripped file into Convex file storage. */
+export const ripUploadUrl = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+  return json({ uploadUrl: await ctx.runMutation(internal.djs.generateRipperUploadUrl, {}) });
+});
+
+/** Register an uploaded file as a library track. */
+export const ripTrack = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const body = (await req.json()) as Parameters<
+    typeof ctx.runMutation<typeof internal.djs.insertRippedTrack>
+  >[1];
+
+  // Skip anything already in the library, so re-running a rip is harmless.
+  if (body.sourceUrl) {
+    const existing = await ctx.runQuery(internal.djs.findTrackBySourceUrl, {
+      sourceUrl: body.sourceUrl,
+    });
+    if (existing) return json({ trackId: existing._id, skipped: true });
+  }
+
+  return json({ trackId: await ctx.runMutation(internal.djs.insertRippedTrack, body) });
+});
+
+/** Create a playlist from the CLI, selecting tracks by genre or filename. */
+export const ripPlaylist = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const body = (await req.json()) as Parameters<
+    typeof ctx.runMutation<typeof internal.djs.createPlaylistFrom>
+  >[1];
+
+  return json(await ctx.runMutation(internal.djs.createPlaylistFrom, body));
+});
+
+/** What's already in the library, so an import can skip duplicates. */
+export const ripFilenames = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+  return json({ filenames: await ctx.runQuery(internal.djs.listFilenames, {}) });
+});
+
+/** Attach cover art to an already-ingested track, matched by filename. */
+export const ripCover = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const body = (await req.json()) as Parameters<
+    typeof ctx.runMutation<typeof internal.djs.setCoverByFilename>
+  >[1];
+
+  return json(await ctx.runMutation(internal.djs.setCoverByFilename, body));
+});
+
+/** Mark a rip request finished (or failed, with a reason). */
+export const finishRip = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const body = (await req.json()) as Parameters<
+    typeof ctx.runMutation<typeof internal.djs.finishRipRequest>
+  >[1];
+
+  await ctx.runMutation(internal.djs.finishRipRequest, body);
+  return new Response(null, { status: 200 });
+});
+
+/** A progress note while a rip is still running. */
+export const ripProgress = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const body = (await req.json()) as Parameters<
+    typeof ctx.runMutation<typeof internal.djs.noteRipProgress>
+  >[1];
+
+  await ctx.runMutation(internal.djs.noteRipProgress, body);
+  return new Response(null, { status: 200 });
+});
+
 const router = httpRouter();
+
+router.route({ path: "/dj-rip/claim", method: "POST", handler: claimRip });
+router.route({ path: "/dj-rip/upload-url", method: "POST", handler: ripUploadUrl });
+router.route({ path: "/dj-rip/track", method: "POST", handler: ripTrack });
+router.route({ path: "/dj-rip/cover", method: "POST", handler: ripCover });
+router.route({ path: "/dj-rip/filenames", method: "POST", handler: ripFilenames });
+router.route({ path: "/dj-rip/playlist", method: "POST", handler: ripPlaylist });
+router.route({ path: "/dj-rip/progress", method: "POST", handler: ripProgress });
+router.route({ path: "/dj-rip/finish", method: "POST", handler: finishRip });
 
 router.route({
   pathPrefix: "/ingest-dad-saying/",
