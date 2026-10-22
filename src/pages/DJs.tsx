@@ -16,7 +16,7 @@ import {
   TextArea,
   TextField,
 } from "@radix-ui/themes";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -34,12 +34,38 @@ import {
   formatSize,
   inferQuality,
   readDuration,
+  readTags,
   rejectReason,
 } from "../utils/audio";
+import { shrinkImage } from "../utils/image";
 import { buildRekordboxXml, matchKey, parseRekordboxXml } from "../utils/rekordbox";
 import { formatTimestamp, getRelativeTime } from "../utils/time";
 import { buildZip, saveBlob, type ZipEntry } from "../utils/zip";
 import { useAuthStatus } from "../utils/useAuthStatus";
+
+/**
+ * Upload cover art pulled out of an audio file. Returns undefined rather than
+ * throwing: a track without its artwork is better than no track at all.
+ */
+async function uploadEmbeddedCover(
+  cover: Blob | undefined,
+  generateUploadUrl: () => Promise<string>,
+): Promise<Id<"_storage"> | undefined> {
+  if (!cover) return undefined;
+  try {
+    const uploadUrl = await generateUploadUrl();
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": cover.type || "image/jpeg" },
+      body: cover,
+    });
+    if (!res.ok) return undefined;
+    const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+    return storageId;
+  } catch {
+    return undefined;
+  }
+}
 
 /** listRipRequests numbers everything still waiting, oldest first. */
 type RipRequest = Doc<"djRipRequests"> & { place: number | null };
@@ -277,6 +303,15 @@ const loudTagStyle = (t: TagStyle): React.CSSProperties => ({
   boxShadow: t.glow ? `0 0 10px rgba(${hexToRgb(t.bg)}, 0.75)` : undefined,
 });
 
+/** A DJ's name as coloured text: their bubble colour, glowing if the bubble does. */
+const djTextStyle = (tag: TagStyle | null): React.CSSProperties | undefined =>
+  tag
+    ? {
+        color: tag.bg,
+        textShadow: tag.glow ? `0 0 10px rgba(${hexToRgb(tag.bg)}, 0.7)` : undefined,
+      }
+    : undefined;
+
 /** A DJ's own colours as inline style, or nothing if they use an accent. */
 const djTagStyle = (tag: TagStyle | null): React.CSSProperties =>
   tag
@@ -352,6 +387,8 @@ const FilterChip = memo(
 
 /** Drag payload: the track ids being dropped onto a playlist. */
 const DRAG_TRACKS = "application/x-wokenet-tracks";
+/** A playlist dragged within the sidebar to reorder it. */
+const DRAG_PLAYLIST = "application/x-wokenet-playlist";
 
 /** How many genre chips fit on one line before we collapse the rest. */
 /** Corner player widths, cycled by clicking its artwork. */
@@ -613,6 +650,22 @@ export const DJs = memo(() => {
 
   const createPlaylist = useMutation(api.djs.createPlaylist);
   const addTracksToPlaylist = useMutation(api.djs.addTracksToPlaylist);
+  // Reorder locally straight away, so a dropped playlist doesn't jump back
+  // while the server catches up.
+  const reorderPlaylists = useMutation(api.djs.reorderPlaylists).withOptimisticUpdate(
+    (store, { playlistIds }) => {
+      const current = store.getQuery(api.djs.listPlaylists, {});
+      if (!current) return;
+      const rank = new Map(playlistIds.map((id, i) => [id, i]));
+      store.setQuery(
+        api.djs.listPlaylists,
+        {},
+        [...current].sort(
+          (a, b) => (rank.get(a._id) ?? Infinity) - (rank.get(b._id) ?? Infinity),
+        ),
+      );
+    },
+  );
   const removeTracksFromPlaylist = useMutation(api.djs.removeTracksFromPlaylist);
   const deletePlaylist = useMutation(api.djs.deletePlaylist);
   const updatePlaylist = useMutation(api.djs.updatePlaylist);
@@ -1100,6 +1153,9 @@ export const DJs = memo(() => {
           try {
             const durationSec = await readDuration(file);
             const { quality, bitrateKbps } = inferQuality(file.name, file.size, durationSec);
+            // Rekordbox's export has no artwork, so the file's own tags are the only source.
+            const tags = await readTags(file);
+            const coverId = await uploadEmbeddedCover(tags.cover, generateUploadUrl);
 
             const uploadUrl = await generateUploadUrl();
             const res = await fetch(uploadUrl, {
@@ -1113,8 +1169,10 @@ export const DJs = memo(() => {
             const hasCues = entry.hotCues.length > 0 || entry.memoryCues.length > 0;
             await addTrack({
               storageId,
-              title: entry.title || file.name.replace(/\.[^.]+$/, ""),
-              artist: entry.artist || undefined,
+              title: entry.title || tags.title || file.name.replace(/\.[^.]+$/, ""),
+              artist: entry.artist || tags.artist,
+              rawGenres: tags.genres,
+              coverId,
               filename: file.name,
               ext: extOf(file.name),
               mimeType: file.type || "application/octet-stream",
@@ -1272,11 +1330,12 @@ export const DJs = memo(() => {
       setBusy(`uploading cover for ${track.title}`);
       setNotice(null);
       try {
+        const picture = await shrinkImage(file);
         const uploadUrl = await generateUploadUrl();
         const res = await fetch(uploadUrl, {
           method: "POST",
-          headers: { "Content-Type": file.type || "image/jpeg" },
-          body: file,
+          headers: { "Content-Type": picture.type || "image/jpeg" },
+          body: picture,
         });
         if (!res.ok) throw new Error(`cover upload failed (${res.status})`);
         const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
@@ -1313,8 +1372,10 @@ export const DJs = memo(() => {
           // works for any upload rather than only for rips.
           setBusy(`analysing ${file.name}`);
           const bpm = await detectBpm(file).catch(() => undefined);
+          const tags = await readTags(file);
           setBusy(`uploading ${file.name}`);
 
+          const coverId = await uploadEmbeddedCover(tags.cover, generateUploadUrl);
           const uploadUrl = await generateUploadUrl();
           const res = await fetch(uploadUrl, {
             method: "POST",
@@ -1326,7 +1387,10 @@ export const DJs = memo(() => {
 
           const trackId = await addTrack({
             storageId,
-            title: file.name.replace(/\.[^.]+$/, ""),
+            title: tags.title || file.name.replace(/\.[^.]+$/, ""),
+            artist: tags.artist,
+            rawGenres: tags.genres,
+            coverId,
             filename: file.name,
             ext: extOf(file.name),
             mimeType: file.type || "application/octet-stream",
@@ -1424,6 +1488,7 @@ export const DJs = memo(() => {
           void addTracksToPlaylist({ playlistId, trackIds });
           setSelected(new Set());
         }}
+        onReorder={(playlistIds) => void reorderPlaylists({ playlistIds })}
       />
 
       {/* Left-aligned against the sidebar rather than centred, so the page
@@ -1458,17 +1523,23 @@ export const DJs = memo(() => {
             {activePlaylist && (
               <Text size="1" color="gray" style={{ opacity: 0.7 }}>
                 playlist by{" "}
-                <Text size="1" color={asBadgeColor(activePlaylist.createdByColor) ?? "gray"}>
+                <Text
+                  size="1"
+                  color={asBadgeColor(activePlaylist.createdByColor) ?? "gray"}
+                  style={djTextStyle(activePlaylist.createdByTag)}
+                >
                   {activePlaylist.createdByName}
                 </Text>
                 {activePlaylist.contributors.length > 0 && (
                   <>
                     {" · colonized by "}
                     {activePlaylist.contributors.map((c, i) => (
-                      <Text key={c.kerb} size="1" color={asBadgeColor(c.color) ?? "gray"}>
+                      <Fragment key={c.kerb}>
                         {i > 0 ? ", " : ""}
-                        {c.name}
-                      </Text>
+                        <Text size="1" color={asBadgeColor(c.color) ?? "gray"} style={djTextStyle(c.tag)}>
+                          {c.name}
+                        </Text>
+                      </Fragment>
                     ))}
                   </>
                 )}
@@ -2838,17 +2909,14 @@ const DjSettingsDialog = memo(() => {
       setError("That isn't an image.");
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError("Pictures have to be under 10 MB.");
-      return;
-    }
     setSaving(true);
     try {
+      const picture = await shrinkImage(file);
       const uploadUrl = await generateUploadUrl();
       const res = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
+        headers: { "Content-Type": picture.type || file.type },
+        body: picture,
       });
       if (!res.ok) throw new Error(`upload failed (${res.status})`);
       const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
@@ -3346,7 +3414,8 @@ type PlaylistRow = Doc<"djPlaylists"> & {
   trackCount: number;
   createdByName: string;
   createdByColor: string | null;
-  contributors: { kerb: string; name: string; color: string | null }[];
+  createdByTag: TagStyle | null;
+  contributors: { kerb: string; name: string; color: string | null; tag: TagStyle | null }[];
 };
 
 /** Drop the current selection into an existing playlist. */
@@ -3603,6 +3672,7 @@ const PlaylistSidebar = memo(
     onSelect,
     onCreate,
     onDropTracks,
+    onReorder,
   }: {
     playlists: PlaylistRow[] | undefined;
     activeId: Id<"djPlaylists"> | null;
@@ -3610,16 +3680,38 @@ const PlaylistSidebar = memo(
     onSelect: (id: Id<"djPlaylists"> | null) => void;
     onCreate: (name: string, description: string) => void;
     onDropTracks: (playlistId: Id<"djPlaylists">, trackIds: Id<"djTracks">[]) => void;
+    onReorder: (playlistIds: Id<"djPlaylists">[]) => void;
   }) => {
     const [creating, setCreating] = useState(false);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [dropTarget, setDropTarget] = useState<Id<"djPlaylists"> | null>(null);
+    // A playlist being dragged to a new spot, and where it would land: above
+    // or below the row under the pointer.
+    const [dragging, setDragging] = useState<Id<"djPlaylists"> | null>(null);
+    const [insertAt, setInsertAt] = useState<{ id: Id<"djPlaylists">; before: boolean } | null>(
+      null,
+    );
+
+    const endReorder = () => {
+      setDragging(null);
+      setInsertAt(null);
+    };
+
+    const dropPlaylist = (targetId: Id<"djPlaylists">, before: boolean) => {
+      if (!playlists || !dragging || dragging === targetId) return;
+      const ids = playlists.map((p) => p._id).filter((id) => id !== dragging);
+      const at = ids.indexOf(targetId);
+      if (at === -1) return;
+      ids.splice(before ? at : at + 1, 0, dragging);
+      if (ids.some((id, i) => id !== playlists[i]._id)) onReorder(ids);
+    };
 
     const Row = ({
       label,
       byline,
       bylineColor,
+      bylineTag,
       count,
       active,
       onClick,
@@ -3629,6 +3721,7 @@ const PlaylistSidebar = memo(
       /** Creator credit, tinted with their DJ colour. */
       byline?: string;
       bylineColor?: BadgeColor;
+      bylineTag?: TagStyle | null;
       count: number;
       active: boolean;
       onClick: () => void;
@@ -3642,9 +3735,30 @@ const PlaylistSidebar = memo(
         px="2"
         py="1"
         onClick={onClick}
+        draggable={dropId !== undefined}
+        onDragStart={
+          dropId
+            ? (e) => {
+                e.dataTransfer.setData(DRAG_PLAYLIST, dropId);
+                e.dataTransfer.effectAllowed = "move";
+                setDragging(dropId);
+              }
+            : undefined
+        }
+        onDragEnd={dropId ? endReorder : undefined}
         onDragOver={
           dropId
             ? (e) => {
+                if (e.dataTransfer.types.includes(DRAG_PLAYLIST)) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const before = e.clientY < rect.top + rect.height / 2;
+                  setInsertAt((cur) =>
+                    cur?.id === dropId && cur.before === before ? cur : { id: dropId, before },
+                  );
+                  return;
+                }
                 if (!e.dataTransfer.types.includes(DRAG_TRACKS)) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = "copy";
@@ -3652,12 +3766,25 @@ const PlaylistSidebar = memo(
               }
             : undefined
         }
-        onDragLeave={dropId ? () => setDropTarget(null) : undefined}
+        onDragLeave={
+          dropId
+            ? () => {
+                setDropTarget(null);
+                setInsertAt(null);
+              }
+            : undefined
+        }
         onDrop={
           dropId
             ? (e) => {
                 e.preventDefault();
                 setDropTarget(null);
+                if (e.dataTransfer.types.includes(DRAG_PLAYLIST)) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  dropPlaylist(dropId, e.clientY < rect.top + rect.height / 2);
+                  endReorder();
+                  return;
+                }
                 const raw = e.dataTransfer.getData(DRAG_TRACKS);
                 if (!raw) return;
                 try {
@@ -3679,12 +3806,18 @@ const PlaylistSidebar = memo(
                 ? "var(--accent-4)"
                 : undefined,
           outline: dropId && dropTarget === dropId ? "1px dashed var(--accent-9)" : undefined,
+          // Where a dragged playlist would land: a line on the near edge.
+          boxShadow:
+            dropId && insertAt?.id === dropId && dragging !== dropId
+              ? `inset 0 ${insertAt.before ? 2 : -2}px 0 var(--accent-9)`
+              : undefined,
+          opacity: dropId && dragging === dropId ? 0.4 : undefined,
         }}
       >
         <Text size="2" truncate color={active ? undefined : "gray"} weight={active ? "bold" : "regular"}>
           {label}
           {byline && (
-            <Text size="1" color={bylineColor ?? "gray"} style={{ opacity: 0.9 }}>
+            <Text size="1" color={bylineColor ?? "gray"} style={{ opacity: 0.9, ...djTextStyle(bylineTag ?? null) }}>
               {" — "}
               {byline}
             </Text>
@@ -3708,12 +3841,15 @@ const PlaylistSidebar = memo(
           overflowY: "auto",
         }}
       >
-        <Row
-          label="Library"
-          count={libraryCount}
-          active={activeId === null}
-          onClick={() => onSelect(null)}
-        />
+        {/* Called rather than rendered as <Row>: Row is redefined every render,
+            so as a component React would remount the rows, which cancels a
+            drag that's in progress. */}
+        {Row({
+          label: "Library",
+          count: libraryCount,
+          active: activeId === null,
+          onClick: () => onSelect(null),
+        })}
 
         <Text size="1" color="gray" mt="3" mb="1" style={{ opacity: 0.6 }}>
           PLAYLISTS
@@ -3729,16 +3865,18 @@ const PlaylistSidebar = memo(
           </Text>
         ) : (
           playlists.map((p) => (
-            <Row
-              key={p._id}
-              label={p.name}
-              byline={p.createdByName}
-              bylineColor={asBadgeColor(p.createdByColor)}
-              count={p.trackCount}
-              active={activeId === p._id}
-              onClick={() => onSelect(p._id)}
-              dropId={p._id}
-            />
+            <Fragment key={p._id}>
+              {Row({
+                label: p.name,
+                byline: p.createdByName,
+                bylineColor: asBadgeColor(p.createdByColor),
+                bylineTag: p.createdByTag,
+                count: p.trackCount,
+                active: activeId === p._id,
+                onClick: () => onSelect(p._id),
+                dropId: p._id,
+              })}
+            </Fragment>
           ))
         )}
 

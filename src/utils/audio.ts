@@ -1,6 +1,7 @@
 // Audio helpers for the DJs library.
 
 import type { Quality } from "../../convex/schema";
+import { shrinkImage } from "./image";
 
 export const LOSSLESS_EXTS = ["wav", "flac", "aiff", "aif"];
 
@@ -78,6 +79,47 @@ export function readDuration(file: File): Promise<number | undefined> {
     // Some containers never fire either event; don't hang the upload on it.
     setTimeout(() => done(undefined), 8000);
   });
+}
+
+/** What a file's own tags say about it. Everything is optional; plenty of files have none. */
+export type FileTags = {
+  title?: string;
+  artist?: string;
+  genres: string[];
+  cover?: Blob;
+};
+
+/**
+ * Read a file's embedded tags and cover art, the same fields the seeder gets
+ * from ffprobe -- so a track uploaded here arrives like one seeded or ripped.
+ *
+ * The parser is imported on demand, so it only loads once someone uploads.
+ * A file it can't read just comes back with no tags rather than failing.
+ */
+export async function readTags(file: File): Promise<FileTags> {
+  try {
+    const { parseBlob, selectCover } = await import("music-metadata");
+    const { common } = await parseBlob(file, { duration: false, skipPostHeaders: true });
+
+    const pic = selectCover(common.picture);
+    let cover: Blob | undefined;
+    if (pic && pic.data.length > 0) {
+      // Usually a MIME type already, but older ID3 tags store just "JPG"/"PNG".
+      const fmt = pic.format.toLowerCase();
+      const type = fmt.startsWith("image/") ? fmt : `image/${fmt === "jpg" ? "jpeg" : fmt}`;
+      // Embedded art can be several MB; store it at the size it's shown.
+      cover = await shrinkImage(new Blob([pic.data], { type })).catch(() => undefined);
+    }
+
+    return {
+      title: common.title?.trim() || undefined,
+      artist: common.artist?.trim() || undefined,
+      genres: (common.genre ?? []).map((g) => g.trim()).filter(Boolean),
+      cover,
+    };
+  } catch {
+    return { genres: [] };
+  }
 }
 
 /**

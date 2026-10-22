@@ -7,6 +7,7 @@ import {
 } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { CUE_SOURCE_VALIDATOR, QUALITY_VALIDATOR } from "./schema";
 import { requireAdmin, requirePutz } from "./utils/auth";
 import { normalizeGenres, normalizeUserGenres } from "./utils/genres";
@@ -285,17 +286,20 @@ export const listPlaylists = query({
   handler: async (ctx) => {
     await requirePutz(ctx);
     const playlists = await ctx.db.query("djPlaylists").withIndex("by_createdAt").collect();
+    playlists.sort((a, b) => playlistOrder(a) - playlistOrder(b));
     const members = await ctx.db.query("djPlaylistTracks").collect();
 
-    // Display names come from the user record, same as track credits, so a
-    // rename follows everywhere.
-    const users = await ctx.db.query("users").collect();
+    // Names and colours come from DJ profiles, same as track credits, so a
+    // rename or recolour follows everywhere.
+    const profiles = await ctx.db.query("djProfiles").collect();
     const names = new Map<string, string>();
     const colors = new Map<string, string>();
-    for (const u of users) {
-      const kerb = kerbOf(u.email);
-      if (u.djName?.trim()) names.set(kerb, u.djName.trim());
-      if (u.djColor) colors.set(kerb, u.djColor);
+    const customTags = new Map<string, { bg: string; fg: string; glow: boolean }>();
+    for (const p of profiles) {
+      if (p.djName?.trim()) names.set(p.kerb, p.djName.trim());
+      if (p.djColor) colors.set(p.kerb, p.djColor);
+      if (p.tagBg && p.tagFg)
+        customTags.set(p.kerb, { bg: p.tagBg, fg: p.tagFg, glow: !!p.tagGlow });
     }
 
     const counts = new Map<string, number>();
@@ -314,6 +318,7 @@ export const listPlaylists = query({
       trackCount: counts.get(p._id) ?? 0,
       createdByName: names.get(p.createdBy) ?? p.createdBy,
       createdByColor: colors.get(p.createdBy) ?? null,
+      createdByTag: customTags.get(p.createdBy) ?? null,
       /** Everyone who has added to it, minus its creator, with their styling. */
       contributors: [...(contributors.get(p._id) ?? [])]
         .filter((kerb) => kerb !== p.createdBy)
@@ -322,8 +327,40 @@ export const listPlaylists = query({
           kerb,
           name: names.get(kerb) ?? kerb,
           color: colors.get(kerb) ?? null,
+          tag: customTags.get(kerb) ?? null,
         })),
     }));
+  },
+});
+
+/**
+ * Where a playlist sits in the sidebar. A reorder numbers every playlist from
+ * 0, so anything moved sorts ahead of creation timestamps -- which leaves a
+ * playlist made after the last reorder at the bottom, where you'd expect it.
+ */
+const playlistOrder = (p: Doc<"djPlaylists">): number => p.position ?? p.createdAt;
+
+/**
+ * Save a new sidebar order. The client sends every playlist it can see, in
+ * order; any it didn't know about (made by someone else mid-drag) keep their
+ * place after them.
+ */
+export const reorderPlaylists = mutation({
+  args: { playlistIds: v.array(v.id("djPlaylists")) },
+  handler: async (ctx, { playlistIds }) => {
+    await requirePutz(ctx);
+    const all = await ctx.db.query("djPlaylists").withIndex("by_createdAt").collect();
+    all.sort((a, b) => playlistOrder(a) - playlistOrder(b));
+
+    const known = new Set(all.map((p) => p._id));
+    const ordered = [...new Set(playlistIds)].filter((id) => known.has(id));
+    const placed = new Set(ordered);
+    for (const p of all) if (!placed.has(p._id)) ordered.push(p._id);
+
+    for (const [i, id] of ordered.entries()) {
+      const p = all.find((x) => x._id === id);
+      if (p && p.position !== i) await ctx.db.patch(id, { position: i });
+    }
   },
 });
 

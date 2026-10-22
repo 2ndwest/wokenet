@@ -178,6 +178,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     createdBy: v.string(), // kerb
     createdAt: v.number(),
+    /**
+     * Sidebar order, set by dragging. Shared, like the playlists themselves.
+     * Absent on playlists nobody has moved, which sort by createdAt instead.
+     */
+    position: v.optional(v.number()),
   }).index("by_createdAt", ["createdAt"]),
 
   djPlaylistTracks: defineTable({
