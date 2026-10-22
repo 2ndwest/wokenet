@@ -9,6 +9,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  Select,
   Separator,
   Slider,
   Text,
@@ -209,6 +210,75 @@ const DRAG_TRACKS = "application/x-wokenet-tracks";
 /** How many genre chips fit on one line before we collapse the rest. */
 const COLLAPSED_GENRE_COUNT = 8;
 
+type SortMode = "alphabetical" | "bpm" | "key" | "dj" | "genre";
+
+const SORT_LABELS: Record<SortMode, string> = {
+  alphabetical: "Alphabetical",
+  bpm: "BPM",
+  key: "Key",
+  dj: "DJ",
+  genre: "Genre",
+};
+
+/**
+ * Sort key for a title: ignore anything before the first letter, so "&NUFF"
+ * files under N and "365 PARTYDOG" under P rather than clustering all the
+ * punctuation and numbers at the top. Accents fold, so "Azótame" sits with the
+ * As. Titles with no letters at all sort after Z.
+ */
+export function alphaKey(title: string): string {
+  const folded = title
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  const first = folded.search(/[a-z]/);
+  // ￿ sorts above any letter, parking letterless titles at the end.
+  return first === -1 ? `￿${folded}` : folded.slice(first);
+}
+
+/**
+ * Order a Camelot key around the wheel: 1A, 1B, 2A, 2B … so harmonically
+ * neighbouring keys end up next to each other, which is the point of sorting
+ * by key at all. Anything unparsed sorts last.
+ */
+function camelotOrder(key: string | undefined): number {
+  const m = /^(\d{1,2})([ab])$/i.exec((key ?? "").trim());
+  if (!m) return Infinity;
+  return Number(m[1]) * 2 + (m[2].toLowerCase() === "b" ? 1 : 0);
+}
+
+/**
+ * Order the visible tracks. Every mode falls back to title, so the list is
+ * stable rather than shuffling around within equal values, and anything
+ * missing the sort field sinks to the bottom instead of leading the list.
+ */
+function sortTracks(tracks: Track[], mode: SortMode): Track[] {
+  const byTitle = (a: Track, b: Track) => alphaKey(a.title).localeCompare(alphaKey(b.title));
+  const sorted = [...tracks];
+
+  switch (mode) {
+    case "bpm":
+      return sorted.sort(
+        (a, b) => (a.bpm ?? Infinity) - (b.bpm ?? Infinity) || byTitle(a, b),
+      );
+    case "key":
+      return sorted.sort(
+        (a, b) => camelotOrder(a.musicalKey) - camelotOrder(b.musicalKey) || byTitle(a, b),
+      );
+    case "dj":
+      return sorted.sort((a, b) => a.djDisplay.localeCompare(b.djDisplay) || byTitle(a, b));
+    case "genre":
+      return sorted.sort((a, b) => {
+        // Untagged tracks last, rather than sorting as an empty string first.
+        const ga = a.genres[0] ?? "￿";
+        const gb = b.genres[0] ?? "￿";
+        return ga.localeCompare(gb) || byTitle(a, b);
+      });
+    default:
+      return sorted.sort(byTitle);
+  }
+}
+
 const toggleIn = <T,>(set: Set<T>, value: T): Set<T> => {
   const next = new Set(set);
   if (next.has(value)) next.delete(value);
@@ -297,6 +367,7 @@ export const DJs = memo(() => {
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [shuffle, setShuffle] = useState(false);
+  const [sortBy, setSortBy] = useState<SortMode>("alphabetical");
   // Mirrored from the <audio> element so the seek slider can drive it.
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -413,6 +484,9 @@ export const DJs = memo(() => {
     needMemoryCues,
   ]);
 
+  /** Filtering decides what's shown; this decides the order it's shown in. */
+  const ordered = useMemo(() => sortTracks(filtered, sortBy), [filtered, sortBy]);
+
   /** Only show BPM buckets that something actually falls into. */
   const availableBpmBuckets = useMemo(() => {
     const counts = new Map<string, number>();
@@ -490,17 +564,17 @@ export const DJs = memo(() => {
 
       let next: Track | undefined;
       if (shuffle) {
-        const pool = filtered.filter((t) => t._id !== nowPlaying._id);
+        const pool = ordered.filter((t) => t._id !== nowPlaying._id);
         next = pool[Math.floor(Math.random() * pool.length)];
       } else {
-        const i = filtered.findIndex((t) => t._id === nowPlaying._id);
-        next = i >= 0 ? filtered[i + direction] : undefined;
+        const i = ordered.findIndex((t) => t._id === nowPlaying._id);
+        next = i >= 0 ? ordered[i + direction] : undefined;
       }
 
       if (!next) return;
       void playTrack(next);
     },
-    [filtered, nowPlaying, playTrack, shuffle],
+    [ordered, nowPlaying, playTrack, shuffle],
   );
 
   /**
@@ -516,20 +590,20 @@ export const DJs = memo(() => {
     const atEnd =
       !shuffle &&
       nowPlaying !== null &&
-      filtered.findIndex((t) => t._id === nowPlaying._id) === filtered.length - 1;
+      ordered.findIndex((t) => t._id === nowPlaying._id) === ordered.length - 1;
     if (atEnd) {
       setIsPlaying(false);
       return;
     }
     step(1);
-  }, [filtered, nowPlaying, shuffle, step]);
+  }, [ordered, nowPlaying, shuffle, step]);
 
   /** Kick off playback from a random track in whatever is on screen. */
   const shufflePlay = useCallback(async () => {
-    if (filtered.length === 0) return;
+    if (ordered.length === 0) return;
     setShuffle(true);
-    await playTrack(filtered[Math.floor(Math.random() * filtered.length)]);
-  }, [filtered, playTrack]);
+    await playTrack(ordered[Math.floor(Math.random() * ordered.length)]);
+  }, [ordered, playTrack]);
 
   const download = useCallback(
     async (track: Track) => {
@@ -1225,7 +1299,7 @@ export const DJs = memo(() => {
           <Text size="2" color="gray">
             {tracks === undefined
               ? "Loading…"
-              : `${filtered.length} of ${scoped.length} track${scoped.length === 1 ? "" : "s"}`}
+              : `${ordered.length} of ${scoped.length} track${scoped.length === 1 ? "" : "s"}`}
           </Text>
 
           {/* Selection controls sit on the count line, next to what they act on. */}
@@ -1286,24 +1360,39 @@ export const DJs = memo(() => {
                   onClick={() =>
                     // "Select all" acts on what's filtered, and toggles back off.
                     setSelected((prev) =>
-                      prev.size === filtered.length
+                      prev.size === ordered.length
                         ? new Set()
-                        : new Set(filtered.map((t) => t._id)),
+                        : new Set(ordered.map((t) => t._id)),
                     )
                   }
                 >
-                  {selected.size === filtered.length && filtered.length > 0
+                  {selected.size === ordered.length && ordered.length > 0
                     ? "Select none"
                     : "Select all"}
                 </Button>
               </>
             ) : (
               <>
+                <Flex gap="1" align="center">
+                  <Text size="1" color="gray">
+                    Sort by
+                  </Text>
+                  <Select.Root value={sortBy} onValueChange={(v) => setSortBy(v as SortMode)}>
+                    <Select.Trigger variant="surface" radius="full" />
+                    <Select.Content>
+                      {(Object.keys(SORT_LABELS) as SortMode[]).map((m) => (
+                        <Select.Item key={m} value={m}>
+                          {SORT_LABELS[m]}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                </Flex>
                 <Button
                   size="1"
                   radius="full"
                   variant={shuffle ? "solid" : "surface"}
-                  disabled={filtered.length === 0}
+                  disabled={ordered.length === 0}
                   onClick={() => void shufflePlay()}
                 >
                   Shuffle
@@ -1322,7 +1411,7 @@ export const DJs = memo(() => {
         </Flex>
 
         {/* ---- track list ---- */}
-        {tracks !== undefined && filtered.length === 0 ? (
+        {tracks !== undefined && ordered.length === 0 ? (
           <Flex direction="column" align="center" gap="2" py="8">
             <Text size="8" color="gray" style={{ opacity: 0.5 }}>
               {scoped.length === 0 ? ":(" : ":/"}
@@ -1337,7 +1426,7 @@ export const DJs = memo(() => {
           </Flex>
         ) : (
           <Flex direction="column" gap="2">
-            {filtered.map((track) => (
+            {ordered.map((track) => (
               <TrackRow
                 key={track._id}
                 track={track}

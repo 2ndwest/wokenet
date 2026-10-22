@@ -18,6 +18,7 @@ import type * as classroomAvailability from "../classroomAvailability.js";
 import type * as classroomReports from "../classroomReports.js";
 import type * as crons from "../crons.js";
 import type * as djs from "../djs.js";
+import type * as email from "../email.js";
 import type * as http from "../http.js";
 import type * as loadLocations from "../loadLocations.js";
 import type * as locations from "../locations.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   classroomReports: typeof classroomReports;
   crons: typeof crons;
   djs: typeof djs;
+  email: typeof email;
   http: typeof http;
   loadLocations: typeof loadLocations;
   locations: typeof locations;

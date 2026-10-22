@@ -1,5 +1,6 @@
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { CUE_SOURCE_VALIDATOR, QUALITY_VALIDATOR } from "./schema";
 import { requireAdmin, requirePutz } from "./utils/auth";
 import { normalizeGenres, normalizeUserGenres } from "./utils/genres";
@@ -722,12 +723,20 @@ export const requestRip = mutation({
     const dupe = outstanding.find((r) => r.url === trimmed);
     if (dupe) return dupe._id;
 
-    return await ctx.db.insert("djRipRequests", {
+    const requestId = await ctx.db.insert("djRipRequests", {
       url: trimmed,
       requestedBy: kerbOf(user.email),
       status: "pending",
       createdAt: Date.now(),
     });
+
+    // Scheduled rather than awaited: a mail outage must not fail the request.
+    await ctx.scheduler.runAfter(0, internal.email.sendRipQueued, {
+      to: user.email,
+      url: trimmed,
+    });
+
+    return requestId;
   },
 });
 
@@ -767,6 +776,23 @@ export const finishRipRequest = internalMutation({
   },
   handler: async (ctx, { requestId, status, message, trackCount }) => {
     await ctx.db.patch(requestId, { status, message, trackCount, finishedAt: Date.now() });
+
+    // Tell whoever asked for it. The kerb is the local part of their address.
+    const request = await ctx.db.get(requestId);
+    if (!request) return;
+
+    const owner = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", `${request.requestedBy}@mit.edu`))
+      .unique();
+    if (!owner) return;
+
+    await ctx.scheduler.runAfter(0, internal.email.sendRipReady, {
+      to: owner.email,
+      url: request.url,
+      trackCount,
+      message,
+    });
   },
 });
 
