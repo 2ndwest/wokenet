@@ -1018,10 +1018,11 @@ export const finishRipRequest = internalMutation({
     const request = await ctx.db.get(requestId);
     if (!request) return;
 
-    const owner = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", `${request.requestedBy}@mit.edu`))
-      .unique();
+    // Match on the kerb rather than rebuilding an @mit.edu address: people
+    // sign in with whatever Clerk has for them, and anyone on another domain
+    // would silently never get this one.
+    const users = await ctx.db.query("users").collect();
+    const owner = users.find((u) => kerbOf(u.email) === request.requestedBy);
     if (!owner) return;
 
     await ctx.scheduler.runAfter(0, internal.email.sendRipReady, {
