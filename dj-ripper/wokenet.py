@@ -74,7 +74,14 @@ def progress(cfg: Config, request_id: str, message: str) -> None:
         pass
 
 
-def finish_rip(cfg: Config, request_id: str, status: str, message: str = "", count: int = 0) -> None:
+def finish_rip(
+    cfg: Config,
+    request_id: str,
+    status: str,
+    message: str = "",
+    count: int = 0,
+    rate_limited: list[str] | None = None,
+) -> None:
     _post(
         cfg,
         "/dj-rip/finish",
@@ -83,6 +90,10 @@ def finish_rip(cfg: Config, request_id: str, status: str, message: str = "", cou
             "status": status,
             "message": message[:300],
             "trackCount": count,
+            # Capped: the server stores these to name them in the email, and a
+            # 150-track playlist that throttled wholesale shouldn't be a wall
+            # of text.
+            "rateLimited": [t[:120] for t in (rate_limited or [])[:40]],
         },
     )
 

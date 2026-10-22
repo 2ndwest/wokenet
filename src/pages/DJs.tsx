@@ -41,6 +41,9 @@ import { formatTimestamp, getRelativeTime } from "../utils/time";
 import { buildZip, saveBlob, type ZipEntry } from "../utils/zip";
 import { useAuthStatus } from "../utils/useAuthStatus";
 
+/** listRipRequests numbers everything still waiting, oldest first. */
+type RipRequest = Doc<"djRipRequests"> & { place: number | null };
+
 /** listTracks resolves the DJ display name and cover URL on the way out. */
 type Track = Doc<"djTracks"> & {
   djDisplay: string;
@@ -1382,8 +1385,18 @@ export const DJs = memo(() => {
     }
   }, [requestRip, ripUrl]);
 
-  const pendingRips = (ripRequests ?? []).filter(
-    (r) => r.status === "pending" || r.status === "claimed",
+  const pendingRips = useMemo(
+    () =>
+      (ripRequests ?? [])
+        .filter((r) => r.status === "pending" || r.status === "claimed")
+        .sort((a, b) => (a.place ?? 0) - (b.place ?? 0)),
+    [ripRequests],
+  );
+
+  /** Finished rips that left tracks behind, so they can be queued again. */
+  const throttledRips = useMemo(
+    () => (ripRequests ?? []).filter((r) => (r.rateLimited?.length ?? 0) > 0).slice(0, 3),
+    [ripRequests],
   );
 
   return (
@@ -1469,6 +1482,7 @@ export const DJs = memo(() => {
               onChange={setRipUrl}
               onSubmit={submitRip}
               pending={pendingRips}
+              recent={throttledRips}
               busy={busy !== null}
             />
             <UploadDialog onRun={(f, p) => void upload(f, p)} busy={busy !== null} />
@@ -4007,12 +4021,14 @@ const RipDialog = memo(
     onChange,
     onSubmit,
     pending,
+    recent,
     busy,
   }: {
     value: string;
     onChange: (v: string) => void;
     onSubmit: () => void;
-    pending: Doc<"djRipRequests">[];
+    pending: RipRequest[];
+    recent: RipRequest[];
     busy: boolean;
   }) => (
     <Dialog.Root>
@@ -4024,8 +4040,8 @@ const RipDialog = memo(
       <Dialog.Content maxWidth="520px">
         <Dialog.Title>Rip from SoundCloud</Dialog.Title>
         <Dialog.Description size="2" color="gray" mb="3">
-          Queues a playlist or track. A DJ's machine does the actual ripping and uploads the result,
-          so it lands once their ripper is running.
+          Queues a playlist or track. The ripping runs on a Mac mini at the house, which checks for
+          new requests every 30 seconds — requests wait in line rather than failing when it's off.
         </Dialog.Description>
 
         <Text size="1" color="gray" mb="4" as="p" style={{ opacity: 0.8 }}>
@@ -4051,15 +4067,70 @@ const RipDialog = memo(
             <Text size="2" weight="bold">
               In the queue
             </Text>
+            <Text size="1" color="gray" as="p" mt="1" style={{ opacity: 0.8 }}>
+              Worked through one at a time, oldest first.
+            </Text>
+            <Flex direction="column" gap="2" mt="2">
+              {pending.map((r) => {
+                // How many are actually still waiting ahead of this one, so
+                // the one that goes next says so even while another is ripping.
+                const waitingAhead = pending.filter(
+                  (x) => x.status === "pending" && (x.place ?? 0) < (r.place ?? 0),
+                ).length;
+                return (
+                <Flex key={r._id} justify="between" gap="2" align="start">
+                  <Flex gap="2" style={{ flex: "1 1 auto", minWidth: 0 }}>
+                    <Text size="1" color="gray" style={{ opacity: 0.5, width: "16px" }}>
+                      {r.place ?? "—"}
+                    </Text>
+                    <Flex direction="column" style={{ minWidth: 0 }}>
+                      <Text size="1" color="gray" truncate>
+                        {r.url}
+                      </Text>
+                      {/* The ripper's own note: "ripping", or what it's
+                          waiting on while it backs off a rate limit. */}
+                      {r.status === "claimed" && r.message && r.message !== "ripping" && (
+                        <Text size="1" color="gray" style={{ opacity: 0.6 }}>
+                          {r.message}
+                        </Text>
+                      )}
+                    </Flex>
+                  </Flex>
+                  <Badge size="1" color={r.status === "claimed" ? "orange" : "gray"} variant="soft">
+                    {r.status === "claimed"
+                      ? "ripping"
+                      : waitingAhead === 0
+                        ? "next up"
+                        : `${waitingAhead} ahead`}
+                  </Badge>
+                </Flex>
+                );
+              })}
+            </Flex>
+          </>
+        )}
+
+        {recent.length > 0 && (
+          <>
+            <Separator size="4" my="4" />
+            <Text size="2" weight="bold">
+              Couldn't get these
+            </Text>
+            <Text size="1" color="gray" as="p" mt="1" style={{ opacity: 0.8 }}>
+              SoundCloud rate-limited them. Queue the same link again — anything already in the
+              library is skipped, so it only picks up what's missing.
+            </Text>
             <Flex direction="column" gap="1" mt="2">
-              {pending.map((r) => (
-                <Flex key={r._id} justify="between" gap="2">
-                  <Text size="1" color="gray" truncate style={{ flex: "1 1 auto" }}>
+              {recent.map((r) => (
+                <Flex key={r._id} direction="column" gap="1">
+                  <Text size="1" color="gray" truncate style={{ opacity: 0.7 }}>
                     {r.url}
                   </Text>
-                  <Badge size="1" color={r.status === "claimed" ? "orange" : "gray"} variant="soft">
-                    {r.status === "claimed" ? "ripping" : "pending"}
-                  </Badge>
+                  {(r.rateLimited ?? []).map((title) => (
+                    <Text key={title} size="1" color="gray" truncate style={{ paddingLeft: "10px" }}>
+                      · {title}
+                    </Text>
+                  ))}
                 </Flex>
               ))}
             </Flex>

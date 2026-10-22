@@ -62,16 +62,28 @@ async function send(to: string, subject: string, html: string): Promise<void> {
 
 /** Sent as soon as a rip is queued. */
 export const sendRipQueued = internalAction({
-  args: { to: v.string(), url: v.string() },
-  handler: async (_ctx, { to, url }) => {
+  args: { to: v.string(), url: v.string(), ahead: v.optional(v.number()) },
+  handler: async (_ctx, { to, url, ahead }) => {
+    const n = ahead ?? 0;
+    const place =
+      n === 0
+        ? "Nothing else is waiting, so it should start within the minute."
+        : `There ${n === 1 ? "is" : "are"} <span style="color:#ededef">${n}</span>
+           request${n === 1 ? "" : "s"} ahead of yours. They're worked through one at a
+           time, oldest first, so yours starts once those are done.`;
+
     await send(
       to,
       "Your rip request is queued",
       wrap(
         "Request received",
         `We've queued <span style="color:#ededef">${escapeHtml(url)}</span>.<br><br>
-         Ripping happens on a DJ's own machine, so it'll start once theirs is running.
-         You'll get another email when the tracks are in the library.`,
+         The ripping itself runs on a Mac mini at the house rather than on the website
+         &mdash; SoundCloud rips need tools a web server can't run. The mini checks for
+         new requests every 30 seconds.<br><br>
+         ${place}<br><br>
+         You'll get another email when the tracks are in the library. If the mini is off
+         or offline, your request waits in the queue rather than failing.`,
       ),
     );
   },
@@ -84,9 +96,32 @@ export const sendRipReady = internalAction({
     url: v.string(),
     trackCount: v.optional(v.number()),
     message: v.optional(v.string()),
+    /** Titles SoundCloud kept throttling; worth submitting again later. */
+    rateLimited: v.optional(v.array(v.string())),
   },
-  handler: async (_ctx, { to, url, trackCount, message }) => {
+  handler: async (_ctx, { to, url, trackCount, message, rateLimited }) => {
     const n = trackCount ?? 0;
+
+    // Name them rather than just counting them, so it's obvious what to
+    // re-submit. Long lists are trimmed so the mail stays readable.
+    const stuck = rateLimited ?? [];
+    const SHOWN = 12;
+    const missed = stuck.length
+      ? `<br><br><span style="color:#ededef">${stuck.length} track${
+          stuck.length === 1 ? "" : "s"
+        } SoundCloud kept rate-limiting:</span>
+         <br><span style="color:#b0b0b8">${stuck
+           .slice(0, SHOWN)
+           .map((t) => `&bull; ${escapeHtml(t)}`)
+           .join("<br>")}</span>
+         ${
+           stuck.length > SHOWN
+             ? `<br><span style="color:#6b6b73">&hellip;and ${stuck.length - SHOWN} more</span>`
+             : ""
+         }
+         <br><br><span style="color:#6b6b73">Submitting the same link again picks up only
+         what's missing &mdash; anything already in the library is skipped.</span>`
+      : "";
     await send(
       to,
       n > 0 ? `${n} track${n === 1 ? "" : "s"} ready on WOKENET` : "Your rip finished",
@@ -95,9 +130,11 @@ export const sendRipReady = internalAction({
         n > 0
           ? `<span style="color:#ededef">${n} track${n === 1 ? "" : "s"}</span> from
              ${escapeHtml(url)} ${n === 1 ? "is" : "are"} now in the library.
-             ${message ? `<br><br><span style="color:#6b6b73">${escapeHtml(message)}</span>` : ""}`
+             ${message ? `<br><br><span style="color:#6b6b73">${escapeHtml(message)}</span>` : ""}
+             ${missed}`
           : `Nothing came through for ${escapeHtml(url)}.
-             ${message ? `<br><br><span style="color:#6b6b73">${escapeHtml(message)}</span>` : ""}`,
+             ${message ? `<br><br><span style="color:#6b6b73">${escapeHtml(message)}</span>` : ""}
+             ${missed}`,
         { label: "Open the library", href: `${ORIGIN()}/djs` },
       ),
     );

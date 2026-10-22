@@ -54,9 +54,11 @@ def rip_one(
     pace: float,
     rounds: int,
     backoff: float,
-) -> tuple[int, str]:
+) -> tuple[int, str, list[str]]:
     """
-    Rip everything behind one URL and upload it. Returns (count, message).
+    Rip everything behind one URL and upload it.
+
+    Returns (uploaded, message, still_rate_limited_titles).
 
     SoundCloud throttles by IP, so a long playlist will start returning 403s
     partway through however politely it's paced. Those tracks aren't failures:
@@ -72,6 +74,7 @@ def rip_one(
     print(f"    {name}: {len(tracks)} track(s)")
 
     uploaded = 0
+    skipped = 0
     drm = 0
     failed = 0
     sweep_stale_workdirs()
@@ -79,7 +82,7 @@ def rip_one(
 
     def attempt(idx: int, track: dict) -> None:
         """Download, upload and register one track. Raises on any failure."""
-        nonlocal uploaded
+        nonlocal uploaded, skipped
         path, fmt = putz_djs.download_one(track, idx, token, workdir, False)
         if path is None:
             raise RuntimeError("no file produced")
@@ -95,7 +98,9 @@ def rip_one(
 
             result = wokenet.register_track(cfg, payload)
             print("already in library" if result.get("skipped") else f"OK  {fmt}")
-            if not result.get("skipped"):
+            if result.get("skipped"):
+                skipped += 1
+            else:
                 uploaded += 1
         finally:
             # Whether or not it registered, the file has served its purpose.
@@ -139,20 +144,25 @@ def rip_one(
             if not pending:
                 break
 
-        # Still throttled after every round: worth re-submitting later, so say
-        # so rather than counting them as plain failures.
-        still_throttled = len(pending)
+        # Still throttled after every round: worth re-submitting later, so name
+        # them rather than counting them as plain failures.
+        stuck = [(t.get("title") or f"track {t['id']}") for _, t in pending]
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
     parts = [f"{uploaded} uploaded"]
+    if skipped:
+        parts.append(f"{skipped} already in the library")
     if drm:
         parts.append(f"{drm} DRM-locked")
     if failed:
         parts.append(f"{failed} failed")
-    if still_throttled:
-        parts.append(f"{still_throttled} still rate-limited — submit again later")
-    return uploaded, ", ".join(parts)
+    if stuck:
+        parts.append(f"{len(stuck)} still rate-limited — submit again later")
+    # Skipped tracks count as a result: re-submitting a link to pick up what
+    # was rate-limited last time shouldn't come back as a failure just because
+    # everything else was already there.
+    return uploaded + skipped, ", ".join(parts), stuck
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Serve wokenet rip requests from this machine.")
@@ -196,9 +206,14 @@ def main() -> None:
         idle_logged = False
         print(f"  got request from {request.get('requestedBy')}: {request['url']}")
         try:
-            count, message = rip_one(cfg, request, token, args.pace, args.rounds, args.backoff)
-            status = "done" if count else "failed"
-            wokenet.finish_rip(cfg, request["requestId"], status, message, count)
+            # "handled" counts tracks that are in the library because of this
+            # request, whether this run fetched them or a previous one did --
+            # which is what the email means by "now in the library".
+            handled, message, stuck = rip_one(
+                cfg, request, token, args.pace, args.rounds, args.backoff
+            )
+            status = "done" if handled else "failed"
+            wokenet.finish_rip(cfg, request["requestId"], status, message, handled, stuck)
             print(f"  {status}: {message}\n")
         except Exception as exc:
             wokenet.finish_rip(cfg, request["requestId"], "failed", str(exc), 0)

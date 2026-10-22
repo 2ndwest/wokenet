@@ -260,7 +260,20 @@ export const listRipRequests = query({
   args: {},
   handler: async (ctx) => {
     await requirePutz(ctx);
-    return await ctx.db.query("djRipRequests").withIndex("by_createdAt").order("desc").take(50);
+    const recent = await ctx.db
+      .query("djRipRequests")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .take(50);
+
+    // Number the ones still waiting, oldest first: that's the order the
+    // ripper will take them in, so it's the order people should see.
+    const queue = recent
+      .filter((r) => r.status === "pending" || r.status === "claimed")
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const place = new Map(queue.map((r, i) => [r._id, i + 1]));
+
+    return recent.map((r) => ({ ...r, place: place.get(r._id) ?? null }));
   },
 });
 
@@ -956,6 +969,9 @@ export const requestRip = mutation({
     await ctx.scheduler.runAfter(0, internal.email.sendRipQueued, {
       to: user.email,
       url: trimmed,
+      // Everything already waiting, which is what it has to get through
+      // before this one starts.
+      ahead: outstanding.length,
     });
 
     return requestId;
@@ -1010,9 +1026,16 @@ export const finishRipRequest = internalMutation({
     status: v.union(v.literal("done"), v.literal("failed")),
     message: v.optional(v.string()),
     trackCount: v.optional(v.number()),
+    rateLimited: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { requestId, status, message, trackCount }) => {
-    await ctx.db.patch(requestId, { status, message, trackCount, finishedAt: Date.now() });
+  handler: async (ctx, { requestId, status, message, trackCount, rateLimited }) => {
+    await ctx.db.patch(requestId, {
+      status,
+      message,
+      trackCount,
+      rateLimited: rateLimited?.length ? rateLimited : undefined,
+      finishedAt: Date.now(),
+    });
 
     // Tell whoever asked for it. The kerb is the local part of their address.
     const request = await ctx.db.get(requestId);
@@ -1030,6 +1053,7 @@ export const finishRipRequest = internalMutation({
       url: request.url,
       trackCount,
       message,
+      rateLimited,
     });
   },
 });

@@ -216,6 +216,11 @@ export default defineSchema({
     /** Progress / error detail for whoever is watching the queue. */
     message: v.optional(v.string()),
     trackCount: v.optional(v.number()),
+    /**
+     * Titles still rate-limited when the ripper gave up on them. Kept so the
+     * email and the queue can name them, rather than just counting them.
+     */
+    rateLimited: v.optional(v.array(v.string())),
     claimedBy: v.optional(v.string()), // kerb of the machine's owner
     claimedAt: v.optional(v.number()),
     finishedAt: v.optional(v.number()),
