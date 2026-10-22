@@ -156,21 +156,29 @@ const SkipIcon = ({ direction }: { direction: "back" | "forward" }) => (
 );
 
 /**
- * Anything tagged putz gets to shout, in a fixed orange rather than the theme
- * accent -- it should look the same whichever theme you're on.
+ * House tags that get to shout. Fixed colours rather than theme tokens, so
+ * they look the same whichever theme you're on.
  */
-const isPutzTag = (genre: string): boolean => /putz/i.test(genre);
+const LOUD_TAGS: { test: RegExp; bg: string; fg: string; glow: string }[] = [
+  { test: /putz/i, bg: "#FF6A00", fg: "#1A1A1A", glow: "255, 106, 0" },
+  // \b41w?\b so it matches "41" and "41W" as words, not any stray 41.
+  { test: /\b41w?\b/i, bg: "#9B4DE0", fg: "#000000", glow: "155, 77, 224" },
+  { test: /florey|krotus/i, bg: "#E5342E", fg: "#000000", glow: "229, 52, 46" },
+  { test: /tetazoo|squanch/i, bg: "#3DD400", fg: "#FFFFFF", glow: "61, 212, 0" },
+];
 
-const PUTZ_TAG_STYLE: React.CSSProperties = {
+const loudTag = (genre: string) => LOUD_TAGS.find((t) => t.test.test(genre));
+
+const loudTagStyle = (t: { bg: string; fg: string; glow: string }): React.CSSProperties => ({
   fontSize: "12px",
   padding: "3px 9px",
-  backgroundColor: "#FF6A00",
-  color: "#1a1a1a",
+  backgroundColor: t.bg,
+  color: t.fg,
   fontWeight: 800,
   letterSpacing: "0.4px",
   textTransform: "uppercase",
-  boxShadow: "0 0 10px rgba(255, 106, 0, 0.75)",
-};
+  boxShadow: `0 0 10px rgba(${t.glow}, 0.75)`,
+});
 
 const PencilIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -192,6 +200,7 @@ const FilterChip = memo(
     onClick,
     color,
     count,
+    loud,
     children,
   }: {
     active: boolean;
@@ -200,6 +209,8 @@ const FilterChip = memo(
     color?: BadgeColor;
     /** Rendered lighter after the label, so the name reads first. */
     count?: number;
+    /** A house tag's fixed colours, which beat both of the above. */
+    loud?: { bg: string; fg: string; glow: string };
     children: React.ReactNode;
   }) => (
     <Button
@@ -209,7 +220,17 @@ const FilterChip = memo(
       // Unset follows the theme accent; a DJ colour wins when there is one.
       color={color ?? (active ? undefined : "gray")}
       onClick={onClick}
-      style={{ height: "24px" }}
+      style={
+        loud
+          ? {
+              height: "24px",
+              backgroundColor: loud.bg,
+              color: loud.fg,
+              fontWeight: 800,
+              boxShadow: active ? `0 0 10px rgba(${loud.glow}, 0.75)` : undefined,
+            }
+          : { height: "24px" }
+      }
     >
       <Text weight="bold">{children}</Text>
       {count !== undefined && (
@@ -1277,9 +1298,9 @@ export const DJs = memo(() => {
                   key={genre}
                   active={genreFilter.has(genre)}
                   count={count}
-                  // Always literal orange, not the theme accent, so a putz tag
-                  // looks the same on either theme.
-                  color={isPutzTag(genre) ? "orange" : undefined}
+                  // House tags keep their fixed colour here too, so a chip
+                  // matches the tag it filters on.
+                  loud={loudTag(genre)}
                   onClick={() => setGenreFilter((s) => toggleIn(s, genre))}
                 >
                   {genre}
@@ -1843,17 +1864,18 @@ const TrackRow = memo(
                 {track.analysisSource === "detected" ? "?" : ""}
               </Tag>
             ) : null}
-            {track.genres.map((g) =>
-              isPutzTag(g) ? (
-                <Badge key={g} variant="solid" style={PUTZ_TAG_STYLE}>
+            {track.genres.map((g) => {
+              const loud = loudTag(g);
+              return loud ? (
+                <Badge key={g} variant="solid" style={loudTagStyle(loud)}>
                   {g}
                 </Badge>
               ) : (
                 <Tag key={g} color="gray" variant="outline">
                   {g}
                 </Tag>
-              ),
-            )}
+              );
+            })}
             {hot > 0 && (
               <Tag color="purple" variant="soft">
                 {hot} hot
