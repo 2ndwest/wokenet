@@ -1,4 +1,10 @@
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type QueryCtx,
+} from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { CUE_SOURCE_VALIDATOR, QUALITY_VALIDATOR } from "./schema";
@@ -14,6 +20,9 @@ import { groupDuplicates } from "./utils/duplicates";
 const MAX_AUDIO_BYTES = 300 * 1024 * 1024; // 300 MB — a long lossless set
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXTS = ["m4a", "mp3", "wav", "flac", "aiff", "aif", "opus", "ogg"];
+
+/** The only colour format accepted anywhere, so none of it can reach CSS raw. */
+const HEX = /^#[0-9a-f]{6}$/i;
 
 /** Plausible tempo range; anything outside is a detection or typing error. */
 const MIN_BPM = 40;
@@ -51,24 +60,31 @@ export const listTracks = query({
     await requirePutz(ctx);
     const tracks = await ctx.db.query("djTracks").withIndex("by_uploadedAt").order("desc").collect();
 
-    // Tracks store the kerb; the display name lives on the user and is
+    // Tracks store the kerb; the display name lives on the DJ's profile and is
     // resolved here, so renaming yourself renames your whole back catalogue.
-    const users = await ctx.db.query("users").collect();
+    // Profiles are keyed by kerb and survive the account being removed, so a
+    // graduate's tracks keep their name and colour.
+    const profiles = await ctx.db.query("djProfiles").collect();
     const names = new Map<string, string>();
     const colors = new Map<string, string>();
-    for (const u of users) {
-      const kerb = kerbOf(u.email);
-      if (u.djName?.trim()) names.set(kerb, u.djName.trim());
-      if (u.djColor) colors.set(kerb, u.djColor);
+    const customTags = new Map<string, { bg: string; fg: string; glow: boolean }>();
+    for (const p of profiles) {
+      if (p.djName?.trim()) names.set(p.kerb, p.djName.trim());
+      if (p.djColor) colors.set(p.kerb, p.djColor);
+      // Both halves or neither: a bubble colour with no letter colour set
+      // can end up unreadable.
+      if (p.tagBg && p.tagFg)
+        customTags.set(p.kerb, { bg: p.tagBg, fg: p.tagFg, glow: !!p.tagGlow });
     }
 
-    // Live name, then the name captured at upload (for DJs who have since
-    // left and had their account removed), then the bare kerb.
+    // The profile name, then the name captured at upload (for anyone who
+    // uploaded before profiles existed), then the bare kerb.
     return await Promise.all(
       tracks.map(async (t) => ({
         ...t,
         djDisplay: names.get(t.dj) ?? t.djNameSnapshot ?? t.dj,
         djColor: colors.get(t.dj) ?? null,
+        djTag: customTags.get(t.dj) ?? null,
         coverUrl: t.coverId ? await ctx.storage.getUrl(t.coverId) : null,
       })),
     );
@@ -82,15 +98,56 @@ export const DJ_COLORS = [
 ] as const;
 
 /** The caller's own DJ settings, so the UI can show what's currently set. */
+/** A kerb's profile row, or null if they've never set anything. */
+const profileFor = async (ctx: QueryCtx, kerb: string) =>
+  await ctx.db
+    .query("djProfiles")
+    .withIndex("by_kerb", (q) => q.eq("kerb", kerb))
+    .unique();
+
 export const myDjSettings = query({
   args: {},
   handler: async (ctx) => {
     const { user } = await requirePutz(ctx);
+    const kerb = kerbOf(user.email);
+    const profile = await profileFor(ctx, kerb);
     return {
-      kerb: kerbOf(user.email),
-      djName: user.djName ?? "",
-      djColor: user.djColor ?? "",
+      kerb,
+      djName: profile?.djName ?? "",
+      djColor: profile?.djColor ?? "",
+      djBio: profile?.djBio ?? "",
+      tagBg: profile?.tagBg ?? "",
+      tagFg: profile?.tagFg ?? "",
+      tagGlow: !!profile?.tagGlow,
+      avatarUrl: profile?.avatarId ? await ctx.storage.getUrl(profile.avatarId) : null,
     };
+  },
+});
+
+/** The bio length a tag's profile card can show without becoming an essay. */
+const MAX_BIO = 280;
+
+/**
+ * Every DJ profile, keyed by kerb. Separate from listTracks so a few hundred
+ * track rows don't each carry a copy of someone's bio, and read from
+ * djProfiles rather than users so people who have graduated still have one.
+ */
+export const listDjProfiles = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePutz(ctx);
+    const profiles = await ctx.db.query("djProfiles").collect();
+    return await Promise.all(
+      profiles.map(async (p) => ({
+        kerb: p.kerb,
+        djName: p.djName?.trim() || null,
+        djColor: p.djColor ?? null,
+        djTag:
+          p.tagBg && p.tagFg ? { bg: p.tagBg, fg: p.tagFg, glow: !!p.tagGlow } : null,
+        djBio: p.djBio?.trim() || null,
+        avatarUrl: p.avatarId ? await ctx.storage.getUrl(p.avatarId) : null,
+      })),
+    );
   },
 });
 
@@ -99,20 +156,89 @@ export const myDjSettings = query({
  * kerb; a blank colour falls back to the site accent.
  */
 export const setMyDjSettings = mutation({
-  args: { djName: v.string(), djColor: v.string() },
-  handler: async (ctx, { djName, djColor }) => {
+  args: {
+    djName: v.string(),
+    djColor: v.string(),
+    djBio: v.optional(v.string()),
+    /** Hex pair for a hand-picked tag. Empty strings go back to the accent. */
+    tagBg: v.optional(v.string()),
+    tagFg: v.optional(v.string()),
+    tagGlow: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { djName, djColor, djBio, tagBg, tagFg, tagGlow }) => {
     const { user } = await requirePutz(ctx);
+    const kerb = kerbOf(user.email);
+    const existing = await profileFor(ctx, kerb);
 
     const trimmedName = djName.trim().slice(0, 40);
+    // Left out means "leave it alone", so saving the name doesn't wipe a bio.
+    const trimmedBio = (djBio ?? existing?.djBio ?? "").trim().slice(0, MAX_BIO);
     // Only accept colours we actually offer, so nothing can inject a value
     // that Radix won't render.
     const color = (DJ_COLORS as readonly string[]).includes(djColor) ? djColor : undefined;
 
-    await ctx.db.patch(user._id, {
+    // Left out keeps what's stored; an empty string clears it. Only real hex
+    // is accepted, so nothing can inject a value into a style attribute.
+    const hexOr = (next: string | undefined, current: string | undefined) => {
+      if (next === undefined) return current;
+      if (next === "") return undefined;
+      return HEX.test(next) ? next : current;
+    };
+    const bg = hexOr(tagBg, existing?.tagBg);
+    const fg = hexOr(tagFg, existing?.tagFg);
+
+    const fields = {
       djName: trimmedName.length > 0 ? trimmedName : undefined,
       djColor: color,
-    });
-    return { djName: trimmedName, djColor: color ?? "" };
+      djBio: trimmedBio.length > 0 ? trimmedBio : undefined,
+      // Only a complete pair is stored, so a tag is never half-styled.
+      tagBg: bg && fg ? bg : undefined,
+      tagFg: bg && fg ? fg : undefined,
+      tagGlow: bg && fg && (tagGlow ?? existing?.tagGlow) ? true : undefined,
+      updatedAt: Date.now(),
+    };
+    if (existing) await ctx.db.patch(existing._id, fields);
+    else await ctx.db.insert("djProfiles", { kerb, ...fields });
+
+    return { djName: trimmedName, djColor: color ?? "", djBio: trimmedBio };
+  },
+});
+
+/** Set your own profile picture. Same checks as a track's cover art. */
+export const setMyDjAvatar = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    const { user } = await requirePutz(ctx);
+    const kerb = kerbOf(user.email);
+    const existing = await profileFor(ctx, kerb);
+
+    // Check what landed in storage, not what the client said it was sending.
+    const meta = await ctx.db.system.get(storageId);
+    if (!meta) throw new Error("IMAGE_NOT_FOUND");
+    if (meta.size > MAX_COVER_BYTES) {
+      await ctx.storage.delete(storageId).catch(() => {});
+      throw new Error("IMAGE_TOO_LARGE");
+    }
+    if (meta.contentType && !meta.contentType.startsWith("image/")) {
+      await ctx.storage.delete(storageId).catch(() => {});
+      throw new Error("NOT_AN_IMAGE");
+    }
+
+    if (existing?.avatarId) await ctx.storage.delete(existing.avatarId).catch(() => {});
+    if (existing) await ctx.db.patch(existing._id, { avatarId: storageId, updatedAt: Date.now() });
+    else await ctx.db.insert("djProfiles", { kerb, avatarId: storageId, updatedAt: Date.now() });
+  },
+});
+
+/** Drop your profile picture, going back to the initial. */
+export const clearMyDjAvatar = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { user } = await requirePutz(ctx);
+    const existing = await profileFor(ctx, kerbOf(user.email));
+    if (!existing) return;
+    if (existing.avatarId) await ctx.storage.delete(existing.avatarId).catch(() => {});
+    await ctx.db.patch(existing._id, { avatarId: undefined, updatedAt: Date.now() });
   },
 });
 
@@ -298,6 +424,93 @@ export const removeTracksFromPlaylist = mutation({
       .withIndex("by_playlist", (q) => q.eq("playlistId", playlistId))
       .collect();
     for (const r of rows) if (wanted.has(r.trackId)) await ctx.db.delete(r._id);
+  },
+});
+
+// ---------------------------------------------------------------- tag styling
+
+export const listTagStyles = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePutz(ctx);
+    return await ctx.db.query("djTagStyles").collect();
+  },
+});
+
+/** Give a tag its own colours, or clear them by passing nothing. */
+export const setTagStyle = mutation({
+  args: {
+    tag: v.string(),
+    bg: v.optional(v.string()),
+    fg: v.optional(v.string()),
+    glow: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { tag, bg, fg, glow }) => {
+    await requirePutz(ctx);
+
+    // Only accept real hex, so nothing can inject a value into a style attr.
+    const cleanBg = bg && HEX.test(bg) ? bg : undefined;
+    const cleanFg = fg && HEX.test(fg) ? fg : undefined;
+
+    const existing = await ctx.db
+      .query("djTagStyles")
+      .withIndex("by_tag", (q) => q.eq("tag", tag))
+      .unique();
+
+    // Nothing set means nothing to store: drop the row rather than keep a
+    // blank one around.
+    if (!cleanBg && !cleanFg && !glow) {
+      if (existing) await ctx.db.delete(existing._id);
+      return;
+    }
+
+    const doc = { tag, bg: cleanBg, fg: cleanFg, glow: glow || undefined };
+    if (existing) await ctx.db.patch(existing._id, doc);
+    else await ctx.db.insert("djTagStyles", doc);
+  },
+});
+
+/**
+ * Rename a tag everywhere it appears.
+ *
+ * This rewrites the genre on each track rather than keeping an alias, so the
+ * library has one name for one thing. Renaming onto an existing tag merges
+ * the two.
+ */
+export const renameTag = mutation({
+  args: { from: v.string(), to: v.string() },
+  handler: async (ctx, { from, to }) => {
+    await requirePutz(ctx);
+
+    const [renamed] = normalizeUserGenres([to]);
+    if (!renamed || renamed === from) return { changed: 0 };
+
+    const tracks = await ctx.db.query("djTracks").collect();
+    let changed = 0;
+
+    for (const t of tracks) {
+      if (!t.genres.includes(from)) continue;
+      // Set keeps the merge case clean when the target already exists.
+      const next = [...new Set(t.genres.map((g) => (g === from ? renamed : g)))];
+      await ctx.db.patch(t._id, { genres: next });
+      changed += 1;
+    }
+
+    // Carry any styling across to the new name.
+    const style = await ctx.db
+      .query("djTagStyles")
+      .withIndex("by_tag", (q) => q.eq("tag", from))
+      .unique();
+    if (style) {
+      const target = await ctx.db
+        .query("djTagStyles")
+        .withIndex("by_tag", (q) => q.eq("tag", renamed))
+        .unique();
+      if (target) await ctx.db.delete(style._id);
+      else await ctx.db.patch(style._id, { tag: renamed });
+    }
+
+    return { changed, renamed };
   },
 });
 
@@ -644,6 +857,15 @@ export const mergeDuplicates = mutation({
           patch.coverId = src.coverId;
           claimedCovers.add(src.coverId); // inherited, so don't delete it below
         }
+      }
+
+      // Credit goes to whoever brought the track to the library first, even
+      // when a better-sounding copy arrives later and wins the merge. The
+      // higher-quality file survives; the earliest uploader keeps the credit.
+      const first = [keep, ...losers].reduce((a, b) => (b.uploadedAt < a.uploadedAt ? b : a));
+      if (first.dj !== keep.dj) {
+        patch.dj = first.dj;
+        patch.djNameSnapshot = first.djNameSnapshot;
       }
 
       if (Object.keys(patch).length > 0) await ctx.db.patch(keep._id, patch);

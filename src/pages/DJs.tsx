@@ -13,9 +13,11 @@ import {
   Separator,
   Slider,
   Text,
+  TextArea,
   TextField,
 } from "@radix-ui/themes";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -43,6 +45,8 @@ import { useAuthStatus } from "../utils/useAuthStatus";
 type Track = Doc<"djTracks"> & {
   djDisplay: string;
   djColor: string | null;
+  /** Hand-picked bubble/letter colours, which win over djColor. */
+  djTag: TagStyle | null;
   coverUrl: string | null;
 };
 
@@ -51,16 +55,84 @@ type BadgeColor = React.ComponentProps<typeof Badge>["color"];
 const asBadgeColor = (c: string | null | undefined): BadgeColor =>
   (c || undefined) as BadgeColor;
 
-/** Square cover art, or a prompt to add one. */
-const Cover = memo(
-  ({ url, size, onClick }: { url: string | null; size: number; onClick?: () => void }) => {
+/** A DJ's picture, or their initial while they haven't set one. */
+const DjAvatar = memo(
+  ({
+    url,
+    size,
+    label,
+    onClick,
+  }: {
+    url: string | null;
+    size: number;
+    label: string;
+    onClick?: () => void;
+  }) => {
     const common = {
       width: size,
       height: size,
-      borderRadius: "var(--radius-2)",
+      borderRadius: "50%",
       flex: `0 0 ${size}px`,
       cursor: onClick ? "pointer" : undefined,
     } as const;
+
+    if (url) {
+      return (
+        <img
+          src={url}
+          alt=""
+          onClick={onClick}
+          style={{ ...common, objectFit: "cover", border: "1px solid var(--gray-5)" }}
+        />
+      );
+    }
+
+    return (
+      <Flex
+        align="center"
+        justify="center"
+        onClick={onClick}
+        style={{
+          ...common,
+          background: "var(--gray-3)",
+          border: "1px dashed var(--gray-6)",
+        }}
+      >
+        <Text size={size >= 64 ? "6" : "2"} weight="bold" color="gray">
+          {(label.trim()[0] ?? "?").toUpperCase()}
+        </Text>
+      </Flex>
+    );
+  },
+);
+
+/** Square cover art, or a prompt to add one. */
+const Cover = memo(
+  ({
+    url,
+    size,
+    fluid,
+    onClick,
+  }: {
+    url: string | null;
+    size: number;
+    /**
+     * Follow the container's width instead of pinning to `size`, which is then
+     * only the hint for how much detail fits. Lets the player's artwork track
+     * a resize without React re-rendering a page of track rows per frame.
+     */
+    fluid?: boolean;
+    onClick?: () => void;
+  }) => {
+    const common = (
+      fluid
+        ? { width: "100%", aspectRatio: "1 / 1", flex: "0 0 auto" }
+        : { width: size, height: size, flex: `0 0 ${size}px` }
+    ) as CSSProperties;
+    Object.assign(common, {
+      borderRadius: "var(--radius-2)",
+      cursor: onClick ? "pointer" : undefined,
+    });
 
     if (url) {
       return (
@@ -130,14 +202,20 @@ const Tag = memo(
   ({
     color,
     variant,
+    style,
     children,
   }: {
     /** Omit to follow the theme accent rather than pinning a colour. */
     color?: React.ComponentProps<typeof Badge>["color"];
     variant: React.ComponentProps<typeof Badge>["variant"];
+    style?: React.CSSProperties;
     children: React.ReactNode;
   }) => (
-    <Badge color={color} variant={variant} style={{ fontSize: "12px", padding: "3px 9px" }}>
+    <Badge
+      color={color}
+      variant={variant}
+      style={{ fontSize: "12px", padding: "3px 9px", ...style }}
+    >
       {children}
     </Badge>
   ),
@@ -159,17 +237,33 @@ const SkipIcon = ({ direction }: { direction: "back" | "forward" }) => (
  * House tags that get to shout. Fixed colours rather than theme tokens, so
  * they look the same whichever theme you're on.
  */
-const LOUD_TAGS: { test: RegExp; bg: string; fg: string; glow: string }[] = [
-  { test: /putz/i, bg: "#FF6A00", fg: "#1A1A1A", glow: "255, 106, 0" },
+export type TagStyle = { bg: string; fg: string; glow: boolean };
+
+const BUILTIN_LOUD_TAGS: { test: RegExp; style: TagStyle }[] = [
+  // Greek letters or their names, as well as the house name itself.
+  { test: /putz|[πτζ]|\b(pi|tau|zeta)\b/i, style: { bg: "#FF6A00", fg: "#1A1A1A", glow: true } },
   // \b41w?\b so it matches "41" and "41W" as words, not any stray 41.
-  { test: /\b41w?\b/i, bg: "#9B4DE0", fg: "#000000", glow: "155, 77, 224" },
-  { test: /florey|krotus/i, bg: "#E5342E", fg: "#000000", glow: "229, 52, 46" },
-  { test: /tetazoo|squanch/i, bg: "#3DD400", fg: "#FFFFFF", glow: "61, 212, 0" },
+  { test: /\b41w?\b/i, style: { bg: "#9B4DE0", fg: "#000000", glow: true } },
+  { test: /florey|krotus/i, style: { bg: "#E5342E", fg: "#000000", glow: true } },
+  { test: /tetazoo|squanch/i, style: { bg: "#3DD400", fg: "#FFFFFF", glow: true } },
 ];
 
-const loudTag = (genre: string) => LOUD_TAGS.find((t) => t.test.test(genre));
+/** A tag's own styling wins; otherwise fall back to the house rules. */
+export function resolveTagStyle(
+  genre: string,
+  custom: Map<string, TagStyle>,
+): TagStyle | undefined {
+  const own = custom.get(genre);
+  if (own) return own;
+  return BUILTIN_LOUD_TAGS.find((t) => t.test.test(genre))?.style;
+}
 
-const loudTagStyle = (t: { bg: string; fg: string; glow: string }): React.CSSProperties => ({
+const hexToRgb = (hex: string): string => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  return m ? `${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}` : "255, 255, 255";
+};
+
+const loudTagStyle = (t: TagStyle): React.CSSProperties => ({
   fontSize: "12px",
   padding: "3px 9px",
   backgroundColor: t.bg,
@@ -177,8 +271,18 @@ const loudTagStyle = (t: { bg: string; fg: string; glow: string }): React.CSSPro
   fontWeight: 800,
   letterSpacing: "0.4px",
   textTransform: "uppercase",
-  boxShadow: `0 0 10px rgba(${t.glow}, 0.75)`,
+  boxShadow: t.glow ? `0 0 10px rgba(${hexToRgb(t.bg)}, 0.75)` : undefined,
 });
+
+/** A DJ's own colours as inline style, or nothing if they use an accent. */
+const djTagStyle = (tag: TagStyle | null): React.CSSProperties =>
+  tag
+    ? {
+        backgroundColor: tag.bg,
+        color: tag.fg,
+        boxShadow: tag.glow ? `0 0 10px rgba(${hexToRgb(tag.bg)}, 0.75)` : undefined,
+      }
+    : {};
 
 const PencilIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -209,8 +313,8 @@ const FilterChip = memo(
     color?: BadgeColor;
     /** Rendered lighter after the label, so the name reads first. */
     count?: number;
-    /** A house tag's fixed colours, which beat both of the above. */
-    loud?: { bg: string; fg: string; glow: string };
+    /** A tag's own colours, which beat both of the above. */
+    loud?: TagStyle;
     children: React.ReactNode;
   }) => (
     <Button
@@ -227,7 +331,8 @@ const FilterChip = memo(
               backgroundColor: loud.bg,
               color: loud.fg,
               fontWeight: 800,
-              boxShadow: active ? `0 0 10px rgba(${loud.glow}, 0.75)` : undefined,
+              boxShadow:
+                active && loud.glow ? `0 0 10px rgba(${hexToRgb(loud.bg)}, 0.75)` : undefined,
             }
           : { height: "24px" }
       }
@@ -246,7 +351,83 @@ const FilterChip = memo(
 const DRAG_TRACKS = "application/x-wokenet-tracks";
 
 /** How many genre chips fit on one line before we collapse the rest. */
-const COLLAPSED_GENRE_COUNT = 8;
+/** Corner player widths, cycled by clicking its artwork. */
+const PLAYER_SIZES = ["small", "normal", "large"] as const;
+type PlayerSize = (typeof PLAYER_SIZES)[number];
+/** Kept narrow at every step: the player is a corner card, not a sidebar. */
+const PLAYER_WIDTH: Record<PlayerSize, number> = { small: 200, normal: 250, large: 300 };
+
+/** The card's margin from the window edge, and from the track rows. */
+const PLAYER_GAP = 16;
+const PLAYER_SIZE_KEY = "wokenet.djs.playerSize";
+
+const loadPlayerSize = (): PlayerSize => {
+  try {
+    const saved = localStorage.getItem(PLAYER_SIZE_KEY);
+    if (saved && (PLAYER_SIZES as readonly string[]).includes(saved)) return saved as PlayerSize;
+  } catch {
+    // Storage can be off; the default is fine.
+  }
+  return "normal";
+};
+
+const COLLAPSED_FACET_COUNT = 8;
+
+/**
+ * The entries a facet shows while collapsed: the first row's worth, plus any
+ * that are currently filtering, so an active chip is never hidden behind
+ * "show more".
+ */
+const collapseFacet = <T extends [string, unknown]>(
+  entries: T[],
+  active: Set<string>,
+  showAll: boolean,
+): T[] => {
+  if (showAll || entries.length <= COLLAPSED_FACET_COUNT) return entries;
+  const head = entries.slice(0, COLLAPSED_FACET_COUNT);
+  const activeTail = entries.slice(COLLAPSED_FACET_COUNT).filter(([key]) => active.has(key));
+  return [...head, ...activeTail];
+};
+
+/** The expand / collapse pair at the end of a long facet row. */
+const ShowMore = memo(
+  ({
+    hidden,
+    expanded,
+    onToggle,
+  }: {
+    hidden: number;
+    expanded: boolean;
+    onToggle: (next: boolean) => void;
+  }) => (
+    <>
+      {hidden > 0 && (
+        <Button
+          size="1"
+          radius="full"
+          variant="ghost"
+          color="gray"
+          onClick={() => onToggle(true)}
+          style={{ height: "22px" }}
+        >
+          show {hidden} more
+        </Button>
+      )}
+      {expanded && (
+        <Button
+          size="1"
+          radius="full"
+          variant="ghost"
+          color="gray"
+          onClick={() => onToggle(false)}
+          style={{ height: "22px" }}
+        >
+          show less
+        </Button>
+      )}
+    </>
+  ),
+);
 
 type SortMode = "alphabetical" | "added" | "bpm" | "key" | "dj" | "genre";
 type SortDir = "asc" | "desc";
@@ -257,7 +438,7 @@ const SORT_LABELS: Record<SortMode, string> = {
   bpm: "BPM",
   key: "Key",
   dj: "DJ",
-  genre: "Genre",
+  genre: "Tags",
 };
 
 /** What each direction means per mode, so the label isn't just asc/desc. */
@@ -393,6 +574,32 @@ export const DJs = memo(() => {
   const tracks = useQuery(api.djs.listTracks);
   const ripRequests = useQuery(api.djs.listRipRequests);
   const playlists = useQuery(api.djs.listPlaylists);
+  const tagStyles = useQuery(api.djs.listTagStyles);
+
+  /** Custom tag colours, keyed by tag, overriding the built-in house rules. */
+  const customTagStyles = useMemo(() => {
+    const m = new Map<string, TagStyle>();
+    for (const s of tagStyles ?? []) {
+      m.set(s.tag, {
+        bg: s.bg ?? "#2A2A2E",
+        fg: s.fg ?? "#EDEDEF",
+        glow: !!s.glow,
+      });
+    }
+    return m;
+  }, [tagStyles]);
+
+  const tagStyleFor = useCallback(
+    (genre: string) => resolveTagStyle(genre, customTagStyles),
+    [customTagStyles],
+  );
+
+  /**
+   * Dialogs a tag on a row opens. Held here rather than inside each row so a
+   * few hundred rows share one of each.
+   */
+  const [tagEditing, setTagEditing] = useState<string | null>(null);
+  const [profileKerb, setProfileKerb] = useState<string | null>(null);
 
   /** null = the whole library; otherwise the playlist being viewed. */
   const [activePlaylistId, setActivePlaylistId] = useState<Id<"djPlaylists"> | null>(null);
@@ -427,6 +634,7 @@ export const DJs = memo(() => {
   // The genre list runs to ~40 chips, which swamps the filter card. Collapse
   // it to one line until asked for more.
   const [showAllGenres, setShowAllGenres] = useState(false);
+  const [showAllDjs, setShowAllDjs] = useState(false);
   const [djFilter, setDjFilter] = useState<Set<string>>(new Set());
   const [qualityFilter, setQualityFilter] = useState<Set<Quality>>(new Set());
   const [bpmFilter, setBpmFilter] = useState<Set<string>>(new Set());
@@ -437,6 +645,8 @@ export const DJs = memo(() => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  /** Source waiting to be given to the <audio> element (see the effect below). */
+  const [pendingPlay, setPendingPlay] = useState<{ url: string } | null>(null);
   const [shuffle, setShuffle] = useState(false);
   /**
    * The order shuffle will play in, fixed when shuffle is switched on. A
@@ -479,31 +689,30 @@ export const DJs = memo(() => {
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [scoped]);
 
-  /**
-   * Genres shown while collapsed: the first row's worth, plus any that are
-   * currently filtering, so an active chip is never hidden behind "see more".
-   */
-  const visibleGenres = useMemo(() => {
-    if (showAllGenres || allGenres.length <= COLLAPSED_GENRE_COUNT) return allGenres;
-    const head = allGenres.slice(0, COLLAPSED_GENRE_COUNT);
-    const activeTail = allGenres
-      .slice(COLLAPSED_GENRE_COUNT)
-      .filter(([genre]) => genreFilter.has(genre));
-    return [...head, ...activeTail];
-  }, [allGenres, genreFilter, showAllGenres]);
-
+  const visibleGenres = useMemo(
+    () => collapseFacet(allGenres, genreFilter, showAllGenres),
+    [allGenres, genreFilter, showAllGenres],
+  );
   const hiddenGenreCount = allGenres.length - visibleGenres.length;
 
   // Keyed by kerb (stable identity), labelled with the DJ's chosen name.
   const allDjs = useMemo(() => {
-    const byKerb = new Map<string, { label: string; count: number; color: string | null }>();
+    const byKerb = new Map<
+      string,
+      { label: string; count: number; color: string | null; tag: Track["djTag"] }
+    >();
     for (const t of scoped) {
       const entry = byKerb.get(t.dj);
       if (entry) entry.count += 1;
-      else byKerb.set(t.dj, { label: t.djDisplay, count: 1, color: t.djColor });
+      else byKerb.set(t.dj, { label: t.djDisplay, count: 1, color: t.djColor, tag: t.djTag });
     }
     return [...byKerb.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label));
   }, [scoped]);
+
+  const visibleDjs = useMemo(
+    () => collapseFacet(allDjs, djFilter, showAllDjs),
+    [allDjs, djFilter, showAllDjs],
+  );
 
   const djLabel = useCallback(
     (kerb: string) => allDjs.find(([k]) => k === kerb)?.[1].label ?? kerb,
@@ -616,15 +825,30 @@ export const DJs = memo(() => {
       const url = await convex.query(api.djs.getTrackUrl, { trackId: track._id });
       if (!url) return;
       setNowPlaying(track);
-      // Let the <audio> element pick up the new src before playing.
-      requestAnimationFrame(() => {
-        if (!audioRef.current) return;
-        audioRef.current.src = url;
-        void audioRef.current.play();
-      });
+      // A fresh object every time, so picking the same track again still
+      // re-runs the effect below.
+      setPendingPlay({ url });
     },
     [convex],
   );
+
+  /**
+   * Hand the new source to the <audio> element once React has put it on the
+   * page.
+   *
+   * The player card -- and the element with it -- only exists while something
+   * is playing, so on the first play of a session there is nothing to point a
+   * ref at yet. Doing this in an effect means it runs after that commit;
+   * doing it straight after setNowPlaying quietly did nothing, which is why
+   * the first track you picked never started.
+   */
+  useEffect(() => {
+    if (!pendingPlay) return;
+    const el = audioRef.current;
+    if (!el) return;
+    el.src = pendingPlay.url;
+    void el.play();
+  }, [pendingPlay]);
 
   /** Row play button: toggles if it's already the current track. */
   const play = useCallback(
@@ -683,6 +907,54 @@ export const DJs = memo(() => {
     }
     step(1);
   }, [ordered, nowPlaying, shuffle, step]);
+
+  /**
+   * How big the corner player is. A fixed set of sizes rather than a drag:
+   * tracking a pointer meant re-rendering a page of track rows per frame,
+   * which made the whole thing crawl.
+   */
+  const [playerSize, setPlayerSize] = useState<PlayerSize>(loadPlayerSize);
+  const cyclePlayerSize = useCallback(() => {
+    setPlayerSize((current) => {
+      const next = PLAYER_SIZES[(PLAYER_SIZES.indexOf(current) + 1) % PLAYER_SIZES.length];
+      try {
+        localStorage.setItem(PLAYER_SIZE_KEY, next);
+      } catch {
+        // Private window or site data off: it just won't be remembered.
+      }
+      return next;
+    });
+  }, []);
+
+  /**
+   * What Play starts from: the first track of the shuffled queue while shuffle
+   * is on, otherwise the first one on screen. Without this, hitting shuffle
+   * and then play always opened on the same song.
+   */
+  const firstUp = useMemo(() => {
+    if (shuffle && shuffleOrder.length > 0) {
+      const onScreen = new Map(ordered.map((t) => [t._id, t]));
+      for (const id of shuffleOrder) {
+        const t = onScreen.get(id);
+        if (t) return t;
+      }
+    }
+    return ordered[0];
+  }, [shuffle, shuffleOrder, ordered]);
+
+  /** Whether what's loaded is one of the tracks currently on screen. */
+  const playingHere = useMemo(
+    () => nowPlaying !== null && ordered.some((t) => t._id === nowPlaying._id),
+    [nowPlaying, ordered],
+  );
+
+  /** Pause or resume without changing what's loaded. */
+  const togglePlayback = useCallback(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) void el.play();
+    else el.pause();
+  }, []);
 
   /**
    * Switch shuffle on or off. Turning it on fixes a fresh queue order over
@@ -1140,8 +1412,11 @@ export const DJs = memo(() => {
           flex: "1 1 auto",
           minWidth: 0,
           overflowY: "auto",
-          // Keep the list clear of the now-playing card in the corner.
-          paddingRight: nowPlaying ? 272 : undefined,
+          // Keep the list clear of the card in the corner, with the same gap
+          // either side of it: row to card, card to window edge.
+          paddingRight: nowPlaying
+            ? PLAYER_WIDTH[playerSize] + PLAYER_GAP * 2
+            : undefined,
         }}
       >
         <Flex direction="column" width="100%" style={{ maxWidth: 1600 }} gap="4" pb="9">
@@ -1188,6 +1463,21 @@ export const DJs = memo(() => {
             />
             <UploadDialog onRun={(f, p) => void upload(f, p)} busy={busy !== null} />
             <LibraryImportDialog onRun={importLibrary} busy={busy !== null} />
+            {/* Starts whatever is on screen, so there's a way to start playing
+                without hunting for a row. Doubles as pause once it's going. */}
+            <Button
+              size="1"
+              radius="full"
+              variant={playingHere && isPlaying ? "solid" : "surface"}
+              disabled={ordered.length === 0}
+              onClick={() => {
+                if (playingHere) togglePlayback();
+                else if (firstUp) void play(firstUp);
+              }}
+            >
+              <PlayIcon playing={playingHere && isPlaying} />
+              {playingHere && isPlaying ? "Pause" : "Play"}
+            </Button>
             {user?.isAdmin && <DuplicatesDialog />}
             {activePlaylist && (
               <PlaylistSettingsDialog
@@ -1216,7 +1506,7 @@ export const DJs = memo(() => {
           <Flex direction="column" gap="3">
             <Flex gap="2" align="center" wrap="wrap">
               <TextField.Root
-                placeholder="Search title, artist, dj, genre…"
+                placeholder="Search title, artist, dj, tag…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ flex: "1 1 240px" }}
@@ -1283,7 +1573,7 @@ export const DJs = memo(() => {
               </Flex>
             )}
 
-            <FacetRow label="Genre" empty={allGenres.length === 0 && untaggedCount === 0}>
+            <FacetRow label="Tags" empty={allGenres.length === 0 && untaggedCount === 0}>
               {untaggedCount > 0 && (
                 <FilterChip
                   active={onlyUntagged}
@@ -1300,36 +1590,17 @@ export const DJs = memo(() => {
                   count={count}
                   // House tags keep their fixed colour here too, so a chip
                   // matches the tag it filters on.
-                  loud={loudTag(genre)}
+                  loud={tagStyleFor(genre)}
                   onClick={() => setGenreFilter((s) => toggleIn(s, genre))}
                 >
                   {genre}
                 </FilterChip>
               ))}
-              {hiddenGenreCount > 0 && (
-                <Button
-                  size="1"
-                  radius="full"
-                  variant="ghost"
-                  color="gray"
-                  onClick={() => setShowAllGenres(true)}
-                  style={{ height: "22px" }}
-                >
-                  show {hiddenGenreCount} more
-                </Button>
-              )}
-              {showAllGenres && allGenres.length > COLLAPSED_GENRE_COUNT && (
-                <Button
-                  size="1"
-                  radius="full"
-                  variant="ghost"
-                  color="gray"
-                  onClick={() => setShowAllGenres(false)}
-                  style={{ height: "22px" }}
-                >
-                  show less
-                </Button>
-              )}
+              <ShowMore
+                hidden={hiddenGenreCount}
+                expanded={showAllGenres && allGenres.length > COLLAPSED_FACET_COUNT}
+                onToggle={setShowAllGenres}
+              />
               {genreFilter.size > 1 && (
                 <FilterChip active={matchAllGenres} onClick={() => setMatchAllGenres((v) => !v)}>
                   {matchAllGenres ? "match all" : "match any"}
@@ -1338,17 +1609,23 @@ export const DJs = memo(() => {
             </FacetRow>
 
             <FacetRow label="DJ" empty={allDjs.length === 0}>
-              {allDjs.map(([kerb, { label, count, color }]) => (
+              {visibleDjs.map(([kerb, { label, count, color, tag }]) => (
                 <FilterChip
                   key={kerb}
                   active={djFilter.has(kerb)}
                   color={asBadgeColor(color)}
+                  loud={tag ? { ...tag, glow: false } : undefined}
                   count={count}
                   onClick={() => setDjFilter((s) => toggleIn(s, kerb))}
                 >
                   {label}
                 </FilterChip>
               ))}
+              <ShowMore
+                hidden={allDjs.length - visibleDjs.length}
+                expanded={showAllDjs && allDjs.length > COLLAPSED_FACET_COUNT}
+                onToggle={setShowAllDjs}
+              />
             </FacetRow>
 
             <FacetRow label="Quality" empty={availableQualities.length === 0}>
@@ -1377,21 +1654,27 @@ export const DJs = memo(() => {
               ))}
             </FacetRow>
 
-            <FacetRow label="Cues">
-              <FilterChip
-                active={needHotCues}
-                count={cueCounts.hot}
-                onClick={() => setNeedHotCues((v) => !v)}
-              >
-                hot cues
-              </FilterChip>
-              <FilterChip
-                active={needMemoryCues}
-                count={cueCounts.memory}
-                onClick={() => setNeedMemoryCues((v) => !v)}
-              >
-                memory cues
-              </FilterChip>
+            {/* Same rule as the tags: a filter that would match nothing isn't
+                worth a chip. */}
+            <FacetRow label="Cues" empty={cueCounts.hot === 0 && cueCounts.memory === 0}>
+              {cueCounts.hot > 0 && (
+                <FilterChip
+                  active={needHotCues}
+                  count={cueCounts.hot}
+                  onClick={() => setNeedHotCues((v) => !v)}
+                >
+                  hot cues
+                </FilterChip>
+              )}
+              {cueCounts.memory > 0 && (
+                <FilterChip
+                  active={needMemoryCues}
+                  count={cueCounts.memory}
+                  onClick={() => setNeedMemoryCues((v) => !v)}
+                >
+                  memory cues
+                </FilterChip>
+              )}
             </FacetRow>
           </Flex>
         </Card>
@@ -1556,6 +1839,9 @@ export const DJs = memo(() => {
                 onDelete={() => void deleteTrack({ trackId: track._id })}
                 onSetCover={(file) => void uploadCover(track, file)}
                 onDetectBpm={() => detectBpmFor(track)}
+                tagStyleFor={tagStyleFor}
+                onEditTag={setTagEditing}
+                onShowProfile={setProfileKerb}
                 selectMode={selectMode}
                 isSelected={selected.has(track._id)}
                 onToggleSelected={() => setSelected((s) => toggleIn(s, track._id))}
@@ -1585,6 +1871,9 @@ export const DJs = memo(() => {
         </Flex>
       </Flex>
 
+      <TagStyleDialog tag={tagEditing} onClose={() => setTagEditing(null)} />
+      <DjProfileCard kerb={profileKerb} onClose={() => setProfileKerb(null)} />
+
       {/* ---- now playing card ----
            A corner card rather than a full-width bar, so it doesn't sit on
            top of the sidebar and hide the DJ settings button. */}
@@ -1595,16 +1884,46 @@ export const DJs = memo(() => {
           p="2"
           style={{
             position: "fixed",
-            bottom: 16,
-            right: 16,
-            width: 224,
+            right: PLAYER_GAP,
+            bottom: PLAYER_GAP,
+            width: PLAYER_WIDTH[playerSize],
             zIndex: 50,
             backgroundColor: "var(--gray-2)",
             border: "1px solid var(--accent-7)",
             borderRadius: "var(--radius-3)",
           }}
         >
-          <Cover url={nowPlaying.coverUrl} size={208} />
+          {/* Stops the audio by unmounting the player altogether. */}
+          <IconButton
+            size="1"
+            variant="ghost"
+            onClick={() => setNowPlaying(null)}
+            title="Close the player"
+            aria-label="Close the player"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 1,
+              margin: 0,
+              background: "none",
+              color: "var(--accent-9)",
+              fontWeight: 700,
+              // Keeps it legible over a light patch of artwork.
+              textShadow: "0 1px 3px rgba(0, 0, 0, 0.9)",
+            }}
+          >
+            ✕
+          </IconButton>
+
+          {/* Click the artwork to cycle the player through its sizes. */}
+          <Box
+            onClick={cyclePlayerSize}
+            style={{ cursor: "pointer" }}
+            title="Click to resize the player"
+          >
+            <Cover url={nowPlaying.coverUrl} size={PLAYER_WIDTH[playerSize]} fluid />
+          </Box>
 
           <Flex direction="column" style={{ minWidth: 0 }}>
             <Text size="2" weight="bold" truncate>
@@ -1612,7 +1931,11 @@ export const DJs = memo(() => {
             </Text>
             <Text size="1" color="gray" truncate>
               {nowPlaying.artist ? `${nowPlaying.artist} · ` : ""}
-              <Text size="1" color={asBadgeColor(nowPlaying.djColor) ?? "gray"}>
+              <Text
+                size="1"
+                color={asBadgeColor(nowPlaying.djColor) ?? "gray"}
+                style={nowPlaying.djTag ? { color: nowPlaying.djTag.bg } : undefined}
+              >
                 {nowPlaying.djDisplay}
               </Text>
             </Text>
@@ -1708,9 +2031,6 @@ export const DJs = memo(() => {
                 <DownloadIcon />
               </IconButton>
             </Flex>
-            <IconButton size="1" variant="ghost" color="gray" onClick={() => setNowPlaying(null)}>
-              ✕
-            </IconButton>
           </Flex>
         </Flex>
       )}
@@ -1754,6 +2074,9 @@ const TrackRow = memo(
     isSelected,
     onToggleSelected,
     onDragStart,
+    tagStyleFor,
+    onEditTag,
+    onShowProfile,
   }: {
     track: Track;
     isCurrent: boolean;
@@ -1769,9 +2092,24 @@ const TrackRow = memo(
     isSelected: boolean;
     onToggleSelected: () => void;
     onDragStart: (e: React.DragEvent) => void;
+    tagStyleFor: (genre: string) => TagStyle | undefined;
+    onEditTag: (genre: string) => void;
+    onShowProfile: (kerb: string) => void;
   }) => {
     // Lets you set cover art straight from the row, without opening the editor.
     const rowCoverInput = useRef<HTMLInputElement | null>(null);
+    /**
+     * The row's own edit button. Tapping a value tag (bpm, key) clicks it, so
+     * those tags lead to the editor without every tag carrying a dialog.
+     */
+    const editButton = useRef<HTMLButtonElement | null>(null);
+
+    /** Tag clicks must not reach the row, or they'd start the track. */
+    const tagClick = (run: () => void) => (e: React.MouseEvent) => {
+      e.stopPropagation();
+      run();
+    };
+    const openEditor = tagClick(() => editButton.current?.click());
 
     const hot = track.hotCues?.length ?? 0;
     const mem = track.memoryCues?.length ?? 0;
@@ -1846,34 +2184,55 @@ const TrackRow = memo(
             justify="end"
             style={{ flex: "1 1 auto", minWidth: 0 }}
           >
-            <Tag color={asBadgeColor(track.djColor)} variant="soft">
-              {track.djDisplay}
-            </Tag>
+            <span
+              onClick={tagClick(() => onShowProfile(track.dj))}
+              style={{ display: "inline-flex", cursor: "pointer" }}
+            >
+              <Tag
+                color={asBadgeColor(track.djColor)}
+                variant="soft"
+                style={djTagStyle(track.djTag)}
+              >
+                {track.djDisplay}
+              </Tag>
+            </span>
             <Tag color={track.quality === "lossless" ? "green" : "gray"} variant="soft">
               {QUALITY_LABEL[track.quality]}
             </Tag>
             {track.bpm ? (
-              <Tag color="gray" variant="outline">
-                {Math.round(track.bpm)} bpm
-                {track.analysisSource === "detected" ? "?" : ""}
-              </Tag>
+              <span onClick={openEditor} style={{ display: "inline-flex", cursor: "pointer" }}>
+                <Tag color="gray" variant="outline">
+                  {Math.round(track.bpm)} bpm
+                  {track.analysisSource === "detected" ? "?" : ""}
+                </Tag>
+              </span>
             ) : null}
             {track.musicalKey ? (
-              <Tag color="gray" variant="outline">
-                {track.musicalKey}
-                {track.analysisSource === "detected" ? "?" : ""}
-              </Tag>
+              <span onClick={openEditor} style={{ display: "inline-flex", cursor: "pointer" }}>
+                <Tag color="gray" variant="outline">
+                  {track.musicalKey}
+                  {track.analysisSource === "detected" ? "?" : ""}
+                </Tag>
+              </span>
             ) : null}
             {track.genres.map((g) => {
-              const loud = loudTag(g);
-              return loud ? (
-                <Badge key={g} variant="solid" style={loudTagStyle(loud)}>
-                  {g}
-                </Badge>
-              ) : (
-                <Tag key={g} color="gray" variant="outline">
-                  {g}
-                </Tag>
+              const loud = tagStyleFor(g);
+              return (
+                <span
+                  key={g}
+                  onClick={tagClick(() => onEditTag(g))}
+                  style={{ display: "inline-flex", cursor: "pointer" }}
+                >
+                  {loud ? (
+                    <Badge variant="solid" style={loudTagStyle(loud)}>
+                      {g}
+                    </Badge>
+                  ) : (
+                    <Tag color="gray" variant="outline">
+                      {g}
+                    </Tag>
+                  )}
+                </span>
               );
             })}
             {hot > 0 && (
@@ -1901,6 +2260,7 @@ const TrackRow = memo(
               onSave={onSave}
               onSetCover={onSetCover}
               onDetectBpm={onDetectBpm}
+              triggerRef={editButton}
             />
             {selectMode ? (
               <Checkbox
@@ -1961,102 +2321,752 @@ const TrackRow = memo(
  * Lets a DJ set the name shown on their tracks. Tracks are keyed by kerb, so
  * changing this renames their whole back catalogue, not just future uploads.
  */
+/**
+ * The two links at the foot of the sidebar. Styled as muted section labels:
+ * the label itself is the thing you click, which reads better than a button
+ * wearing your own name.
+ */
+const SIDEBAR_LINK: React.CSSProperties = {
+  justifyContent: "flex-start",
+  width: "fit-content",
+  opacity: 0.6,
+  letterSpacing: "0.5px",
+};
+
+/** Starting points offered for a tag with no colours of its own yet. */
+const TAG_PRESETS: TagStyle[] = [
+  { bg: "#FF6A00", fg: "#1A1A1A", glow: false },
+  { bg: "#9B4DE0", fg: "#000000", glow: false },
+  { bg: "#E5342E", fg: "#000000", glow: false },
+  { bg: "#3DD400", fg: "#FFFFFF", glow: false },
+  { bg: "#00C2FF", fg: "#001018", glow: false },
+  { bg: "#FFD400", fg: "#1A1A1A", glow: false },
+  { bg: "#FF4FA3", fg: "#FFFFFF", glow: false },
+  { bg: "#2A2A2E", fg: "#EDEDEF", glow: false },
+];
+
+const DEFAULT_DRAFT: TagStyle = { bg: "#FF6A00", fg: "#1A1A1A", glow: false };
+
+/** Custom tag colours keyed by tag, as the queries hand them over. */
+const tagStyleMap = (rows: Doc<"djTagStyles">[] | undefined): Map<string, TagStyle> => {
+  const m = new Map<string, TagStyle>();
+  for (const r of rows ?? []) {
+    m.set(r.tag, { bg: r.bg ?? DEFAULT_DRAFT.bg, fg: r.fg ?? DEFAULT_DRAFT.fg, glow: !!r.glow });
+  }
+  return m;
+};
+
+/**
+ * Rename one tag and pick its colours. Used both from the tag list and
+ * straight off a tag on a track, so there's one editor rather than two.
+ */
+const TagStyleEditor = memo(({ tag, onDone }: { tag: string; onDone: () => void }) => {
+  const tagStyles = useQuery(api.djs.listTagStyles);
+  const setTagStyle = useMutation(api.djs.setTagStyle);
+  const renameTag = useMutation(api.djs.renameTag);
+
+  const custom = useMemo(() => tagStyleMap(tagStyles), [tagStyles]);
+  const stored = custom.get(tag);
+
+  const [nameDraft, setNameDraft] = useState(tag);
+  const [draft, setDraft] = useState<TagStyle | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Re-seed when pointed at a different tag, so reopening never shows the
+  // last tag's colours.
+  useEffect(() => {
+    setNameDraft(tag);
+    setDraft(null);
+  }, [tag]);
+
+  const style = draft ?? stored ?? resolveTagStyle(tag, custom) ?? DEFAULT_DRAFT;
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      let target = tag;
+      // Rename first, so the colours land on the name it ends up with.
+      const wanted = nameDraft.trim();
+      if (wanted && wanted !== tag) {
+        const res = await renameTag({ from: tag, to: wanted });
+        if (res?.renamed) target = res.renamed;
+      }
+      await setTagStyle({ tag: target, bg: style.bg, fg: style.fg, glow: style.glow });
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try {
+      await setTagStyle({ tag });
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Flex direction="column" gap="4">
+      <Flex align="center" gap="3">
+        <Badge variant="solid" style={loudTagStyle(style)}>
+          {nameDraft.trim() || tag}
+        </Badge>
+        <Text size="1" color="gray">
+          preview
+        </Text>
+      </Flex>
+
+      <Flex direction="column" gap="1">
+        <Text size="2" weight="bold">
+          Name
+        </Text>
+        <TextField.Root
+          value={nameDraft}
+          maxLength={40}
+          onChange={(e) => setNameDraft(e.target.value)}
+        />
+        <Text size="1" color="gray">
+          Renaming updates every track carrying this tag. Renaming onto a tag that already exists
+          merges the two.
+        </Text>
+      </Flex>
+
+      <Flex gap="5" wrap="wrap">
+        <Flex direction="column" gap="1">
+          <Text size="2" weight="bold">
+            Bubble
+          </Text>
+          <Flex align="center" gap="2">
+            <input
+              type="color"
+              value={style.bg}
+              onChange={(e) => setDraft({ ...style, bg: e.target.value })}
+              style={{ width: 44, height: 28, border: "none", background: "none" }}
+            />
+            <Text size="1" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {style.bg.toUpperCase()}
+            </Text>
+          </Flex>
+        </Flex>
+
+        <Flex direction="column" gap="1">
+          <Text size="2" weight="bold">
+            Letters
+          </Text>
+          <Flex align="center" gap="2">
+            <input
+              type="color"
+              value={style.fg}
+              onChange={(e) => setDraft({ ...style, fg: e.target.value })}
+              style={{ width: 44, height: 28, border: "none", background: "none" }}
+            />
+            <Text size="1" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {style.fg.toUpperCase()}
+            </Text>
+          </Flex>
+        </Flex>
+
+        <Flex direction="column" gap="1">
+          <Text size="2" weight="bold">
+            Glow
+          </Text>
+          <Text as="label" size="2">
+            <Flex align="center" gap="2" style={{ height: "28px" }}>
+              <Checkbox
+                checked={style.glow}
+                onCheckedChange={(v) => setDraft({ ...style, glow: v === true })}
+              />
+              obnoxious
+            </Flex>
+          </Text>
+        </Flex>
+      </Flex>
+
+      <Flex direction="column" gap="2">
+        <Text size="2" weight="bold">
+          Presets
+        </Text>
+        <Flex gap="2" wrap="wrap">
+          {TAG_PRESETS.map((p) => (
+            <Badge
+              key={p.bg}
+              variant="solid"
+              onClick={() => setDraft({ ...p, glow: style.glow })}
+              style={{ ...loudTagStyle(p), cursor: "pointer" }}
+            >
+              {nameDraft.trim() || tag}
+            </Badge>
+          ))}
+        </Flex>
+      </Flex>
+
+      <Flex justify="between" gap="2" mt="2">
+        <Button size="2" variant="soft" color="gray" disabled={busy || !stored} onClick={clear}>
+          {stored ? "remove colours" : "no colours set"}
+        </Button>
+        <Flex gap="2">
+          <Button size="2" variant="soft" color="gray" onClick={onDone}>
+            back
+          </Button>
+          <Button size="2" disabled={busy} onClick={save}>
+            {busy ? "saving…" : "save"}
+          </Button>
+        </Flex>
+      </Flex>
+    </Flex>
+  );
+});
+
+/**
+ * The tag editor on its own, opened by tapping a tag on a track. Mounted once
+ * at page level rather than per row, so a few hundred rows don't each carry a
+ * dialog around.
+ */
+const TagStyleDialog = memo(({ tag, onClose }: { tag: string | null; onClose: () => void }) => (
+  <Dialog.Root open={tag !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Content maxWidth="520px">
+      <Dialog.Title>{tag ?? "Tag"}</Dialog.Title>
+      <Dialog.Description size="2" color="gray" mb="4">
+        Rename this tag or give it colours, everywhere it appears.
+      </Dialog.Description>
+      {tag !== null && <TagStyleEditor tag={tag} onDone={onClose} />}
+    </Dialog.Content>
+  </Dialog.Root>
+));
+
+/**
+ * Every tag in the library as a block you can click to rename and colour.
+ *
+ * Reads the track list rather than taking it as a prop: Convex caches by
+ * query, so this is the same subscription the page already holds.
+ */
+const TagSettingsDialog = memo(() => {
+  const tracks = useQuery(api.djs.listTracks);
+  const tagStyles = useQuery(api.djs.listTagStyles);
+
+  const [selected, setSelected] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const custom = useMemo(() => tagStyleMap(tagStyles), [tagStyles]);
+
+  /**
+   * Tags with at least one track behind them. A tag nothing is using any more
+   * is nothing to style, so it doesn't belong in the list.
+   */
+  const tags = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of tracks ?? []) {
+      for (const g of t.genres) counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [tracks]);
+
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? tags.filter(([t]) => t.toLowerCase().includes(q)) : tags;
+  }, [tags, search]);
+
+  const close = () => {
+    setSelected(null);
+    setSearch("");
+  };
+
+  return (
+    <Dialog.Root onOpenChange={(open) => !open && close()}>
+      <Dialog.Trigger>
+        <Button size="1" variant="ghost" color="gray" style={SIDEBAR_LINK}>
+          TAG SETTINGS
+        </Button>
+      </Dialog.Trigger>
+      <Dialog.Content maxWidth="640px">
+        <Dialog.Title>Tag settings</Dialog.Title>
+        <Dialog.Description size="2" color="gray" mb="3">
+          Every tag in the library. Click one to rename it or give it colours.
+        </Dialog.Description>
+
+        {selected !== null ? (
+          <TagStyleEditor tag={selected} onDone={() => setSelected(null)} />
+        ) : (
+          <Flex direction="column" gap="3">
+            <TextField.Root
+              placeholder="find a tag"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <Box style={{ maxHeight: "48vh", overflowY: "auto" }}>
+              {shown.length === 0 ? (
+                <Text size="2" color="gray">
+                  {tags.length === 0 ? "No tags yet." : "Nothing matches that."}
+                </Text>
+              ) : (
+                <Flex gap="2" wrap="wrap">
+                  {shown.map(([tag, count]) => {
+                    const style = resolveTagStyle(tag, custom);
+                    return (
+                      <Badge
+                        key={tag}
+                        variant={style ? "solid" : "outline"}
+                        color="gray"
+                        onClick={() => setSelected(tag)}
+                        style={{
+                          cursor: "pointer",
+                          ...(style
+                            ? loudTagStyle(style)
+                            : { fontSize: "12px", padding: "3px 9px" }),
+                        }}
+                      >
+                        {tag}
+                        <Text style={{ opacity: 0.6, marginLeft: "4px" }}>{count}</Text>
+                      </Badge>
+                    );
+                  })}
+                </Flex>
+              )}
+            </Box>
+            <Text size="1" color="gray">
+              {tags.length} tag{tags.length === 1 ? "" : "s"}, most used first. A tag no track
+              carries isn't shown.
+            </Text>
+          </Flex>
+        )}
+
+        {selected === null && (
+          <Flex justify="end" mt="4">
+            <Dialog.Close>
+              <Button size="2" variant="soft" color="gray">
+                done
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        )}
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+});
+
+/**
+ * Someone's profile card, opened by tapping their tag on a track.
+ *
+ * Reads the profile roster rather than the user list, so a DJ who has since
+ * graduated and lost their account still has a name, a colour and a face.
+ * Controlled and mounted once per page, so rows stay cheap.
+ */
+const DjProfileCard = memo(({ kerb, onClose }: { kerb: string | null; onClose: () => void }) => {
+  const profiles = useQuery(api.djs.listDjProfiles);
+  const tracks = useQuery(api.djs.listTracks);
+
+  const profile = useMemo(() => profiles?.find((p) => p.kerb === kerb), [profiles, kerb]);
+  const trackCount = useMemo(
+    () => (kerb ? (tracks ?? []).filter((t) => t.dj === kerb).length : 0),
+    [tracks, kerb],
+  );
+
+  const name = profile?.djName || kerb || "";
+
+  return (
+    <Dialog.Root open={kerb !== null} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Content maxWidth="420px">
+        <Dialog.Title style={{ display: "none" }}>{name}</Dialog.Title>
+        <Flex gap="4" align="start">
+          <DjAvatar url={profile?.avatarUrl ?? null} size={88} label={name} />
+          <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+            {/* Their own colours if they picked a pair, otherwise their accent. */}
+            <Heading
+              size="6"
+              color={asBadgeColor(profile?.djColor)}
+              style={
+                profile?.djTag
+                  ? {
+                      color: profile.djTag.bg,
+                      textShadow: profile.djTag.glow
+                        ? `0 0 14px rgba(${hexToRgb(profile.djTag.bg)}, 0.7)`
+                        : undefined,
+                      wordBreak: "break-word",
+                    }
+                  : { wordBreak: "break-word" }
+              }
+            >
+              {name}
+            </Heading>
+            <Text size="2" color="gray">
+              {kerb}
+            </Text>
+            <Text size="1" color="gray" style={{ opacity: 0.7 }}>
+              {trackCount} track{trackCount === 1 ? "" : "s"} in the library
+            </Text>
+          </Flex>
+        </Flex>
+
+        {profile?.djBio ? (
+          <Text as="p" size="2" mt="4" style={{ whiteSpace: "pre-wrap" }}>
+            {profile.djBio}
+          </Text>
+        ) : (
+          <Text as="p" size="2" color="gray" mt="4">
+            No bio yet.
+          </Text>
+        )}
+
+        <Flex justify="end" mt="4">
+          <Dialog.Close>
+            <Button size="1" variant="soft" color="gray">
+              close
+            </Button>
+          </Dialog.Close>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+});
+
+/**
+ * Your own tag at the foot of the sidebar. Clicking it shows your card the way
+ * everyone else sees it; changing it is the DJ SETTINGS link above.
+ */
+const MyDjTag = memo(() => {
+  const me = useQuery(api.djs.myDjSettings);
+  const [open, setOpen] = useState(false);
+  if (!me) return null;
+
+  const tag =
+    me.tagBg && me.tagFg ? { bg: me.tagBg, fg: me.tagFg, glow: me.tagGlow } : null;
+
+  return (
+    <>
+      <Button
+        size="1"
+        radius="full"
+        variant="surface"
+        color={asBadgeColor(me.djColor)}
+        onClick={() => setOpen(true)}
+        style={tag ? djTagStyle(tag) : undefined}
+      >
+        {me.djName || me.kerb}
+      </Button>
+      <DjProfileCard kerb={open ? me.kerb : null} onClose={() => setOpen(false)} />
+    </>
+  );
+});
+
 const DjSettingsDialog = memo(() => {
   const me = useQuery(api.djs.myDjSettings);
   const save = useMutation(api.djs.setMyDjSettings);
+  const generateUploadUrl = useMutation(api.djs.generateUploadUrl);
+  const setAvatar = useMutation(api.djs.setMyDjAvatar);
+  const clearAvatar = useMutation(api.djs.clearMyDjAvatar);
 
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [bioDraft, setBioDraft] = useState<string | null>(null);
   const [colorDraft, setColorDraft] = useState<string | null>(null);
+  /** null = not touched, "" = back to the accent, hex = a custom pair. */
+  const [bgDraft, setBgDraft] = useState<string | null>(null);
+  const [fgDraft, setFgDraft] = useState<string | null>(null);
+  const [glowDraft, setGlowDraft] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
 
   const name = nameDraft ?? me?.djName ?? "";
+  const bio = bioDraft ?? me?.djBio ?? "";
   const color = colorDraft ?? me?.djColor ?? "";
+  const bg = bgDraft ?? me?.tagBg ?? "";
+  const fg = fgDraft ?? me?.tagFg ?? "";
+  const glow = glowDraft ?? me?.tagGlow ?? false;
+  const custom = bg !== "" && fg !== "";
   const preview = name.trim() || me?.kerb || "you";
+
+  const reset = () => {
+    setNameDraft(null);
+    setBioDraft(null);
+    setColorDraft(null);
+    setBgDraft(null);
+    setFgDraft(null);
+    setGlowDraft(null);
+    setError(null);
+  };
 
   const commit = async () => {
     setSaving(true);
     try {
-      await save({ djName: name, djColor: color });
-      setNameDraft(null);
-      setColorDraft(null);
+      await save({
+        djName: name,
+        djColor: color,
+        djBio: bio,
+        tagBg: bg,
+        tagFg: fg,
+        tagGlow: glow,
+      });
+      reset();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Same flow as a track's cover art: upload, then point the profile at it. */
+  const uploadAvatar = async (file: File) => {
+    setError(null);
+    if (!file.type.startsWith("image/")) {
+      setError("That isn't an image.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Pictures have to be under 10 MB.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) throw new Error(`upload failed (${res.status})`);
+      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+      await setAvatar({ storageId });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't set that picture.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog.Root
-      onOpenChange={(open) => {
-        if (!open) {
-          setNameDraft(null);
-          setColorDraft(null);
-        }
-      }}
-    >
+    <Dialog.Root onOpenChange={(open) => !open && reset()}>
       <Dialog.Trigger>
-        <Button size="1" radius="full" variant="surface" color={asBadgeColor(me?.djColor)}>
-          {me?.djName || me?.kerb || "DJ settings"}
+        <Button size="1" variant="ghost" color="gray" style={SIDEBAR_LINK}>
+          DJ SETTINGS
         </Button>
       </Dialog.Trigger>
-      <Dialog.Content maxWidth="480px">
+      <Dialog.Content maxWidth="560px">
         <Dialog.Title>DJ settings</Dialog.Title>
         <Dialog.Description size="2" color="gray" mb="4">
-          How you're credited on every track you add, and the colour your tag gets.
+          How you're credited on every track you add, and what people see when they tap your tag.
         </Dialog.Description>
 
-        <Flex direction="column" gap="4">
-          <Flex direction="column" gap="1">
-            <Text size="2" weight="bold">
-              Name
-            </Text>
-            <TextField.Root
-              placeholder={me?.kerb ?? "kerb"}
-              value={name}
-              maxLength={40}
-              onChange={(e) => setNameDraft(e.target.value)}
+        <Flex gap="4" align="start">
+          {/* Picture on the left, same shape as editing a track's cover. */}
+          <Flex direction="column" gap="1" align="center">
+            <DjAvatar
+              url={me?.avatarUrl ?? null}
+              size={96}
+              label={preview}
+              onClick={() => avatarInput.current?.click()}
             />
-            <Text size="1" color="gray">
-              Blank uses your kerb{me?.kerb ? ` (${me.kerb})` : ""}. Renaming updates your existing
-              tracks too — they're stored against your kerb, not the name.
-            </Text>
+            <input
+              ref={avatarInput}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadAvatar(f);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={() => avatarInput.current?.click()}
+            >
+              {me?.avatarUrl ? "change" : "add picture"}
+            </Button>
+            {me?.avatarUrl && (
+              <Button
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={() => void clearAvatar()}
+                style={{ opacity: 0.6 }}
+              >
+                remove
+              </Button>
+            )}
           </Flex>
 
-          <Flex direction="column" gap="2">
-            <Text size="2" weight="bold">
-              Tag colour
-            </Text>
-            <Flex gap="2" wrap="wrap">
-              {/* Each swatch shows the actual tag, so you pick what you'll see. */}
+          <Flex direction="column" gap="4" style={{ flex: "1 1 auto", minWidth: 0 }}>
+            <Flex direction="column" gap="1">
+              <Text size="2" weight="bold">
+                Name
+              </Text>
+              <TextField.Root
+                placeholder={me?.kerb ?? "kerb"}
+                value={name}
+                maxLength={40}
+                onChange={(e) => setNameDraft(e.target.value)}
+              />
+              <Text size="1" color="gray">
+                Blank uses your kerb{me?.kerb ? ` (${me.kerb})` : ""}. Renaming updates your
+                existing tracks too — they're stored against your kerb, not the name, so they stay
+                yours even after you graduate.
+              </Text>
+            </Flex>
+
+            <Flex direction="column" gap="1">
+              <Text size="2" weight="bold">
+                Bio
+              </Text>
+              <TextArea
+                placeholder="what you play, where you play it, whatever"
+                value={bio}
+                maxLength={280}
+                rows={3}
+                onChange={(e) => setBioDraft(e.target.value)}
+              />
+              <Text size="1" color="gray">
+                {280 - bio.length} left. Shown when someone taps your tag on a track.
+              </Text>
+            </Flex>
+          </Flex>
+        </Flex>
+
+        <Flex direction="column" gap="2" mt="4">
+          <Text size="2" weight="bold">
+            Tag colour
+          </Text>
+          <Flex gap="2" wrap="wrap">
+            {/* Each swatch shows the actual tag, so you pick what you'll see. */}
+            <Badge
+              variant="soft"
+              onClick={() => {
+                setColorDraft("");
+                setBgDraft("");
+                setFgDraft("");
+              }}
+              style={{
+                cursor: "pointer",
+                outline: color === "" && !custom ? "2px solid var(--gray-12)" : undefined,
+              }}
+            >
+              {preview}
+            </Badge>
+            {DJ_COLORS.map((c) => (
               <Badge
+                key={c}
+                color={c}
                 variant="soft"
-                onClick={() => setColorDraft("")}
+                onClick={() => {
+                  setColorDraft(c);
+                  // Picking an accent drops a custom pair, or it would win.
+                  setBgDraft("");
+                  setFgDraft("");
+                }}
                 style={{
                   cursor: "pointer",
-                  outline: color === "" ? "2px solid var(--gray-12)" : undefined,
+                  outline: color === c && !custom ? "2px solid var(--gray-12)" : undefined,
                 }}
               >
                 {preview}
               </Badge>
-              {DJ_COLORS.map((c) => (
-                <Badge
-                  key={c}
-                  color={c}
-                  variant="soft"
-                  onClick={() => setColorDraft(c)}
-                  style={{
-                    cursor: "pointer",
-                    outline: color === c ? "2px solid var(--gray-12)" : undefined,
+            ))}
+          </Flex>
+          <Text size="1" color="gray">
+            Used for your tag on every track and for your chip in the DJ filter.
+          </Text>
+        </Flex>
+
+        <Flex direction="column" gap="2" mt="4">
+          <Text size="2" weight="bold">
+            Or pick your own
+          </Text>
+          <Flex gap="4" wrap="wrap" align="end">
+            <Flex direction="column" gap="1">
+              <Text size="1" color="gray">
+                Bubble
+              </Text>
+              <Flex align="center" gap="2">
+                <input
+                  type="color"
+                  value={bg || "#FF6A00"}
+                  onChange={(e) => {
+                    setBgDraft(e.target.value);
+                    // Both halves or neither, so a tag is never half-styled.
+                    if (fg === "") setFgDraft("#1A1A1A");
                   }}
-                >
-                  {preview}
-                </Badge>
-              ))}
+                  style={{ width: 44, height: 28, border: "none", background: "none" }}
+                />
+                <Text size="1" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {(bg || "—").toUpperCase()}
+                </Text>
+              </Flex>
             </Flex>
-            <Text size="1" color="gray">
-              Used for your tag on every track and for your chip in the DJ filter.
-            </Text>
+
+            <Flex direction="column" gap="1">
+              <Text size="1" color="gray">
+                Letters
+              </Text>
+              <Flex align="center" gap="2">
+                <input
+                  type="color"
+                  value={fg || "#1A1A1A"}
+                  onChange={(e) => {
+                    setFgDraft(e.target.value);
+                    if (bg === "") setBgDraft("#FF6A00");
+                  }}
+                  style={{ width: 44, height: 28, border: "none", background: "none" }}
+                />
+                <Text size="1" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {(fg || "—").toUpperCase()}
+                </Text>
+              </Flex>
+            </Flex>
+
+            <Flex direction="column" gap="1">
+              <Text size="1" color="gray">
+                Glow
+              </Text>
+              <Text as="label" size="2">
+                <Flex align="center" gap="2" style={{ height: "28px" }}>
+                  <Checkbox
+                    checked={glow}
+                    disabled={!custom}
+                    onCheckedChange={(v) => setGlowDraft(v === true)}
+                  />
+                  obnoxious
+                </Flex>
+              </Text>
+            </Flex>
+
+            <Flex direction="column" gap="1">
+              <Text size="1" color="gray">
+                Preview
+              </Text>
+              <Badge
+                variant="soft"
+                color={asBadgeColor(color)}
+                style={custom ? djTagStyle({ bg, fg, glow }) : undefined}
+              >
+                {preview}
+              </Badge>
+            </Flex>
+
+            {custom && (
+              <Button
+                size="1"
+                variant="ghost"
+                color="gray"
+                onClick={() => {
+                  setBgDraft("");
+                  setFgDraft("");
+                }}
+              >
+                back to accent
+              </Button>
+            )}
           </Flex>
         </Flex>
+
+        {error && (
+          <Text size="1" color="red" mt="3" as="p">
+            {error}
+          </Text>
+        )}
 
         <Flex justify="end" gap="2" mt="4">
           <Dialog.Close>
@@ -2090,11 +3100,14 @@ const TrackEditDialog = memo(
     onSave,
     onSetCover,
     onDetectBpm,
+    triggerRef,
   }: {
     track: Track;
     onSave: (edits: TrackEdits) => void;
     onSetCover: (file: File) => void;
     onDetectBpm: () => Promise<number | undefined>;
+    /** Lets the row open this dialog from a tag rather than the pencil. */
+    triggerRef?: React.Ref<HTMLButtonElement>;
   }) => {
     const coverInput = useRef<HTMLInputElement | null>(null);
     const [detecting, setDetecting] = useState(false);
@@ -2130,7 +3143,7 @@ const TrackEditDialog = memo(
     return (
       <Dialog.Root onOpenChange={(open) => open && reset()}>
         <Dialog.Trigger>
-          <IconButton size="1" variant="soft" color="gray" aria-label="Edit track">
+          <IconButton size="1" variant="soft" color="gray" aria-label="Edit track" ref={triggerRef}>
             <PencilIcon />
           </IconButton>
         </Dialog.Trigger>
@@ -2223,7 +3236,7 @@ const TrackEditDialog = memo(
                 />
               </Field>
             </Flex>
-            <Field label="Genres">
+            <Field label="Tags">
               <TextField.Root
                 value={genres}
                 placeholder="comma separated, e.g. Baile Funk, Jersey Club"
@@ -2231,7 +3244,7 @@ const TrackEditDialog = memo(
               />
             </Field>
             <Text size="1" color="gray">
-              Separate genres with commas. Tags get normalized, so "ukgarage" and "UK Garage" end up
+              Separate tags with commas. Tags get normalized, so "ukgarage" and "UK Garage" end up
               the same one — but anything you type by hand is kept as-is.
             </Text>
           </Flex>
@@ -2753,12 +3766,11 @@ const PlaylistSidebar = memo(
           </Button>
         )}
 
-        <Flex direction="column" gap="1" mt="auto" pt="3">
+        <Flex direction="column" gap="2" align="start" mt="auto" pt="3">
           <Separator size="4" />
-          <Text size="1" color="gray" style={{ opacity: 0.6 }}>
-            DJ SETTINGS
-          </Text>
           <DjSettingsDialog />
+          <TagSettingsDialog />
+          <MyDjTag />
         </Flex>
       </Flex>
     );

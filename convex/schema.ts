@@ -52,12 +52,11 @@ export default defineSchema({
     affiliation: AFFILIATION_VALIDATOR,
     isAdmin: v.boolean(),
     /**
-     * Display name on the DJs library. Tracks are keyed by kerb, and this is
-     * resolved at read time, so changing it renames a DJ's whole back
-     * catalogue rather than just their next upload. Falls back to the kerb.
+     * Legacy home of the DJ display name and colour, before profiles moved to
+     * djProfiles so they could outlive the account. Nothing reads these; they
+     * stay in the schema only so existing rows still validate.
      */
     djName: v.optional(v.string()),
-    /** Radix accent name used for this DJ's tag, e.g. "cyan". */
     djColor: v.optional(v.string()),
   }).index("by_email", ["email"]),
 
@@ -150,6 +149,27 @@ export default defineSchema({
     .index("by_dj", ["dj"])
     .index("by_uploadedAt", ["uploadedAt"]),
 
+  // A DJ's identity on the library: name, tag colour, bio, picture.
+  //
+  // Keyed by kerb and deliberately kept off the user record, for the same
+  // reason tracks are: someone who graduates loses their account, and their
+  // back catalogue should still carry their name, colour and face rather than
+  // falling back to a bare kerb.
+  djProfiles: defineTable({
+    kerb: v.string(),
+    djName: v.optional(v.string()),
+    /** Radix accent name used for this DJ's tag, e.g. "cyan". */
+    djColor: v.optional(v.string()),
+    djBio: v.optional(v.string()),
+    avatarId: v.optional(v.id("_storage")),
+    /** Hand-picked tag colours, which win over djColor when set. */
+    tagBg: v.optional(v.string()),
+    tagFg: v.optional(v.string()),
+    /** Whether the tag glows, the same option genre tags get. */
+    tagGlow: v.optional(v.boolean()),
+    updatedAt: v.number(),
+  }).index("by_kerb", ["kerb"]),
+
   // Shared playlists over the DJ library. Anyone in PUTZ can make one, and
   // membership is a join table so a track can sit in several playlists and
   // deleting a playlist never touches the audio.
@@ -171,6 +191,16 @@ export default defineSchema({
     .index("by_playlist", ["playlistId"])
     .index("by_playlist_track", ["playlistId", "trackId"])
     .index("by_track", ["trackId"]),
+
+  // Per-tag styling, so a genre can be given house colours. Only tags that
+  // have been customised get a row; everything else falls back to the built-in
+  // rules and then to the plain outline.
+  djTagStyles: defineTable({
+    tag: v.string(),
+    bg: v.optional(v.string()), // hex, e.g. "#FF6A00"
+    fg: v.optional(v.string()),
+    glow: v.optional(v.boolean()),
+  }).index("by_tag", ["tag"]),
 
   // Rip requests. Serverless can't run yt-dlp/ffmpeg, so a helper on a DJ's
   // own machine polls for pending rows, rips, uploads, and marks them done.
