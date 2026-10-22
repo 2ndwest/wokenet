@@ -400,6 +400,13 @@ export const DJs = memo(() => {
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [shuffle, setShuffle] = useState(false);
+  /**
+   * The order shuffle will play in, fixed when shuffle is switched on. A
+   * permutation rather than a random pick each time, so the queue has a real
+   * order: previous goes back where you came from, and nothing repeats until
+   * the list is exhausted.
+   */
+  const [shuffleOrder, setShuffleOrder] = useState<Id<"djTracks">[]>([]);
   const [sortBy, setSortBy] = useState<SortMode>("alphabetical");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   // Mirrored from the <audio> element so the seek slider can drive it.
@@ -600,9 +607,13 @@ export const DJs = memo(() => {
       if (!nowPlaying) return;
 
       let next: Track | undefined;
-      if (shuffle) {
-        const pool = ordered.filter((t) => t._id !== nowPlaying._id);
-        next = pool[Math.floor(Math.random() * pool.length)];
+      if (shuffle && shuffleOrder.length > 0) {
+        // Walk the shuffled queue, skipping anything filtered out since.
+        const visible = new Set(ordered.map((t) => t._id));
+        const queue = shuffleOrder.filter((id) => visible.has(id));
+        const i = queue.indexOf(nowPlaying._id);
+        const nextId = i >= 0 ? queue[i + direction] : queue[0];
+        next = ordered.find((t) => t._id === nextId);
       } else {
         const i = ordered.findIndex((t) => t._id === nowPlaying._id);
         next = i >= 0 ? ordered[i + direction] : undefined;
@@ -611,7 +622,7 @@ export const DJs = memo(() => {
       if (!next) return;
       void playTrack(next);
     },
-    [ordered, nowPlaying, playTrack, shuffle],
+    [ordered, nowPlaying, playTrack, shuffle, shuffleOrder],
   );
 
   /**
@@ -635,12 +646,24 @@ export const DJs = memo(() => {
     step(1);
   }, [ordered, nowPlaying, shuffle, step]);
 
-  /** Kick off playback from a random track in whatever is on screen. */
-  const shufflePlay = useCallback(async () => {
-    if (ordered.length === 0) return;
+  /**
+   * Switch shuffle on or off. Turning it on fixes a fresh queue order over
+   * whatever is currently on screen; it never interrupts what's playing, it
+   * only changes what comes next.
+   */
+  const toggleShuffle = useCallback(() => {
+    if (shuffle) {
+      setShuffle(false);
+      return;
+    }
+    const ids = ordered.map((t) => t._id);
+    for (let i = ids.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    setShuffleOrder(ids);
     setShuffle(true);
-    await playTrack(ordered[Math.floor(Math.random() * ordered.length)]);
-  }, [ordered, playTrack]);
+  }, [ordered, shuffle]);
 
   const download = useCallback(
     async (track: Track) => {
@@ -1447,7 +1470,7 @@ export const DJs = memo(() => {
                   radius="full"
                   variant={shuffle ? "solid" : "surface"}
                   disabled={ordered.length === 0}
-                  onClick={() => void shufflePlay()}
+                  onClick={toggleShuffle}
                 >
                   Shuffle
                 </Button>
@@ -1627,7 +1650,7 @@ export const DJs = memo(() => {
                 radius="full"
                 variant={shuffle ? "solid" : "soft"}
                 color={shuffle ? undefined : "gray"}
-                onClick={() => setShuffle((v) => !v)}
+                onClick={toggleShuffle}
                 title={shuffle ? "Shuffle on" : "Shuffle off"}
                 aria-label="Toggle shuffle"
               >
