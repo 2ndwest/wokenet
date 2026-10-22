@@ -266,15 +266,21 @@ const SkipIcon = ({ direction }: { direction: "back" | "forward" }) => (
  * House tags that get to shout. Fixed colours rather than theme tokens, so
  * they look the same whichever theme you're on.
  */
-export type TagStyle = { bg: string; fg: string; glow: boolean };
+export type TagStyle = {
+  bg: string;
+  fg: string;
+  glow: boolean;
+  /** House tags only: shown in capitals. A tag someone colours keeps its own case. */
+  shout?: boolean;
+};
 
 const BUILTIN_LOUD_TAGS: { test: RegExp; style: TagStyle }[] = [
   // Greek letters or their names, as well as the house name itself.
-  { test: /putz|[πτζ]|\b(pi|tau|zeta)\b/i, style: { bg: "#FF6A00", fg: "#1A1A1A", glow: true } },
+  { test: /putz|[πτζ]|\b(pi|tau|zeta)\b/i, style: { bg: "#FF6A00", fg: "#1A1A1A", glow: true, shout: true } },
   // \b41w?\b so it matches "41" and "41W" as words, not any stray 41.
-  { test: /\b41w?\b/i, style: { bg: "#9B4DE0", fg: "#000000", glow: true } },
-  { test: /florey|krotus/i, style: { bg: "#E5342E", fg: "#000000", glow: true } },
-  { test: /tetazoo|squanch/i, style: { bg: "#3DD400", fg: "#FFFFFF", glow: true } },
+  { test: /\b41w?\b/i, style: { bg: "#9B4DE0", fg: "#000000", glow: true, shout: true } },
+  { test: /florey|krotus/i, style: { bg: "#E5342E", fg: "#000000", glow: true, shout: true } },
+  { test: /tetazoo|squanch/i, style: { bg: "#3DD400", fg: "#FFFFFF", glow: true, shout: true } },
 ];
 
 /** A tag's own styling wins; otherwise fall back to the house rules. */
@@ -282,9 +288,11 @@ export function resolveTagStyle(
   genre: string,
   custom: Map<string, TagStyle>,
 ): TagStyle | undefined {
+  const house = BUILTIN_LOUD_TAGS.find((t) => t.test.test(genre))?.style;
   const own = custom.get(genre);
-  if (own) return own;
-  return BUILTIN_LOUD_TAGS.find((t) => t.test.test(genre))?.style;
+  // A recoloured house tag still shouts.
+  if (own) return house ? { ...own, shout: true } : own;
+  return house;
 }
 
 const hexToRgb = (hex: string): string => {
@@ -299,7 +307,7 @@ const loudTagStyle = (t: TagStyle): React.CSSProperties => ({
   color: t.fg,
   fontWeight: 800,
   letterSpacing: "0.4px",
-  textTransform: "uppercase",
+  textTransform: t.shout ? "uppercase" : undefined,
   boxShadow: t.glow ? `0 0 10px rgba(${hexToRgb(t.bg)}, 0.75)` : undefined,
 });
 
@@ -364,8 +372,8 @@ const FilterChip = memo(
               backgroundColor: loud.bg,
               color: loud.fg,
               fontWeight: 800,
-              boxShadow:
-                active && loud.glow ? `0 0 10px rgba(${hexToRgb(loud.bg)}, 0.75)` : undefined,
+              // Its own colours don't change when selected, so it glows instead.
+              boxShadow: active ? `0 0 10px rgba(${hexToRgb(loud.bg)}, 0.75)` : undefined,
             }
           : { height: "24px" }
       }
@@ -413,6 +421,9 @@ const COLLAPSED_FACET_COUNT = 8;
  * that are currently filtering, so an active chip is never hidden behind
  * "show more".
  */
+/** Tags on fewer tracks than this don't get a chip in the filter bar. */
+const MIN_TAG_TRACKS = 2;
+
 const collapseFacet = <T extends [string, unknown]>(
   entries: T[],
   active: Set<string>,
@@ -737,8 +748,11 @@ export const DJs = memo(() => {
     }
     // Alphabetical, so a given genre is always in the same place. localeCompare
     // keeps accented names (Guarachatón) next to their unaccented neighbours.
-    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [scoped]);
+    // A one-off tag isn't worth a chip, unless it's selected and needs unticking.
+    return [...counts.entries()]
+      .filter(([g, n]) => n >= MIN_TAG_TRACKS || genreFilter.has(g))
+      .sort((a, b) => a[0].localeCompare(b[0]));
+  }, [scoped, genreFilter]);
 
   const visibleGenres = useMemo(
     () => collapseFacet(allGenres, genreFilter, showAllGenres),
@@ -1458,6 +1472,24 @@ export const DJs = memo(() => {
     [ripRequests],
   );
 
+  // Starts whatever is on screen, so there's a way to start playing without
+  // hunting for a row. Doubles as pause once it's going.
+  const playButton = (
+    <Button
+      size="1"
+      radius="full"
+      variant={playingHere && isPlaying ? "solid" : "surface"}
+      disabled={ordered.length === 0}
+      onClick={() => {
+        if (playingHere) togglePlayback();
+        else if (firstUp) void play(firstUp);
+      }}
+    >
+      <PlayIcon playing={playingHere && isPlaying} />
+      {playingHere && isPlaying ? "Pause" : "Play"}
+    </Button>
+  );
+
   return (
     <Flex width="100%" height="100%" style={{ minHeight: 0 }}>
       <PlaylistSidebar
@@ -1509,6 +1541,8 @@ export const DJs = memo(() => {
               <Heading size="8" truncate>
                 {activePlaylist ? activePlaylist.name : "Library"}
               </Heading>
+              {/* In a playlist, play sits by its name; in the library, with the actions. */}
+              {activePlaylist && <Box style={{ alignSelf: "center" }}>{playButton}</Box>}
               {activePlaylist?.description && (
                 <Text size="2" color="gray" style={{ opacity: 0.8 }}>
                   {activePlaylist.description}
@@ -1553,21 +1587,7 @@ export const DJs = memo(() => {
             />
             <UploadDialog onRun={(f, p) => void upload(f, p)} busy={busy !== null} />
             <LibraryImportDialog onRun={importLibrary} busy={busy !== null} />
-            {/* Starts whatever is on screen, so there's a way to start playing
-                without hunting for a row. Doubles as pause once it's going. */}
-            <Button
-              size="1"
-              radius="full"
-              variant={playingHere && isPlaying ? "solid" : "surface"}
-              disabled={ordered.length === 0}
-              onClick={() => {
-                if (playingHere) togglePlayback();
-                else if (firstUp) void play(firstUp);
-              }}
-            >
-              <PlayIcon playing={playingHere && isPlaying} />
-              {playingHere && isPlaying ? "Pause" : "Play"}
-            </Button>
+            {!activePlaylist && playButton}
             {user?.isAdmin && <DuplicatesDialog />}
             {activePlaylist && (
               <PlaylistSettingsDialog
@@ -1704,7 +1724,7 @@ export const DJs = memo(() => {
                   key={kerb}
                   active={djFilter.has(kerb)}
                   color={asBadgeColor(color)}
-                  loud={tag ? { ...tag, glow: false } : undefined}
+                  loud={tag ?? undefined}
                   count={count}
                   onClick={() => setDjFilter((s) => toggleIn(s, kerb))}
                 >
