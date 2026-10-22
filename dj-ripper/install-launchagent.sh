@@ -1,7 +1,10 @@
 #!/bin/bash
 # Installs a macOS LaunchAgent so ripper.py starts at login and restarts if it
-# dies. Reads config from the environment at install time and bakes it into the
-# plist, so set WOKENET_SITE_URL / DJ_RIPPER_SECRET / SC_OAUTH_TOKEN first.
+# dies.
+#
+# Config lives in ~/.wokenet-ripper.env rather than in the plist, so pointing
+# the ripper at a different deployment -- local today, production once it's
+# live -- is editing one line and restarting, not reinstalling.
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -9,12 +12,31 @@ PY="$HERE/venv/bin/python"
 LABEL="net.woke.djripper"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/wokenet-djripper.log"
+ENVFILE="$HOME/.wokenet-ripper.env"
 
 [ -x "$PY" ] || { echo "No venv found. Run: python3 -m venv venv && ./venv/bin/pip install -r requirements.txt"; exit 1; }
-[ -n "$WOKENET_SITE_URL" ] || { echo "Set WOKENET_SITE_URL first."; exit 1; }
-[ -n "$DJ_RIPPER_SECRET" ] || { echo "Set DJ_RIPPER_SECRET first."; exit 1; }
 
 KERB="${1:-$(id -un)}"
+
+# First install writes a template; after that the file is left alone, so
+# re-running never clobbers a secret you've already set.
+if [ ! -f "$ENVFILE" ]; then
+  cat > "$ENVFILE" <<ENV_EOF
+# wokenet ripper config. Restart after editing:
+#   launchctl kickstart -k gui/\$UID/$LABEL
+
+# Your Convex *site* URL -- the .convex.site one, not .convex.cloud.
+WOKENET_SITE_URL="${WOKENET_SITE_URL:-https://your-deployment.convex.site}"
+
+# Must match DJ_RIPPER_SECRET on that Convex deployment.
+DJ_RIPPER_SECRET="${DJ_RIPPER_SECRET:-}"
+
+# Optional: a SoundCloud token unlocks originals / 256k instead of a 160k cap.
+SC_OAUTH_TOKEN=""
+ENV_EOF
+  chmod 600 "$ENVFILE"
+  echo "wrote $ENVFILE"
+fi
 
 mkdir -p "$HOME/Library/LaunchAgents" "$(dirname "$LOG")"
 
@@ -26,18 +48,17 @@ cat > "$PLIST" <<PLIST_EOF
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$PY</string>
-    <string>$HERE/ripper.py</string>
-    <string>--me</string>
-    <string>$KERB</string>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>set -a; . "$ENVFILE"; set +a; exec "$PY" "$HERE/ripper.py" --me "$KERB"</string>
   </array>
-  <key>WorkingDirectory</key><string>$HERE</string>
+  <key>WorkingDirectory</key><string>/tmp</string>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>WOKENET_SITE_URL</key><string>$WOKENET_SITE_URL</string>
-    <key>DJ_RIPPER_SECRET</key><string>$DJ_RIPPER_SECRET</string>
-    <key>SC_OAUTH_TOKEN</key><string>${SC_OAUTH_TOKEN:-}</string>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Otherwise python buffers stdout into the log file and `tail -f`
+         shows nothing until the buffer fills. -->
+    <key>PYTHONUNBUFFERED</key><string>1</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -47,11 +68,11 @@ cat > "$PLIST" <<PLIST_EOF
 </plist>
 PLIST_EOF
 
-chmod 600 "$PLIST"   # it holds your secrets
+launchctl bootout "gui/$UID/$LABEL" 2>/dev/null || true
+launchctl bootstrap "gui/$UID" "$PLIST"
 
-launchctl unload "$PLIST" 2>/dev/null || true
-launchctl load "$PLIST"
-
-echo "installed $LABEL (running as '$KERB')"
+echo "installed $LABEL (crediting rips to '$KERB')"
+echo "  config:  $ENVFILE"
 echo "  logs:    tail -f $LOG"
-echo "  stop:    launchctl unload $PLIST"
+echo "  restart: launchctl kickstart -k gui/\$UID/$LABEL"
+echo "  stop:    launchctl bootout gui/\$UID/$LABEL"
