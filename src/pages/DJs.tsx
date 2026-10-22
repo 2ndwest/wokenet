@@ -303,14 +303,9 @@ const loudTagStyle = (t: TagStyle): React.CSSProperties => ({
   boxShadow: t.glow ? `0 0 10px rgba(${hexToRgb(t.bg)}, 0.75)` : undefined,
 });
 
-/** A DJ's name as coloured text: their bubble colour, glowing if the bubble does. */
+/** A DJ's name as coloured text: plain lettering in their bubble colour, no glow. */
 const djTextStyle = (tag: TagStyle | null): React.CSSProperties | undefined =>
-  tag
-    ? {
-        color: tag.bg,
-        textShadow: tag.glow ? `0 0 10px rgba(${hexToRgb(tag.bg)}, 0.7)` : undefined,
-      }
-    : undefined;
+  tag ? { color: tag.bg } : undefined;
 
 /** A DJ's own colours as inline style, or nothing if they use an accent. */
 const djTagStyle = (tag: TagStyle | null): React.CSSProperties =>
