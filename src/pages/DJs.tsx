@@ -1,4 +1,5 @@
 import {
+  AlertDialog,
   Badge,
   Box,
   Button,
@@ -939,6 +940,11 @@ export const DJs = memo(() => {
         libraryCount={tracks?.length ?? 0}
         onSelect={(id) => {
           setActivePlaylistId(id);
+          // Filters belong to the view you set them in: a genre that makes
+          // sense in the library may match nothing in a playlist, which just
+          // looks like an empty playlist. Start each one clean.
+          clearFilters();
+          setShowAllGenres(false);
           setSelected(new Set());
           setSelectMode(false);
         }}
@@ -1010,6 +1016,7 @@ export const DJs = memo(() => {
             />
             <UploadDialog onRun={(f, p) => void upload(f, p)} busy={busy !== null} />
             <LibraryImportDialog onRun={importLibrary} busy={busy !== null} />
+            {user?.isAdmin && <DuplicatesDialog />}
             {activePlaylist && (
               <PlaylistSettingsDialog
                 playlist={activePlaylist}
@@ -1336,7 +1343,7 @@ export const DJs = memo(() => {
                 track={track}
                 isCurrent={nowPlaying?._id === track._id}
                 isPlaying={isPlaying && nowPlaying?._id === track._id}
-                canDelete={!!user?.isAdmin}
+                canDelete
                 onPlay={() => void play(track)}
                 onDownload={() => void download(track)}
                 onDelete={() => void deleteTrack({ trackId: track._id })}
@@ -1695,9 +1702,37 @@ const TrackRow = memo(
                   <DownloadIcon />
                 </IconButton>
                 {canDelete && (
-                  <IconButton size="1" variant="soft" color="red" onClick={onDelete}>
-                    ✕
-                  </IconButton>
+                  <AlertDialog.Root>
+                    <AlertDialog.Trigger>
+                      <IconButton size="1" variant="soft" color="red" aria-label="Delete track">
+                        ✕
+                      </IconButton>
+                    </AlertDialog.Trigger>
+                    <AlertDialog.Content maxWidth="420px">
+                      <AlertDialog.Title>Delete this track?</AlertDialog.Title>
+                      <AlertDialog.Description size="2">
+                        <Text weight="bold">{track.title}</Text> will be removed from the library
+                        for everyone, along with its audio file and any playlists it's in. This
+                        can't be undone.
+                      </AlertDialog.Description>
+                      {/* Delete is pushed to the far left and Cancel sits
+                          where a confirm button normally would, so destroying
+                          something takes a deliberate move rather than a
+                          reflex click. */}
+                      <Flex gap="2" justify="between" mt="4">
+                        <AlertDialog.Action>
+                          <Button size="1" color="red" onClick={onDelete}>
+                            Delete
+                          </Button>
+                        </AlertDialog.Action>
+                        <AlertDialog.Cancel>
+                          <Button size="1" variant="soft" color="gray">
+                            Cancel
+                          </Button>
+                        </AlertDialog.Cancel>
+                      </Flex>
+                    </AlertDialog.Content>
+                  </AlertDialog.Root>
                 )}
               </>
             )}
@@ -2121,6 +2156,115 @@ const AddToPlaylistButton = memo(
     </Dialog.Root>
   ),
 );
+
+/**
+ * Shows what a duplicate merge would do, then runs it. Admin-only, since
+ * merging deletes the losing copies and their audio.
+ */
+const DuplicatesDialog = memo(() => {
+  const groups = useQuery(api.djs.findDuplicates);
+  const merge = useMutation(api.djs.mergeDuplicates);
+  const [result, setResult] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const toRemove = (groups ?? []).reduce((n, g) => n + g.drop.length, 0);
+
+  return (
+    <Dialog.Root onOpenChange={(open) => open && setResult(null)}>
+      <Dialog.Trigger>
+        <Button size="1" radius="full" variant="surface">
+          Duplicates{toRemove > 0 ? ` (${toRemove})` : ""}
+        </Button>
+      </Dialog.Trigger>
+      <Dialog.Content maxWidth="620px">
+        <Dialog.Title>Duplicate tracks</Dialog.Title>
+        <Dialog.Description size="2" color="gray" mb="4">
+          The same recording ingested more than once — matched on identical length and title, so
+          edits and remixes stay separate.
+        </Dialog.Description>
+
+        {groups === undefined ? (
+          <Text size="2" color="gray">
+            Checking…
+          </Text>
+        ) : groups.length === 0 ? (
+          <Text size="2" color="gray">
+            No duplicates found.
+          </Text>
+        ) : (
+          <>
+            <Text size="2" mb="2" as="p">
+              <Text weight="bold">{groups.length}</Text> groups, removing{" "}
+              <Text weight="bold">{toRemove}</Text> copies. The best quality copy of each is kept.
+            </Text>
+
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ maxHeight: 280, overflowY: "auto" }}
+              pr="2"
+            >
+              {groups.slice(0, 40).map((g, i) => (
+                <Flex key={i} direction="column" style={{ borderBottom: "1px solid var(--gray-4)" }} pb="1">
+                  <Text size="1" truncate>
+                    <Text weight="bold">keep</Text> {g.keep.title} —{" "}
+                    <Text color="green">{QUALITY_LABEL[g.keep.quality as Quality]}</Text>
+                  </Text>
+                  {g.drop.map((d, j) => (
+                    <Text key={j} size="1" color="gray" truncate style={{ opacity: 0.75 }}>
+                      drop {d.title} — {QUALITY_LABEL[d.quality as Quality]}
+                    </Text>
+                  ))}
+                </Flex>
+              ))}
+              {groups.length > 40 && (
+                <Text size="1" color="gray">
+                  …and {groups.length - 40} more
+                </Text>
+              )}
+            </Flex>
+
+            <Text size="1" color="gray" mt="3" as="p">
+              Genres from every copy are merged onto the one kept, and cues, BPM, key and cover art
+              are inherited where it's missing them. Playlist entries are re-pointed, so nothing
+              drops out of a playlist.
+            </Text>
+          </>
+        )}
+
+        {result && (
+          <Text size="2" mt="3" as="p">
+            {result}
+          </Text>
+        )}
+
+        <Flex justify="end" gap="2" mt="4">
+          <Dialog.Close>
+            <Button size="1" variant="soft" color="gray">
+              Close
+            </Button>
+          </Dialog.Close>
+          {(groups?.length ?? 0) > 0 && (
+            <Button
+              size="1"
+              color="red"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                void merge({})
+                  .then((r) => setResult(`Merged ${r.merged} groups, removed ${r.removed} copies.`))
+                  .catch(() => setResult("Couldn't merge — admin only."))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              {busy ? "merging…" : `Merge ${toRemove}`}
+            </Button>
+          )}
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+});
 
 /** Rename a playlist, change its blurb, or remove it. */
 const PlaylistSettingsDialog = memo(

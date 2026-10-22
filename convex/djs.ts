@@ -4,6 +4,7 @@ import { CUE_SOURCE_VALIDATOR, QUALITY_VALIDATOR } from "./schema";
 import { requireAdmin, requirePutz } from "./utils/auth";
 import { normalizeGenres, normalizeUserGenres } from "./utils/genres";
 import { normalizeKey } from "./utils/keys";
+import { groupDuplicates } from "./utils/duplicates";
 
 /**
  * Upload limits. Enforced here rather than only in the UI, because the
@@ -533,14 +534,160 @@ export const setAnalysis = mutation({
   },
 });
 
+// ---------------------------------------------------------------- duplicates
+
 /**
- * Admins only. Deleting destroys the stored file as well as the row, so it is
- * not something an ordinary member should be able to do to a shared library.
+ * Tracks that look like the same recording arriving more than once.
+ * Read-only: shows what a merge would do without doing it.
+ */
+export const findDuplicates = query({
+  args: {},
+  handler: async (ctx) => {
+    await requirePutz(ctx);
+    const tracks = await ctx.db.query("djTracks").collect();
+
+    return groupDuplicates(
+      tracks.map((t) => ({
+        _id: t._id,
+        title: t.title,
+        durationSec: t.durationSec,
+        quality: t.quality,
+        uploadedAt: t.uploadedAt,
+        dj: t.dj,
+      })),
+    ).map((g) => ({
+      keep: { title: g.keep.title, quality: g.keep.quality, dj: g.keep.dj },
+      drop: g.drop.map((d) => ({ title: d.title, quality: d.quality, dj: d.dj })),
+    }));
+  },
+});
+
+/**
+ * Merge duplicate groups: keep the best copy, fold everything useful into it,
+ * and delete the rest.
+ *
+ * Nothing is lost -- genres are unioned, and cues, analysis and cover art are
+ * inherited where the winner lacks them. Duplicates are matched on identical
+ * length, so cue positions remain valid across copies.
+ *
+ * Admin-only: it deletes tracks and their stored audio.
+ */
+export const mergeDuplicates = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+
+    const tracks = await ctx.db.query("djTracks").collect();
+    const byId = new Map(tracks.map((t) => [t._id as string, t]));
+    const groups = groupDuplicates(
+      tracks.map((t) => ({
+        _id: t._id,
+        title: t.title,
+        durationSec: t.durationSec,
+        quality: t.quality,
+        uploadedAt: t.uploadedAt,
+      })),
+    );
+
+    let merged = 0;
+    let removed = 0;
+
+    for (const group of groups) {
+      const keep = byId.get(group.keep._id);
+      const losers = group.drop.map((d) => byId.get(d._id)).filter((t) => !!t);
+      if (!keep || losers.length === 0) continue;
+
+      const patch: Record<string, unknown> = {};
+      const claimedCovers = new Set<string>();
+
+      // Tags are additive: every copy's genres survive on the winner.
+      const genres = new Set(keep.genres);
+      for (const l of losers) for (const g of l.genres) genres.add(g);
+      if (genres.size !== keep.genres.length) patch.genres = [...genres];
+
+      // Cues transfer only when the winner has none. Identical length means
+      // the positions still line up; prefer whichever copy has the most.
+      if ((keep.hotCues?.length ?? 0) === 0 && (keep.memoryCues?.length ?? 0) === 0) {
+        const best = losers
+          .filter((l) => (l.hotCues?.length ?? 0) + (l.memoryCues?.length ?? 0) > 0)
+          .sort(
+            (a, b) =>
+              (b.hotCues?.length ?? 0) +
+              (b.memoryCues?.length ?? 0) -
+              ((a.hotCues?.length ?? 0) + (a.memoryCues?.length ?? 0)),
+          )[0];
+        if (best) {
+          patch.hotCues = best.hotCues;
+          patch.memoryCues = best.memoryCues;
+          patch.cueSource = best.cueSource;
+        }
+      }
+
+      // Analysis and artwork fill gaps only; real analysis beats an estimate.
+      if (keep.bpm === undefined) {
+        const src =
+          losers.find((l) => l.bpm !== undefined && l.analysisSource === "tag") ??
+          losers.find((l) => l.bpm !== undefined);
+        if (src) {
+          patch.bpm = src.bpm;
+          patch.analysisSource = src.analysisSource;
+        }
+      }
+      if (!keep.musicalKey) {
+        const src = losers.find((l) => l.musicalKey);
+        if (src) patch.musicalKey = src.musicalKey;
+      }
+      if (!keep.coverId) {
+        const src = losers.find((l) => l.coverId);
+        if (src?.coverId) {
+          patch.coverId = src.coverId;
+          claimedCovers.add(src.coverId); // inherited, so don't delete it below
+        }
+      }
+
+      if (Object.keys(patch).length > 0) await ctx.db.patch(keep._id, patch);
+
+      for (const loser of losers) {
+        // Re-point playlist membership at the winner, without duplicating it.
+        const rows = await ctx.db
+          .query("djPlaylistTracks")
+          .withIndex("by_track", (q) => q.eq("trackId", loser._id))
+          .collect();
+
+        for (const row of rows) {
+          const existing = await ctx.db
+            .query("djPlaylistTracks")
+            .withIndex("by_playlist_track", (q) =>
+              q.eq("playlistId", row.playlistId).eq("trackId", keep._id),
+            )
+            .unique();
+          if (existing) await ctx.db.delete(row._id);
+          else await ctx.db.patch(row._id, { trackId: keep._id });
+        }
+
+        await ctx.storage.delete(loser.storageId).catch(() => {});
+        if (loser.coverId && !claimedCovers.has(loser.coverId)) {
+          await ctx.storage.delete(loser.coverId).catch(() => {});
+        }
+        await ctx.db.delete(loser._id);
+        removed += 1;
+      }
+      merged += 1;
+    }
+
+    return { merged, removed };
+  },
+});
+
+/**
+ * Any member can delete. It destroys the stored file as well as the row, so
+ * the UI confirms first -- the library is small and trusted enough that
+ * curation is worth more than gatekeeping.
  */
 export const deleteTrack = mutation({
   args: { trackId: v.id("djTracks") },
   handler: async (ctx, { trackId }) => {
-    await requireAdmin(ctx);
+    await requirePutz(ctx);
     const track = await ctx.db.get(trackId);
     if (!track) return;
 
