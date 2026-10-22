@@ -14,6 +14,7 @@ import { memo, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { formatTimestamp } from "../utils/time";
+import { useDisplaySettings } from "../utils/useDisplaySettings";
 import { Id } from "../../convex/_generated/dataModel";
 
 type SortMode = "recent" | "top";
@@ -31,6 +32,7 @@ const UpvoteButton = ({
 }) => {
   const toggleVote = useMutation(api.shitMyDadSays.toggleVote);
   const [isVoting, setIsVoting] = useState(false);
+  const { accent } = useDisplaySettings();
 
   const handleVote = async () => {
     setIsVoting(true);
@@ -45,7 +47,7 @@ const UpvoteButton = ({
     return (
       <Button
         variant={hasVoted ? "solid" : "soft"}
-        color={hasVoted ? "orange" : "gray"}
+        color={hasVoted ? accent : "gray"}
         onClick={handleVote}
         disabled={isVoting}
         style={{ cursor: "pointer" }}
@@ -63,7 +65,7 @@ const UpvoteButton = ({
       <IconButton
         size="1"
         variant={hasVoted ? "solid" : "soft"}
-        color={hasVoted ? "orange" : "gray"}
+        color={hasVoted ? accent : "gray"}
         onClick={handleVote}
         disabled={isVoting}
         style={{ cursor: "pointer" }}
@@ -72,7 +74,7 @@ const UpvoteButton = ({
           <path d="M8 4L3 9h3v4h4V9h3L8 4z" />
         </svg>
       </IconButton>
-      <Text size="2" color={hasVoted ? "orange" : "gray"} weight={hasVoted ? "bold" : "regular"}>
+      <Text size="2" color={hasVoted ? accent : "gray"} weight={hasVoted ? "bold" : "regular"}>
         {voteCount}
       </Text>
     </Flex>
@@ -82,6 +84,7 @@ const UpvoteButton = ({
 export const ShitMyDadSays = memo(() => {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const sayings = useQuery(api.shitMyDadSays.getSayings, { sortBy: sortMode });
+  const { accent } = useDisplaySettings();
 
   const { latest, rest } = useMemo(() => {
     const list = sayings ?? [];
@@ -115,7 +118,7 @@ export const ShitMyDadSays = memo(() => {
                 style={{
                   border: "1px solid var(--gray-4)",
                   background:
-                    "radial-gradient(1200px 300px at -5% 0%, rgba(255, 102, 0, 0.12), transparent), linear-gradient(180deg, rgba(255,255,255,0.02), transparent)",
+                    "radial-gradient(1200px 300px at -5% 0%, rgba(var(--banner-rgb), 0.12), transparent), linear-gradient(180deg, rgba(255,255,255,0.02), transparent)",
                   boxShadow:
                     "0 20px 50px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(255,255,255,0.05)",
                 }}
@@ -137,7 +140,7 @@ export const ShitMyDadSays = memo(() => {
                     <Flex align="center" gap="3" wrap="wrap">
                       {sortMode === "recent" && (
                         <>
-                          <Badge color="orange" variant="soft">
+                          <Badge color={accent} variant="soft">
                             Latest
                           </Badge>
                           <Separator orientation="vertical" />
@@ -145,7 +148,7 @@ export const ShitMyDadSays = memo(() => {
                       )}
                       {sortMode === "top" && (
                         <>
-                          <Badge color="orange" variant="soft">
+                          <Badge color={accent} variant="soft">
                             #1
                           </Badge>
                           <Separator orientation="vertical" />

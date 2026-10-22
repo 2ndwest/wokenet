@@ -305,9 +305,9 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
       overflow="hidden"
       style={{
         containerType: "size",
-        backgroundColor: "rgba(255, 102, 0, 0.15)",
-        borderTop: "1px solid rgba(255, 102, 0, 0.3)",
-        borderBottom: "1px solid rgba(255, 102, 0, 0.3)",
+        backgroundColor: "rgba(var(--banner-rgb), 0.15)",
+        borderTop: "1px solid rgba(var(--banner-rgb), 0.3)",
+        borderBottom: "1px solid rgba(var(--banner-rgb), 0.3)",
       }}
     >
       {blackoutMessage ? (
@@ -341,7 +341,7 @@ const SMDSMarquee = memo(({ height }: { height: string }) => {
                 }}
               >
                 <span style={{ fontStyle: "italic", color: "white" }}>"{quote.quote}"</span>
-                <span style={{ color: "rgba(255, 102, 0, 0.75)" }}>— {quote.quoted}</span>
+                <span style={{ color: "rgba(var(--banner-rgb), 0.75)" }}>— {quote.quoted}</span>
               </span>
             ))}
           </span>
