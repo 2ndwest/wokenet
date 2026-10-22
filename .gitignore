@@ -26,3 +26,8 @@ dist-ssr
 .vercel
 .wrangler
 .claude/settings.local.json
+
+# Python helper caches
+__pycache__/
+*.pyc
+dj-ripper/venv/

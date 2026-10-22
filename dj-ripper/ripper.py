@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""
+Serves rip requests from the wokenet DJs page on your own machine.
+
+Ripping needs yt-dlp and ffmpeg, which Convex and Vercel can't run, so this
+polls wokenet for queued requests, does the work locally, and uploads the
+results. It only makes outbound requests -- nothing listens on a port, and your
+SoundCloud token never leaves this machine.
+
+    export WOKENET_SITE_URL="https://<your-deployment>.convex.site"
+    export DJ_RIPPER_SECRET="<same secret as on the Convex dashboard>"
+    export SC_OAUTH_TOKEN="2-..."        # optional, unlocks originals / 256k
+    python3 ripper.py --me nicorios
+
+Requests queue up while this isn't running and get picked up when it starts.
+"""
+
+from __future__ import annotations
+
+import argparse
+import shutil
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import wokenet
+
+try:
+    import putz_djs
+except SystemExit:  # the module exits if yt-dlp is missing
+    raise SystemExit("yt-dlp is not installed. Run: pip install -r requirements.txt")
+
+
+def rip_one(cfg: wokenet.Config, request: dict, token: str | None, pace: float) -> tuple[int, str]:
+    """Rip everything behind one URL and upload it. Returns (count, message)."""
+    url = request["url"]
+    credit = request.get("requestedBy", "unknown")
+
+    tracks, name, is_playlist = putz_djs.resolve_input(url, token)
+    putz_djs.fill_titles(tracks, token)
+    print(f"    {name}: {len(tracks)} track(s)")
+
+    uploaded = 0
+    drm = 0
+    failed = 0
+    workdir = Path(tempfile.mkdtemp(prefix="wokenet-rip-"))
+
+    try:
+        for idx, track in enumerate(tracks, start=1):
+            label = (track.get("title") or f"track {track['id']}")[:44]
+            print(f"    [{idx:>3}/{len(tracks)}] {label:<46}", end=" ", flush=True)
+            try:
+                path, fmt = putz_djs.download_one(track, idx, token, workdir, False)
+                if path is None:
+                    raise RuntimeError("no file produced")
+
+                payload = wokenet.track_payload(path, credit)
+                # The rip knows the permalink even when the file's tags don't.
+                payload.setdefault("sourceUrl", url if not is_playlist else payload.get("sourceUrl"))
+                payload["storageId"] = wokenet.upload_file(cfg, path)
+
+                cover_id = wokenet.upload_cover(cfg, path, workdir)
+                if cover_id:
+                    payload["coverId"] = cover_id
+
+                result = wokenet.register_track(cfg, payload)
+
+                print("already in library" if result.get("skipped") else f"OK  {fmt}")
+                if not result.get("skipped"):
+                    uploaded += 1
+                path.unlink(missing_ok=True)
+            except Exception as exc:
+                kind = putz_djs.classify(str(exc))
+                if kind == "drm":
+                    drm += 1
+                    print("DRM (skipped)")
+                else:
+                    failed += 1
+                    print(f"failed: {exc}"[:90])
+            if pace:
+                time.sleep(pace)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    parts = [f"{uploaded} uploaded"]
+    if drm:
+        parts.append(f"{drm} DRM-locked")
+    if failed:
+        parts.append(f"{failed} failed")
+    return uploaded, ", ".join(parts)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Serve wokenet rip requests from this machine.")
+    ap.add_argument("--me", required=True, help="your kerb, recorded as the machine that ripped")
+    ap.add_argument("--site-url", help="Convex site URL (or set WOKENET_SITE_URL)")
+    ap.add_argument("--secret", help="DJ_RIPPER_SECRET (or set the env var)")
+    ap.add_argument("--token", help="SoundCloud oauth_token (or set SC_OAUTH_TOKEN)")
+    ap.add_argument("--interval", type=float, default=30.0, help="seconds between polls")
+    ap.add_argument("--pace", type=float, default=2.0, help="seconds between tracks")
+    ap.add_argument("--once", action="store_true", help="handle at most one request, then exit")
+    args = ap.parse_args()
+
+    cfg = wokenet.Config(args.site_url, args.secret)
+    token = putz_djs.load_token(args.token)
+    me = args.me.strip().lower().split("@")[0]
+
+    print(f"ripper up as '{me}', polling {cfg.site_url} every {args.interval:.0f}s")
+    print("  token:", f"...{token[-4:]} (originals / 256k unlocked)" if token else "none (160k cap)")
+    print("  ctrl-c to stop\n")
+
+    idle_logged = False
+    while True:
+        try:
+            request = wokenet.claim_rip(cfg, me)
+        except Exception as exc:
+            print(f"  poll failed: {exc}"[:150])
+            time.sleep(args.interval)
+            continue
+
+        if not request:
+            if not idle_logged:
+                print("  waiting for requests…")
+                idle_logged = True
+            if args.once:
+                return
+            time.sleep(args.interval)
+            continue
+
+        idle_logged = False
+        print(f"  got request from {request.get('requestedBy')}: {request['url']}")
+        try:
+            count, message = rip_one(cfg, request, token, args.pace)
+            status = "done" if count else "failed"
+            wokenet.finish_rip(cfg, request["requestId"], status, message, count)
+            print(f"  {status}: {message}\n")
+        except Exception as exc:
+            wokenet.finish_rip(cfg, request["requestId"], "failed", str(exc), 0)
+            print(f"  failed: {exc}\n"[:200])
+
+        if args.once:
+            return
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit("\nstopped")
