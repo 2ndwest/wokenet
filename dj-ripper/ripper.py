@@ -32,6 +32,21 @@ except SystemExit:  # the module exits if yt-dlp is missing
     raise SystemExit("yt-dlp is not installed. Run: pip install -r requirements.txt")
 
 
+
+def sweep_stale_workdirs() -> None:
+    """
+    Clear out rip directories a previous run left behind.
+
+    Each run deletes its own in a finally, so this only ever finds dirs from a
+    process that was killed outright (or a machine that lost power). Without
+    it they'd sit in the system temp dir holding on to disk space until the OS
+    got round to it.
+    """
+    for leftover in Path(tempfile.gettempdir()).glob("wokenet-rip-*"):
+        if leftover.is_dir():
+            shutil.rmtree(leftover, ignore_errors=True)
+
+
 def rip_one(cfg: wokenet.Config, request: dict, token: str | None, pace: float) -> tuple[int, str]:
     """Rip everything behind one URL and upload it. Returns (count, message)."""
     url = request["url"]
@@ -44,6 +59,7 @@ def rip_one(cfg: wokenet.Config, request: dict, token: str | None, pace: float) 
     uploaded = 0
     drm = 0
     failed = 0
+    sweep_stale_workdirs()
     workdir = Path(tempfile.mkdtemp(prefix="wokenet-rip-"))
 
     try:

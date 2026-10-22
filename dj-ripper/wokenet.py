@@ -106,12 +106,15 @@ def ffprobe_tags(path: Path) -> dict:
             [
                 "ffprobe", "-v", "error",
                 "-show_entries",
-                "format=duration,bit_rate:format_tags=title,artist,genre,comment,purl",
+                "format=duration,bit_rate:format_tags=title,artist,genre,comment,purl"
+                ":stream=bit_rate,codec_type",
                 "-of", "json", str(path),
             ],
             capture_output=True, text=True, timeout=30, check=False,
         ).stdout
-        fmt = (json.loads(out) or {}).get("format", {}) if out.strip() else {}
+        probe = (json.loads(out) or {}) if out.strip() else {}
+        fmt = probe.get("format", {})
+        streams = probe.get("streams", []) or []
     except Exception:
         return {}
 
@@ -122,10 +125,16 @@ def ffprobe_tags(path: Path) -> dict:
         info["duration"] = float(fmt["duration"])
     except (KeyError, TypeError, ValueError):
         pass
-    try:
-        info["bitrate_kbps"] = round(int(fmt["bit_rate"]) / 1000)
-    except (KeyError, TypeError, ValueError):
-        pass
+    # The audio stream's own bitrate, not the container's. Embedded artwork
+    # counts towards the container figure -- a 160k rip with a cover measures
+    # about 230k -- which used to promote rips a whole quality tier.
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    for source in (audio or {}).get("bit_rate"), fmt.get("bit_rate"):
+        try:
+            info["bitrate_kbps"] = round(int(source) / 1000)
+            break
+        except (TypeError, ValueError):
+            continue
     return info
 
 

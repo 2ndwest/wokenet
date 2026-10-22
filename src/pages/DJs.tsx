@@ -942,6 +942,16 @@ export const DJs = memo(() => {
     return ordered[0];
   }, [shuffle, shuffleOrder, ordered]);
 
+  /**
+   * Drop the player when the track it's holding is deleted. Anyone can delete,
+   * so the row can disappear from under whoever is listening to it -- and its
+   * stored audio goes with it, leaving a card that can't play anything.
+   */
+  useEffect(() => {
+    if (!nowPlaying || tracks === undefined) return;
+    if (!tracks.some((t) => t._id === nowPlaying._id)) setNowPlaying(null);
+  }, [tracks, nowPlaying]);
+
   /** Whether what's loaded is one of the tracks currently on screen. */
   const playingHere = useMemo(
     () => nowPlaying !== null && ordered.some((t) => t._id === nowPlaying._id),
