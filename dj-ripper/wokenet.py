@@ -61,6 +61,19 @@ def claim_rip(cfg: Config, claimed_by: str) -> dict | None:
     return claim if (claim := _post(cfg, "/dj-rip/claim", {"claimedBy": claimed_by})) else None
 
 
+def progress(cfg: Config, request_id: str, message: str) -> None:
+    """
+    Note progress on a request that's still running.
+
+    Best-effort: a rip that's going fine shouldn't fall over because a status
+    note didn't get through.
+    """
+    try:
+        _post(cfg, "/dj-rip/progress", {"requestId": request_id, "message": message})
+    except Exception:
+        pass
+
+
 def finish_rip(cfg: Config, request_id: str, status: str, message: str = "", count: int = 0) -> None:
     _post(
         cfg,

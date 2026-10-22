@@ -175,6 +175,19 @@ export const finishRip = httpAction(async (ctx, req) => {
   return new Response(null, { status: 200 });
 });
 
+/** A progress note while a rip is still running. */
+export const ripProgress = httpAction(async (ctx, req) => {
+  const bad = ripperSecretOk(req);
+  if (bad) return bad;
+
+  const body = (await req.json()) as Parameters<
+    typeof ctx.runMutation<typeof internal.djs.noteRipProgress>
+  >[1];
+
+  await ctx.runMutation(internal.djs.noteRipProgress, body);
+  return new Response(null, { status: 200 });
+});
+
 const router = httpRouter();
 
 router.route({ path: "/dj-rip/claim", method: "POST", handler: claimRip });
@@ -183,6 +196,7 @@ router.route({ path: "/dj-rip/track", method: "POST", handler: ripTrack });
 router.route({ path: "/dj-rip/cover", method: "POST", handler: ripCover });
 router.route({ path: "/dj-rip/filenames", method: "POST", handler: ripFilenames });
 router.route({ path: "/dj-rip/playlist", method: "POST", handler: ripPlaylist });
+router.route({ path: "/dj-rip/progress", method: "POST", handler: ripProgress });
 router.route({ path: "/dj-rip/finish", method: "POST", handler: finishRip });
 
 router.route({

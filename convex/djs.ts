@@ -989,6 +989,21 @@ export const claimNextRipRequest = internalMutation({
   },
 });
 
+/**
+ * A progress note on a request that's still running, so a long rip isn't a
+ * silent "claimed" for half an hour. Only touches the message: the status and
+ * the finish time belong to finishRipRequest.
+ */
+export const noteRipProgress = internalMutation({
+  args: { requestId: v.id("djRipRequests"), message: v.string() },
+  handler: async (ctx, { requestId, message }) => {
+    const request = await ctx.db.get(requestId);
+    // Ignore a note that arrives after the request was finished or cancelled.
+    if (!request || request.status !== "claimed") return;
+    await ctx.db.patch(requestId, { message: message.slice(0, 200) });
+  },
+});
+
 export const finishRipRequest = internalMutation({
   args: {
     requestId: v.id("djRipRequests"),

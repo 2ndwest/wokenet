@@ -47,8 +47,23 @@ def sweep_stale_workdirs() -> None:
             shutil.rmtree(leftover, ignore_errors=True)
 
 
-def rip_one(cfg: wokenet.Config, request: dict, token: str | None, pace: float) -> tuple[int, str]:
-    """Rip everything behind one URL and upload it. Returns (count, message)."""
+def rip_one(
+    cfg: wokenet.Config,
+    request: dict,
+    token: str | None,
+    pace: float,
+    rounds: int,
+    backoff: float,
+) -> tuple[int, str]:
+    """
+    Rip everything behind one URL and upload it. Returns (count, message).
+
+    SoundCloud throttles by IP, so a long playlist will start returning 403s
+    partway through however politely it's paced. Those tracks aren't failures:
+    they're collected and retried in later rounds, each waiting twice as long
+    as the one before. Anything still throttled after the last round is left
+    for a re-submission rather than silently dropped.
+    """
     url = request["url"]
     credit = request.get("requestedBy", "unknown")
 
@@ -62,40 +77,71 @@ def rip_one(cfg: wokenet.Config, request: dict, token: str | None, pace: float) 
     sweep_stale_workdirs()
     workdir = Path(tempfile.mkdtemp(prefix="wokenet-rip-"))
 
+    def attempt(idx: int, track: dict) -> None:
+        """Download, upload and register one track. Raises on any failure."""
+        nonlocal uploaded
+        path, fmt = putz_djs.download_one(track, idx, token, workdir, False)
+        if path is None:
+            raise RuntimeError("no file produced")
+        try:
+            payload = wokenet.track_payload(path, credit)
+            # The rip knows the permalink even when the file's tags don't.
+            payload.setdefault("sourceUrl", url if not is_playlist else payload.get("sourceUrl"))
+            payload["storageId"] = wokenet.upload_file(cfg, path)
+
+            cover_id = wokenet.upload_cover(cfg, path, workdir)
+            if cover_id:
+                payload["coverId"] = cover_id
+
+            result = wokenet.register_track(cfg, payload)
+            print("already in library" if result.get("skipped") else f"OK  {fmt}")
+            if not result.get("skipped"):
+                uploaded += 1
+        finally:
+            # Whether or not it registered, the file has served its purpose.
+            path.unlink(missing_ok=True)
+
     try:
-        for idx, track in enumerate(tracks, start=1):
-            label = (track.get("title") or f"track {track['id']}")[:44]
-            print(f"    [{idx:>3}/{len(tracks)}] {label:<46}", end=" ", flush=True)
-            try:
-                path, fmt = putz_djs.download_one(track, idx, token, workdir, False)
-                if path is None:
-                    raise RuntimeError("no file produced")
+        pending = list(enumerate(tracks, start=1))
+        for rnd in range(1, max(1, rounds) + 1):
+            if rnd > 1:
+                wait = backoff * (2 ** (rnd - 2))
+                print(f"    {len(pending)} rate-limited; waiting {wait:.0f}s before round {rnd}")
+                # Tell whoever submitted it why their request is still going.
+                wokenet.progress(
+                    cfg,
+                    request["requestId"],
+                    f"{uploaded} done, {len(pending)} rate-limited — retrying in {wait:.0f}s",
+                )
+                time.sleep(wait)
 
-                payload = wokenet.track_payload(path, credit)
-                # The rip knows the permalink even when the file's tags don't.
-                payload.setdefault("sourceUrl", url if not is_playlist else payload.get("sourceUrl"))
-                payload["storageId"] = wokenet.upload_file(cfg, path)
+            throttled: list[tuple[int, dict]] = []
+            for n, (idx, track) in enumerate(pending, start=1):
+                label = (track.get("title") or f"track {track['id']}")[:44]
+                print(f"    [{idx:>3}/{len(tracks)}] {label:<46}", end=" ", flush=True)
+                try:
+                    attempt(idx, track)
+                except Exception as exc:
+                    kind = putz_djs.classify(str(exc))
+                    if kind == "drm":
+                        drm += 1
+                        print("DRM (skipped)")
+                    elif kind == "throttled":
+                        throttled.append((idx, track))
+                        print("rate-limited (will retry)")
+                    else:
+                        failed += 1
+                        print(f"failed: {exc}"[:90])
+                if pace and n < len(pending):
+                    time.sleep(pace)
 
-                cover_id = wokenet.upload_cover(cfg, path, workdir)
-                if cover_id:
-                    payload["coverId"] = cover_id
+            pending = throttled
+            if not pending:
+                break
 
-                result = wokenet.register_track(cfg, payload)
-
-                print("already in library" if result.get("skipped") else f"OK  {fmt}")
-                if not result.get("skipped"):
-                    uploaded += 1
-                path.unlink(missing_ok=True)
-            except Exception as exc:
-                kind = putz_djs.classify(str(exc))
-                if kind == "drm":
-                    drm += 1
-                    print("DRM (skipped)")
-                else:
-                    failed += 1
-                    print(f"failed: {exc}"[:90])
-            if pace:
-                time.sleep(pace)
+        # Still throttled after every round: worth re-submitting later, so say
+        # so rather than counting them as plain failures.
+        still_throttled = len(pending)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
@@ -104,8 +150,9 @@ def rip_one(cfg: wokenet.Config, request: dict, token: str | None, pace: float) 
         parts.append(f"{drm} DRM-locked")
     if failed:
         parts.append(f"{failed} failed")
+    if still_throttled:
+        parts.append(f"{still_throttled} still rate-limited — submit again later")
     return uploaded, ", ".join(parts)
-
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Serve wokenet rip requests from this machine.")
@@ -115,6 +162,8 @@ def main() -> None:
     ap.add_argument("--token", help="SoundCloud oauth_token (or set SC_OAUTH_TOKEN)")
     ap.add_argument("--interval", type=float, default=30.0, help="seconds between polls")
     ap.add_argument("--pace", type=float, default=2.0, help="seconds between tracks")
+    ap.add_argument("--rounds", type=int, default=4, help="retry rounds for rate-limited tracks")
+    ap.add_argument("--backoff", type=float, default=90.0, help="base backoff seconds, doubles each round")
     ap.add_argument("--once", action="store_true", help="handle at most one request, then exit")
     args = ap.parse_args()
 
@@ -147,7 +196,7 @@ def main() -> None:
         idle_logged = False
         print(f"  got request from {request.get('requestedBy')}: {request['url']}")
         try:
-            count, message = rip_one(cfg, request, token, args.pace)
+            count, message = rip_one(cfg, request, token, args.pace, args.rounds, args.backoff)
             status = "done" if count else "failed"
             wokenet.finish_rip(cfg, request["requestId"], status, message, count)
             print(f"  {status}: {message}\n")

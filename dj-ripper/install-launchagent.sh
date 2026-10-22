@@ -52,12 +52,12 @@ cat > "$PLIST" <<PLIST_EOF
     <string>-c</string>
     <string>set -a; . "$ENVFILE"; set +a; exec "$PY" "$HERE/ripper.py" --me "$KERB"</string>
   </array>
-  <key>WorkingDirectory</key><string>/tmp</string>
+  <key>WorkingDirectory</key><string>/</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <!-- Otherwise python buffers stdout into the log file and `tail -f`
-         shows nothing until the buffer fills. -->
+    <!-- Otherwise python buffers its output into the log file and the log
+         stays empty for the first few minutes. -->
     <key>PYTHONUNBUFFERED</key><string>1</string>
   </dict>
   <key>RunAtLoad</key><true/>
