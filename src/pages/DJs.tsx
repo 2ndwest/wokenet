@@ -2876,10 +2876,15 @@ const RipDialog = memo(
       </Dialog.Trigger>
       <Dialog.Content maxWidth="520px">
         <Dialog.Title>Rip from SoundCloud</Dialog.Title>
-        <Dialog.Description size="2" color="gray" mb="4">
+        <Dialog.Description size="2" color="gray" mb="3">
           Queues a playlist or track. A DJ's machine does the actual ripping and uploads the result,
           so it lands once their ripper is running.
         </Dialog.Description>
+
+        <Text size="1" color="gray" mb="4" as="p" style={{ opacity: 0.8 }}>
+          You'll get an email confirming the request was submitted, and another once the tracks are
+          in the library.
+        </Text>
 
         <Flex gap="2" align="center">
           <TextField.Root
