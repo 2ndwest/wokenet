@@ -9,6 +9,7 @@ import {
   Heading,
   IconButton,
   Separator,
+  Slider,
   Text,
   TextField,
 } from "@radix-ui/themes";
@@ -134,10 +135,22 @@ const Tag = memo(
     variant: React.ComponentProps<typeof Badge>["variant"];
     children: React.ReactNode;
   }) => (
-    <Badge color={color} variant={variant} style={{ fontSize: "10px", padding: "1px 5px" }}>
+    <Badge color={color} variant={variant} style={{ fontSize: "12px", padding: "3px 9px" }}>
       {children}
     </Badge>
   ),
+);
+
+const SkipIcon = ({ direction }: { direction: "back" | "forward" }) => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 16 16"
+    fill="currentColor"
+    style={direction === "back" ? { transform: "scaleX(-1)" } : undefined}
+  >
+    <path d="M3 3l7 5-7 5V3zM11 3h2v10h-2z" />
+  </svg>
 );
 
 const PencilIcon = () => (
@@ -159,12 +172,15 @@ const FilterChip = memo(
     active,
     onClick,
     color,
+    count,
     children,
   }: {
     active: boolean;
     onClick: () => void;
     /** Overrides the default tint, so a DJ's chip matches their tag. */
     color?: BadgeColor;
+    /** Rendered lighter after the label, so the name reads first. */
+    count?: number;
     children: React.ReactNode;
   }) => (
     <Button
@@ -174,9 +190,14 @@ const FilterChip = memo(
       // Unset follows the theme accent; a DJ colour wins when there is one.
       color={color ?? (active ? undefined : "gray")}
       onClick={onClick}
-      style={{ height: "22px" }}
+      style={{ height: "24px" }}
     >
-      {children}
+      <Text weight="bold">{children}</Text>
+      {count !== undefined && (
+        <Text weight="regular" style={{ opacity: 0.7 }}>
+          ({count})
+        </Text>
+      )}
     </Button>
   ),
 );
@@ -275,6 +296,9 @@ export const DJs = memo(() => {
   const [nowPlaying, setNowPlaying] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [shuffle, setShuffle] = useState(false);
+  // Mirrored from the <audio> element so the seek slider can drive it.
+  const [elapsed, setElapsed] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   // Multi-select: the row's download and delete controls become a checkbox,
   // while the pencil and everything else keep working.
@@ -336,9 +360,20 @@ export const DJs = memo(() => {
   );
 
   const availableQualities = useMemo(() => {
-    const present = new Set(scoped.map((t) => t.quality));
-    return QUALITY_ORDER.filter((q) => present.has(q));
+    const counts = new Map<Quality, number>();
+    for (const t of scoped) counts.set(t.quality, (counts.get(t.quality) ?? 0) + 1);
+    return QUALITY_ORDER.filter((q) => counts.has(q)).map(
+      (q) => [q, counts.get(q)!] as const,
+    );
   }, [scoped]);
+
+  const cueCounts = useMemo(
+    () => ({
+      hot: scoped.filter((t) => (t.hotCues?.length ?? 0) > 0).length,
+      memory: scoped.filter((t) => (t.memoryCues?.length ?? 0) > 0).length,
+    }),
+    [scoped],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -418,13 +453,9 @@ export const DJs = memo(() => {
 
   // ---- actions ----
 
-  const play = useCallback(
+  /** Load a track into the player and start it. */
+  const playTrack = useCallback(
     async (track: Track) => {
-      if (nowPlaying?._id === track._id && audioRef.current) {
-        if (isPlaying) audioRef.current.pause();
-        else void audioRef.current.play();
-        return;
-      }
       const url = await convex.query(api.djs.getTrackUrl, { trackId: track._id });
       if (!url) return;
       setNowPlaying(track);
@@ -435,7 +466,40 @@ export const DJs = memo(() => {
         void audioRef.current.play();
       });
     },
-    [convex, isPlaying, nowPlaying],
+    [convex],
+  );
+
+  /** Row play button: toggles if it's already the current track. */
+  const play = useCallback(
+    async (track: Track) => {
+      if (nowPlaying?._id === track._id && audioRef.current) {
+        if (isPlaying) audioRef.current.pause();
+        else void audioRef.current.play();
+        return;
+      }
+      await playTrack(track);
+    },
+    [isPlaying, nowPlaying, playTrack],
+  );
+
+  /** Step through whatever is on screen; shuffle picks at random instead. */
+  const step = useCallback(
+    (direction: 1 | -1) => {
+      if (!nowPlaying) return;
+
+      let next: Track | undefined;
+      if (shuffle) {
+        const pool = filtered.filter((t) => t._id !== nowPlaying._id);
+        next = pool[Math.floor(Math.random() * pool.length)];
+      } else {
+        const i = filtered.findIndex((t) => t._id === nowPlaying._id);
+        next = i >= 0 ? filtered[i + direction] : undefined;
+      }
+
+      if (!next) return;
+      void playTrack(next);
+    },
+    [filtered, nowPlaying, playTrack, shuffle],
   );
 
   /**
@@ -443,49 +507,28 @@ export const DJs = memo(() => {
    * like a playlist instead of stopping after every song. Follows whatever is
    * on screen, so filters and playlist order decide what comes next.
    */
+  /**
+   * Roll on when a track finishes, so the library plays through rather than
+   * stopping after every song. Reaching the end just stops.
+   */
   const playNext = useCallback(() => {
-    if (!nowPlaying) return;
-
-    let next: Track | undefined;
-    if (shuffle) {
-      // Anything but the track that just finished, so it never repeats itself.
-      const pool = filtered.filter((t) => t._id !== nowPlaying._id);
-      next = pool[Math.floor(Math.random() * pool.length)];
-    } else {
-      const i = filtered.findIndex((t) => t._id === nowPlaying._id);
-      next = i >= 0 ? filtered[i + 1] : undefined;
-    }
-
-    if (!next) {
+    const atEnd =
+      !shuffle &&
+      nowPlaying !== null &&
+      filtered.findIndex((t) => t._id === nowPlaying._id) === filtered.length - 1;
+    if (atEnd) {
       setIsPlaying(false);
       return;
     }
-    void (async () => {
-      const url = await convex.query(api.djs.getTrackUrl, { trackId: next._id });
-      if (!url) return;
-      setNowPlaying(next);
-      requestAnimationFrame(() => {
-        if (!audioRef.current) return;
-        audioRef.current.src = url;
-        void audioRef.current.play();
-      });
-    })();
-  }, [convex, filtered, nowPlaying, shuffle]);
+    step(1);
+  }, [filtered, nowPlaying, shuffle, step]);
 
   /** Kick off playback from a random track in whatever is on screen. */
   const shufflePlay = useCallback(async () => {
     if (filtered.length === 0) return;
-    const pick = filtered[Math.floor(Math.random() * filtered.length)];
     setShuffle(true);
-    const url = await convex.query(api.djs.getTrackUrl, { trackId: pick._id });
-    if (!url) return;
-    setNowPlaying(pick);
-    requestAnimationFrame(() => {
-      if (!audioRef.current) return;
-      audioRef.current.src = url;
-      void audioRef.current.play();
-    });
-  }, [convex, filtered]);
+    await playTrack(filtered[Math.floor(Math.random() * filtered.length)]);
+  }, [filtered, playTrack]);
 
   const download = useCallback(
     async (track: Track) => {
@@ -910,13 +953,20 @@ export const DJs = memo(() => {
         }}
       />
 
+      {/* Left-aligned against the sidebar rather than centred, so the page
+          doesn't leave a dead gutter on wide screens. */}
       <Flex
         direction="column"
-        align="center"
         p="5"
-        style={{ flex: "1 1 auto", minWidth: 0, overflowY: "auto" }}
+        style={{
+          flex: "1 1 auto",
+          minWidth: 0,
+          overflowY: "auto",
+          // Keep the list clear of the now-playing card in the corner.
+          paddingRight: nowPlaying ? 272 : undefined,
+        }}
       >
-        <Flex direction="column" width="100%" style={{ maxWidth: 1100 }} gap="4" pb="9">
+        <Flex direction="column" width="100%" style={{ maxWidth: 1600 }} gap="4" pb="9">
         <Flex justify="between" align="center" wrap="wrap" gap="3">
           <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
             <Flex align="baseline" gap="3" wrap="wrap">
@@ -935,8 +985,17 @@ export const DJs = memo(() => {
                 <Text size="1" color={asBadgeColor(activePlaylist.createdByColor) ?? "gray"}>
                   {activePlaylist.createdByName}
                 </Text>
-                {activePlaylist.contributors.length > 0 &&
-                  ` · colonized by ${activePlaylist.contributors.join(", ")}`}
+                {activePlaylist.contributors.length > 0 && (
+                  <>
+                    {" · colonized by "}
+                    {activePlaylist.contributors.map((c, i) => (
+                      <Text key={c.kerb} size="1" color={asBadgeColor(c.color) ?? "gray"}>
+                        {i > 0 ? ", " : ""}
+                        {c.name}
+                      </Text>
+                    ))}
+                  </>
+                )}
               </Text>
             )}
           </Flex>
@@ -974,7 +1033,7 @@ export const DJs = memo(() => {
         )}
 
         {/* ---- filters ---- */}
-        <Card style={{ border: "1px solid var(--gray-4)" }}>
+        <Card style={{ border: "1px solid var(--accent-7)" }}>
           <Flex direction="column" gap="3">
             <Flex gap="2" align="center" wrap="wrap">
               <TextField.Root
@@ -1047,17 +1106,22 @@ export const DJs = memo(() => {
 
             <FacetRow label="Genre" empty={allGenres.length === 0 && untaggedCount === 0}>
               {untaggedCount > 0 && (
-                <FilterChip active={onlyUntagged} onClick={() => setOnlyUntagged((v) => !v)}>
-                  untagged {untaggedCount}
+                <FilterChip
+                  active={onlyUntagged}
+                  count={untaggedCount}
+                  onClick={() => setOnlyUntagged((v) => !v)}
+                >
+                  untagged
                 </FilterChip>
               )}
               {visibleGenres.map(([genre, count]) => (
                 <FilterChip
                   key={genre}
                   active={genreFilter.has(genre)}
+                  count={count}
                   onClick={() => setGenreFilter((s) => toggleIn(s, genre))}
                 >
-                  {genre} {count}
+                  {genre}
                 </FilterChip>
               ))}
               {hiddenGenreCount > 0 && (
@@ -1097,18 +1161,20 @@ export const DJs = memo(() => {
                   key={kerb}
                   active={djFilter.has(kerb)}
                   color={asBadgeColor(color)}
+                  count={count}
                   onClick={() => setDjFilter((s) => toggleIn(s, kerb))}
                 >
-                  {label} {count}
+                  {label}
                 </FilterChip>
               ))}
             </FacetRow>
 
             <FacetRow label="Quality" empty={availableQualities.length === 0}>
-              {availableQualities.map((q) => (
+              {availableQualities.map(([q, count]) => (
                 <FilterChip
                   key={q}
                   active={qualityFilter.has(q)}
+                  count={count}
                   onClick={() => setQualityFilter((s) => toggleIn(s, q))}
                 >
                   {QUALITY_LABEL[q]}
@@ -1121,19 +1187,28 @@ export const DJs = memo(() => {
                 <FilterChip
                   key={label}
                   active={bpmFilter.has(label)}
+                  count={count}
                   onClick={() => setBpmFilter((s) => toggleIn(s, label))}
                 >
-                  {label} {count}
+                  {label}
                 </FilterChip>
               ))}
             </FacetRow>
 
             <FacetRow label="Cues">
-              <FilterChip active={needHotCues} onClick={() => setNeedHotCues((v) => !v)}>
-                has hot cues
+              <FilterChip
+                active={needHotCues}
+                count={cueCounts.hot}
+                onClick={() => setNeedHotCues((v) => !v)}
+              >
+                hot cues
               </FilterChip>
-              <FilterChip active={needMemoryCues} onClick={() => setNeedMemoryCues((v) => !v)}>
-                has memory cues
+              <FilterChip
+                active={needMemoryCues}
+                count={cueCounts.memory}
+                onClick={() => setNeedMemoryCues((v) => !v)}
+              >
+                memory cues
               </FilterChip>
             </FacetRow>
           </Flex>
@@ -1296,54 +1371,133 @@ export const DJs = memo(() => {
         </Flex>
       </Flex>
 
-      {/* ---- sticky preview player ---- */}
+      {/* ---- now playing card ----
+           A corner card rather than a full-width bar, so it doesn't sit on
+           top of the sidebar and hide the DJ settings button. */}
       {nowPlaying && (
         <Flex
-          align="center"
-          gap="3"
-          px="4"
-          py="2"
+          direction="column"
+          gap="2"
+          p="2"
           style={{
             position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 16,
+            right: 16,
+            width: 224,
             zIndex: 50,
-            backgroundColor: "var(--gray-1)",
-            borderTop: "1px solid var(--gray-4)",
-            boxShadow: "0 -8px 24px rgba(0,0,0,0.35)",
+            backgroundColor: "var(--gray-2)",
+            border: "1px solid var(--accent-7)",
+            borderRadius: "var(--radius-3)",
           }}
         >
-          <Flex direction="column" style={{ minWidth: 0, flex: "1 1 auto" }}>
+          <Cover url={nowPlaying.coverUrl} size={208} />
+
+          <Flex direction="column" style={{ minWidth: 0 }}>
             <Text size="2" weight="bold" truncate>
               {nowPlaying.title}
             </Text>
             <Text size="1" color="gray" truncate>
               {nowPlaying.artist ? `${nowPlaying.artist} · ` : ""}
-              {nowPlaying.djDisplay}
+              <Text size="1" color={asBadgeColor(nowPlaying.djColor) ?? "gray"}>
+                {nowPlaying.djDisplay}
+              </Text>
             </Text>
           </Flex>
+
+          {/* The element itself is hidden; the controls below drive it. */}
           <audio
             ref={audioRef}
-            controls
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={playNext}
-            style={{ height: "32px", flex: "2 1 320px", maxWidth: 520 }}
+            onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
+            onLoadedMetadata={(e) => {
+              setDuration(Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0);
+              setElapsed(0);
+            }}
+            style={{ display: "none" }}
           />
-          {/* Shuffle stays reachable while something is playing. */}
-          <Button
+
+          <Flex align="center" gap="2">
+            <IconButton
+              size="2"
+              radius="full"
+              onClick={() => {
+                if (!audioRef.current) return;
+                if (isPlaying) audioRef.current.pause();
+                else void audioRef.current.play();
+              }}
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              <PlayIcon playing={isPlaying} />
+            </IconButton>
+            <Text size="1" color="gray" style={{ fontVariantNumeric: "tabular-nums" }}>
+              {formatDuration(elapsed)} / {formatDuration(duration || nowPlaying.durationSec)}
+            </Text>
+          </Flex>
+
+          <Slider
             size="1"
-            radius="full"
-            variant={shuffle ? "solid" : "surface"}
-            onClick={() => setShuffle((v) => !v)}
-            title={shuffle ? "Shuffle on" : "Shuffle off"}
-          >
-            ⤮
-          </Button>
-          <IconButton size="1" variant="ghost" color="gray" onClick={() => setNowPlaying(null)}>
-            ✕
-          </IconButton>
+            value={[Math.min(elapsed, duration || 0)]}
+            max={Math.max(duration || nowPlaying.durationSec || 1, 1)}
+            step={1}
+            onValueChange={([v]) => {
+              // Move the handle immediately; timeupdate would lag the drag.
+              setElapsed(v);
+              if (audioRef.current) audioRef.current.currentTime = v;
+            }}
+            aria-label="Seek"
+          />
+
+          <Flex justify="between" align="center" gap="1">
+            <Flex gap="1" align="center">
+              <IconButton
+                size="1"
+                variant="soft"
+                color="gray"
+                onClick={() => step(-1)}
+                title="Previous track"
+                aria-label="Previous track"
+              >
+                <SkipIcon direction="back" />
+              </IconButton>
+              <IconButton
+                size="1"
+                variant="soft"
+                color="gray"
+                onClick={() => step(1)}
+                title="Next track"
+                aria-label="Next track"
+              >
+                <SkipIcon direction="forward" />
+              </IconButton>
+              {/* Shuffle stays reachable while something is playing. */}
+              <IconButton
+                size="1"
+                radius="full"
+                variant={shuffle ? "solid" : "soft"}
+                color={shuffle ? undefined : "gray"}
+                onClick={() => setShuffle((v) => !v)}
+                title={shuffle ? "Shuffle on" : "Shuffle off"}
+                aria-label="Toggle shuffle"
+              >
+                ⤮
+              </IconButton>
+              <IconButton
+                size="1"
+                variant="soft"
+                color="gray"
+                onClick={() => void download(nowPlaying)}
+                title="Download this track"
+                aria-label="Download this track"
+              >
+                <DownloadIcon />
+              </IconButton>
+            </Flex>
+            <IconButton size="1" variant="ghost" color="gray" onClick={() => setNowPlaying(null)}>
+              ✕
+            </IconButton>
+          </Flex>
         </Flex>
       )}
     </Flex>
@@ -1353,7 +1507,7 @@ export const DJs = memo(() => {
 const FacetRow = memo(
   ({ label, empty, children }: { label: string; empty?: boolean; children: React.ReactNode }) => (
     <Flex gap="2" align="start">
-      <Text size="1" color="gray" style={{ minWidth: 58, paddingTop: 3 }}>
+      <Text size="2" color="gray" style={{ minWidth: 68, paddingTop: 2 }}>
         {label}
       </Text>
       <Flex gap="1" wrap="wrap">
@@ -1411,27 +1565,43 @@ const TrackRow = memo(
     return (
       <Card
         style={{
-          border: `1px solid ${isCurrent ? "var(--accent-7)" : "var(--gray-4)"}`,
+          border: `1px solid ${isCurrent ? "var(--accent-9)" : "var(--accent-7)"}`,
           background: isCurrent ? "var(--accent-2)" : undefined,
         }}
       >
         {/* nowrap so the action icons never drop to their own line: the
             title, badges and artwork give up space first. */}
+        {/* Clicking anywhere that isn't a control plays the track (or toggles
+            selection while selecting). The controls stop propagation. */}
         <Flex
           align="center"
           gap="3"
           wrap="nowrap"
           draggable
           onDragStart={onDragStart}
-          style={{ cursor: "grab", minWidth: 0 }}
+          onClick={() => (selectMode ? onToggleSelected() : onPlay())}
+          style={{ cursor: selectMode ? "pointer" : "grab", minWidth: 0 }}
         >
-          <IconButton size="1" radius="full" variant={isPlaying ? "solid" : "soft"} onClick={onPlay}>
+          <IconButton
+            size="1"
+            radius="full"
+            variant={isPlaying ? "solid" : "soft"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlay();
+            }}
+          >
             <PlayIcon playing={isPlaying} />
           </IconButton>
 
-          {/* Artwork is the first thing to go when the row runs out of room. */}
-          <Box display={{ initial: "none", xs: "block" }} style={{ flex: "0 0 auto" }}>
-            <Cover url={track.coverUrl} size={34} onClick={() => rowCoverInput.current?.click()} />
+          {/* Artwork is the first thing to go when the row runs out of room.
+              Its own click sets cover art, so it mustn't also start playback. */}
+          <Box
+            display={{ initial: "none", xs: "block" }}
+            style={{ flex: "0 0 auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Cover url={track.coverUrl} size={46} onClick={() => rowCoverInput.current?.click()} />
           </Box>
           <input
             ref={rowCoverInput}
@@ -1445,11 +1615,11 @@ const TrackRow = memo(
             }}
           />
 
-          <Flex direction="column" style={{ minWidth: 0, flex: "1 1 120px" }}>
-            <Text size="2" weight="bold" truncate>
+          <Flex direction="column" style={{ minWidth: 0, flex: "1 1 220px" }}>
+            <Text size="3" weight="bold" truncate>
               {track.title}
             </Text>
-            <Text size="1" color="gray" truncate>
+            <Text size="2" color="gray" truncate>
               {track.artist ? `${track.artist} · ` : ""}
               {formatDuration(track.durationSec)} · {formatSize(track.sizeBytes)}
             </Text>
@@ -1497,7 +1667,12 @@ const TrackRow = memo(
             )}
           </Flex>
 
-          <Flex gap="1" align="center" style={{ flex: "0 0 auto" }}>
+          <Flex
+            gap="1"
+            align="center"
+            style={{ flex: "0 0 auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* The pencil stays available in select mode; download and delete
                 give way to the checkbox so the row doesn't grow. */}
             <TrackEditDialog
@@ -1885,7 +2060,7 @@ type PlaylistRow = Doc<"djPlaylists"> & {
   trackCount: number;
   createdByName: string;
   createdByColor: string | null;
-  contributors: string[];
+  contributors: { kerb: string; name: string; color: string | null }[];
 };
 
 /** Drop the current selection into an existing playlist. */
@@ -2111,7 +2286,7 @@ const PlaylistSidebar = memo(
           outline: dropId && dropTarget === dropId ? "1px dashed var(--accent-9)" : undefined,
         }}
       >
-        <Text size="1" truncate color={active ? undefined : "gray"} weight={active ? "bold" : "regular"}>
+        <Text size="2" truncate color={active ? undefined : "gray"} weight={active ? "bold" : "regular"}>
           {label}
           {byline && (
             <Text size="1" color={bylineColor ?? "gray"} style={{ opacity: 0.9 }}>
@@ -2132,8 +2307,8 @@ const PlaylistSidebar = memo(
         gap="1"
         p="3"
         style={{
-          width: 210,
-          flex: "0 0 210px",
+          width: 240,
+          flex: "0 0 240px",
           borderRight: "1px solid var(--gray-3)",
           overflowY: "auto",
         }}

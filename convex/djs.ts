@@ -173,10 +173,15 @@ export const listPlaylists = query({
       trackCount: counts.get(p._id) ?? 0,
       createdByName: names.get(p.createdBy) ?? p.createdBy,
       createdByColor: colors.get(p.createdBy) ?? null,
-      /** Everyone who has added to it, minus its creator. */
+      /** Everyone who has added to it, minus its creator, with their styling. */
       contributors: [...(contributors.get(p._id) ?? [])]
         .filter((kerb) => kerb !== p.createdBy)
-        .sort(),
+        .sort()
+        .map((kerb) => ({
+          kerb,
+          name: names.get(kerb) ?? kerb,
+          color: colors.get(kerb) ?? null,
+        })),
     }));
   },
 });
