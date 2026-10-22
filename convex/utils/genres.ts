@@ -426,11 +426,18 @@ export function normalizeUserGenre(raw: string | undefined | null): string[] {
   const base = clean(raw);
   if (base.length === 0) return [];
 
+  // Known genres still fold to one canonical spelling, so the library doesn't
+  // end up with "Techno" and "TECHNO" as separate chips.
   const atomic = ATOMIC_ALIASES[base];
   if (atomic) return [atomic];
 
   const known = ALIASES[base];
   if (known) return [known];
+
+  // For anything we don't recognize, respect how it was typed: SHOUTING is a
+  // deliberate choice on a custom tag, not something to tidy away.
+  const trimmed = raw.trim().replace(/\s+/g, " ");
+  if (/[A-Z]/.test(trimmed) && trimmed === trimmed.toUpperCase()) return [trimmed];
 
   return [titleCase(base)];
 }

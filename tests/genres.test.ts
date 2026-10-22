@@ -20,6 +20,13 @@ describe("normalizeUserGenre", () => {
     expect(normalizeUserGenre("  TECHNO  ")).toEqual(["Techno"]);
   });
 
+  it("keeps SHOUTING on custom tags, since that's deliberate", () => {
+    expect(normalizeUserGenre("PUTZ CLASSICS")).toEqual(["PUTZ CLASSICS"]);
+    expect(normalizeUserGenre("BANGERS")).toEqual(["BANGERS"]);
+    // ...but a known genre still folds, so chips don't fragment.
+    expect(normalizeUserGenre("TECHNO")).toEqual(["Techno"]);
+  });
+
   it("drops only genuinely empty input, and dedupes", () => {
     expect(normalizeUserGenre("   ")).toEqual([]);
     expect(normalizeUserGenres(["Techno", "techno", "  "])).toEqual(["Techno"]);

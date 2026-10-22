@@ -155,6 +155,23 @@ const SkipIcon = ({ direction }: { direction: "back" | "forward" }) => (
   </svg>
 );
 
+/**
+ * Anything tagged putz gets to shout, in a fixed orange rather than the theme
+ * accent -- it should look the same whichever theme you're on.
+ */
+const isPutzTag = (genre: string): boolean => /putz/i.test(genre);
+
+const PUTZ_TAG_STYLE: React.CSSProperties = {
+  fontSize: "12px",
+  padding: "3px 9px",
+  backgroundColor: "#FF6A00",
+  color: "#1a1a1a",
+  fontWeight: 800,
+  letterSpacing: "0.4px",
+  textTransform: "uppercase",
+  boxShadow: "0 0 10px rgba(255, 106, 0, 0.75)",
+};
+
 const PencilIcon = () => (
   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
     <path d="M11.5 1.5l3 3-8 8H3.5v-3l8-8zM2 14h12v1.5H2V14z" />
@@ -1260,6 +1277,9 @@ export const DJs = memo(() => {
                   key={genre}
                   active={genreFilter.has(genre)}
                   count={count}
+                  // Always literal orange, not the theme accent, so a putz tag
+                  // looks the same on either theme.
+                  color={isPutzTag(genre) ? "orange" : undefined}
                   onClick={() => setGenreFilter((s) => toggleIn(s, genre))}
                 >
                   {genre}
@@ -1823,11 +1843,17 @@ const TrackRow = memo(
                 {track.analysisSource === "detected" ? "?" : ""}
               </Tag>
             ) : null}
-            {track.genres.map((g) => (
-              <Tag key={g} color="gray" variant="outline">
-                {g}
-              </Tag>
-            ))}
+            {track.genres.map((g) =>
+              isPutzTag(g) ? (
+                <Badge key={g} variant="solid" style={PUTZ_TAG_STYLE}>
+                  {g}
+                </Badge>
+              ) : (
+                <Tag key={g} color="gray" variant="outline">
+                  {g}
+                </Tag>
+              ),
+            )}
             {hot > 0 && (
               <Tag color="purple" variant="soft">
                 {hot} hot
