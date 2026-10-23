@@ -260,7 +260,8 @@ export const getTrackUrl = query({
 export const listRipRequests = query({
   args: {},
   handler: async (ctx) => {
-    await requirePutz(ctx);
+    const { user } = await requirePutz(ctx);
+    const kerb = kerbOf(user.email);
     const recent = await ctx.db
       .query("djRipRequests")
       .withIndex("by_createdAt")
@@ -274,7 +275,12 @@ export const listRipRequests = query({
       .sort((a, b) => a.createdAt - b.createdAt);
     const place = new Map(queue.map((r, i) => [r._id, i + 1]));
 
-    return recent.map((r) => ({ ...r, place: place.get(r._id) ?? null }));
+    return recent.map((r) => ({
+      ...r,
+      place: place.get(r._id) ?? null,
+      // Whoever queued it can stop it; admins can stop anything stuck.
+      canCancel: r.requestedBy === kerb || !!user.isAdmin,
+    }));
   },
 });
 
@@ -1015,6 +1021,30 @@ export const requestRip = mutation({
   },
 });
 
+/**
+ * Stop a rip. A pending one is simply never claimed; a running one is stopped
+ * by the ripper between tracks, the next time it checks in. Tracks it already
+ * uploaded stay in the library.
+ */
+export const cancelRipRequest = mutation({
+  args: { requestId: v.id("djRipRequests") },
+  handler: async (ctx, { requestId }) => {
+    const { user } = await requirePutz(ctx);
+    const request = await ctx.db.get(requestId);
+    if (!request) throw new Error("RIP_NOT_FOUND");
+    if (request.requestedBy !== kerbOf(user.email) && !user.isAdmin) {
+      throw new Error("NOT_YOUR_RIP");
+    }
+    if (request.status !== "pending" && request.status !== "claimed") return;
+
+    await ctx.db.patch(requestId, {
+      status: "cancelled",
+      message: `cancelled by ${kerbOf(user.email)}`,
+      finishedAt: Date.now(),
+    });
+  },
+});
+
 // ---------------------------------------------------------------- ripper helper
 //
 // Serverless can't run yt-dlp or ffmpeg, so a helper script on a DJ's own
@@ -1048,12 +1078,26 @@ export const claimNextRipRequest = internalMutation({
  * the finish time belong to finishRipRequest.
  */
 export const noteRipProgress = internalMutation({
-  args: { requestId: v.id("djRipRequests"), message: v.string() },
-  handler: async (ctx, { requestId, message }) => {
+  args: {
+    requestId: v.id("djRipRequests"),
+    message: v.string(),
+    done: v.optional(v.number()),
+    tried: v.optional(v.number()),
+    total: v.optional(v.number()),
+  },
+  handler: async (ctx, { requestId, message, done, tried, total }) => {
     const request = await ctx.db.get(requestId);
-    // Ignore a note that arrives after the request was finished or cancelled.
-    if (!request || request.status !== "claimed") return;
-    await ctx.db.patch(requestId, { message: message.slice(0, 200) });
+    // The answer doubles as the ripper's cue to stop.
+    if (request?.status === "cancelled") return { cancelled: true };
+    // Ignore a note that arrives after the request was finished.
+    if (!request || request.status !== "claimed") return { cancelled: false };
+    await ctx.db.patch(requestId, {
+      message: message.slice(0, 200),
+      tracksDone: done,
+      tracksTried: tried,
+      tracksTotal: total,
+    });
+    return { cancelled: false };
   },
 });
 
@@ -1066,6 +1110,14 @@ export const finishRipRequest = internalMutation({
     rateLimited: v.optional(v.array(v.string())),
   },
   handler: async (ctx, { requestId, status, message, trackCount, rateLimited }) => {
+    // Cancelled mid-rip: keep it cancelled, record what got done before the
+    // ripper stopped, and don't email -- they know, they cancelled it.
+    const current = await ctx.db.get(requestId);
+    if (current?.status === "cancelled") {
+      await ctx.db.patch(requestId, { message, trackCount });
+      return;
+    }
+
     await ctx.db.patch(requestId, {
       status,
       message,

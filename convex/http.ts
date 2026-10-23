@@ -184,8 +184,8 @@ export const ripProgress = httpAction(async (ctx, req) => {
     typeof ctx.runMutation<typeof internal.djs.noteRipProgress>
   >[1];
 
-  await ctx.runMutation(internal.djs.noteRipProgress, body);
-  return new Response(null, { status: 200 });
+  const result = await ctx.runMutation(internal.djs.noteRipProgress, body);
+  return Response.json(result);
 });
 
 const router = httpRouter();

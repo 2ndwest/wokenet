@@ -9,6 +9,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  Progress,
   Select,
   Separator,
   Slider,
@@ -68,7 +69,7 @@ async function uploadEmbeddedCover(
 }
 
 /** listRipRequests numbers everything still waiting, oldest first. */
-type RipRequest = Doc<"djRipRequests"> & { place: number | null };
+type RipRequest = Doc<"djRipRequests"> & { place: number | null; canCancel: boolean };
 
 /** listTracks resolves the DJ display name and cover URL on the way out. */
 type Track = Doc<"djTracks"> & {
@@ -475,7 +476,7 @@ const ShowMore = memo(
   ),
 );
 
-type SortMode = "alphabetical" | "added" | "bpm" | "key" | "dj" | "genre";
+type SortMode = "alphabetical" | "added" | "bpm" | "key" | "quality" | "dj" | "genre";
 type SortDir = "asc" | "desc";
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -483,6 +484,7 @@ const SORT_LABELS: Record<SortMode, string> = {
   added: "Date added",
   bpm: "BPM",
   key: "Key",
+  quality: "Quality",
   dj: "DJ",
   genre: "Tags",
 };
@@ -493,6 +495,7 @@ const DIRECTION_LABELS: Record<SortMode, { asc: string; desc: string }> = {
   added: { asc: "Oldest", desc: "Newest" },
   bpm: { asc: "Slowest", desc: "Fastest" },
   key: { asc: "1A–12B", desc: "12B–1A" },
+  quality: { asc: "Best first", desc: "Worst first" },
   dj: { asc: "A–Z", desc: "Z–A" },
   genre: { asc: "A–Z", desc: "Z–A" },
 };
@@ -503,6 +506,7 @@ const DEFAULT_DIRECTION: Record<SortMode, SortDir> = {
   added: "desc",
   bpm: "asc",
   key: "asc",
+  quality: "asc",
   dj: "asc",
   genre: "asc",
 };
@@ -559,6 +563,14 @@ function sortTracks(tracks: Track[], mode: SortMode, dir: SortDir): Track[] {
         return (a.bpm ?? 0) - (b.bpm ?? 0) || byTitle(a, b);
       case "key":
         return camelotOrder(a.musicalKey) - camelotOrder(b.musicalKey) || byTitle(a, b);
+      case "quality":
+        // "Ascending" is best first: QUALITY_ORDER runs best to worst, and
+        // within a tier the higher bitrate wins.
+        return (
+          QUALITY_ORDER.indexOf(a.quality) - QUALITY_ORDER.indexOf(b.quality) ||
+          (b.bitrateKbps ?? 0) - (a.bitrateKbps ?? 0) ||
+          byTitle(a, b)
+        );
       case "dj":
         return a.djDisplay.localeCompare(b.djDisplay) || byTitle(a, b);
       case "genre":
@@ -1654,7 +1666,7 @@ export const DJs = memo(() => {
                     onRemove={() => setDjFilter((s) => removeFrom(s, d))}
                   />
                 ))}
-                {[...qualityFilter].map((q) => (
+                {QUALITY_ORDER.filter((q) => qualityFilter.has(q)).map((q) => (
                   <ActiveFilterBubble
                     key={`q-${q}`}
                     label={QUALITY_LABEL[q]}
@@ -4183,7 +4195,9 @@ const RipDialog = memo(
     pending: RipRequest[];
     recent: RipRequest[];
     busy: boolean;
-  }) => (
+  }) => {
+    const cancelRip = useMutation(api.djs.cancelRipRequest);
+    return (
     <Dialog.Root>
       <Dialog.Trigger>
         <Button size="1" radius="full" variant="surface">
@@ -4247,15 +4261,43 @@ const RipDialog = memo(
                           {r.message}
                         </Text>
                       )}
+                      {/* Bar follows tracks tried, so DRM-locked or failed
+                          ones still move it; the count is what actually landed. */}
+                      {r.status === "claimed" && r.tracksTotal ? (
+                        <Flex direction="column" gap="1" mt="1">
+                          <Progress
+                            size="1"
+                            color="orange"
+                            value={((r.tracksTried ?? 0) / r.tracksTotal) * 100}
+                          />
+                          <Text size="1" color="gray" style={{ opacity: 0.6 }}>
+                            {r.tracksDone ?? 0}/{r.tracksTotal} tracks downloaded
+                          </Text>
+                        </Flex>
+                      ) : null}
                     </Flex>
                   </Flex>
-                  <Badge size="1" color={r.status === "claimed" ? "orange" : "gray"} variant="soft">
-                    {r.status === "claimed"
-                      ? "ripping"
-                      : waitingAhead === 0
-                        ? "next up"
-                        : `${waitingAhead} ahead`}
-                  </Badge>
+                  <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
+                    <Badge size="1" color={r.status === "claimed" ? "orange" : "gray"} variant="soft">
+                      {r.status === "claimed"
+                        ? "ripping"
+                        : waitingAhead === 0
+                          ? "next up"
+                          : `${waitingAhead} ahead`}
+                    </Badge>
+                    {r.canCancel && (
+                      <Button
+                        size="1"
+                        variant="ghost"
+                        color="red"
+                        // A running rip stops between tracks, so it can take a
+                        // moment; anything already uploaded stays.
+                        onClick={() => void cancelRip({ requestId: r._id })}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </Flex>
                 </Flex>
                 );
               })}
@@ -4299,5 +4341,6 @@ const RipDialog = memo(
         </Flex>
       </Dialog.Content>
     </Dialog.Root>
-  ),
+    );
+  },
 );

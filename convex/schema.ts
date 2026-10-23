@@ -217,10 +217,17 @@ export default defineSchema({
       v.literal("claimed"),
       v.literal("done"),
       v.literal("failed"),
+      // Stopped by whoever queued it. A running ripper notices on its next
+      // progress note and stops between tracks.
+      v.literal("cancelled"),
     ),
     /** Progress / error detail for whoever is watching the queue. */
     message: v.optional(v.string()),
     trackCount: v.optional(v.number()),
+    /** Live counts from the ripper while it runs, for the progress bar. */
+    tracksDone: v.optional(v.number()), // in the library because of this rip
+    tracksTried: v.optional(v.number()), // attempted, whatever the outcome
+    tracksTotal: v.optional(v.number()),
     /**
      * Titles still rate-limited when the ripper gave up on them. Kept so the
      * email and the queue can name them, rather than just counting them.
