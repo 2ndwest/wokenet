@@ -248,6 +248,23 @@ export const clearMyDjAvatar = mutation({
  * A short-lived URL for streaming or downloading one track. Kept separate from
  * listTracks so we don't mint a few hundred URLs on every reactive re-run.
  */
+/**
+ * Count a download of each track, once per track per download -- a zip of 12
+ * counts each of the 12 once. Called by the page after the file actually
+ * arrived, which is why it's separate from getTrackUrl: playing a track fetches
+ * the same URL and shouldn't count.
+ */
+export const recordDownloads = mutation({
+  args: { trackIds: v.array(v.id("djTracks")) },
+  handler: async (ctx, { trackIds }) => {
+    await requirePutz(ctx);
+    for (const trackId of new Set(trackIds)) {
+      const track = await ctx.db.get(trackId);
+      if (track) await ctx.db.patch(trackId, { downloadCount: (track.downloadCount ?? 0) + 1 });
+    }
+  },
+});
+
 export const getTrackUrl = query({
   args: { trackId: v.id("djTracks") },
   handler: async (ctx, { trackId }) => {

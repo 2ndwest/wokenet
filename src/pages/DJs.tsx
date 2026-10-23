@@ -506,12 +506,13 @@ const ShowMore = memo(
 /** The filter rows, so one can be left out when counting its own chips. */
 type Facet = "tags" | "dj" | "quality" | "bpm" | "cues";
 
-type SortMode = "alphabetical" | "added" | "bpm" | "key" | "quality" | "dj" | "genre";
+type SortMode = "alphabetical" | "added" | "popular" | "bpm" | "key" | "quality" | "dj" | "genre";
 type SortDir = "asc" | "desc";
 
 const SORT_LABELS: Record<SortMode, string> = {
   alphabetical: "Alphabetical",
   added: "Date added",
+  popular: "Popularity",
   bpm: "BPM",
   key: "Key",
   quality: "Quality",
@@ -523,6 +524,7 @@ const SORT_LABELS: Record<SortMode, string> = {
 const DIRECTION_LABELS: Record<SortMode, { asc: string; desc: string }> = {
   alphabetical: { asc: "A–Z", desc: "Z–A" },
   added: { asc: "Oldest", desc: "Newest" },
+  popular: { asc: "Least downloaded", desc: "Most downloaded" },
   bpm: { asc: "Slowest", desc: "Fastest" },
   key: { asc: "1A–12B", desc: "12B–1A" },
   quality: { asc: "Best first", desc: "Worst first" },
@@ -530,10 +532,11 @@ const DIRECTION_LABELS: Record<SortMode, { asc: string; desc: string }> = {
   genre: { asc: "A–Z", desc: "Z–A" },
 };
 
-/** Newest-first is the useful default for dates; everything else reads up. */
+/** Newest-first and most-downloaded-first are the useful defaults; everything else reads up. */
 const DEFAULT_DIRECTION: Record<SortMode, SortDir> = {
   alphabetical: "asc",
   added: "desc",
+  popular: "desc",
   bpm: "asc",
   key: "asc",
   quality: "asc",
@@ -589,6 +592,13 @@ function sortTracks(tracks: Track[], mode: SortMode, dir: SortDir): Track[] {
     switch (mode) {
       case "added":
         return a.uploadedAt - b.uploadedAt || byTitle(a, b);
+      case "popular":
+        // Most tracks tie (at 0 early on), and the list gets reversed for
+        // most-downloaded-first; flip the title tiebreak so ties still read A–Z.
+        return (
+          (a.downloadCount ?? 0) - (b.downloadCount ?? 0) ||
+          (dir === "desc" ? -byTitle(a, b) : byTitle(a, b))
+        );
       case "bpm":
         return (a.bpm ?? 0) - (b.bpm ?? 0) || byTitle(a, b);
       case "key":
@@ -730,6 +740,7 @@ export const DJs = memo(() => {
   const attachCues = useMutation(api.djs.attachCues);
   const setCover = useMutation(api.djs.setCover);
   const setAnalysis = useMutation(api.djs.setAnalysis);
+  const recordDownloads = useMutation(api.djs.recordDownloads);
 
   // ---- filters (within a facet: OR; across facets: AND) ----
   const [search, setSearch] = useState("");
@@ -1177,13 +1188,15 @@ export const DJs = memo(() => {
         a.click();
         a.remove();
         URL.revokeObjectURL(objectUrl);
+        // A miscount isn't worth failing a download over.
+        void recordDownloads({ trackIds: [track._id] }).catch(() => {});
       } catch (err) {
         setNotice(err instanceof Error ? err.message : "Couldn't download that track.");
       } finally {
         setBusy(null);
       }
     },
-    [convex],
+    [convex, recordDownloads],
   );
 
   /**
@@ -1324,6 +1337,7 @@ export const DJs = memo(() => {
 
     setNotice(null);
     const entries: ZipEntry[] = [];
+    const fetched: Id<"djTracks">[] = [];
     try {
       for (let i = 0; i < chosen.length; i += 1) {
         const t = chosen[i];
@@ -1333,6 +1347,7 @@ export const DJs = memo(() => {
         const res = await fetch(url);
         if (!res.ok) continue;
         entries.push({ name: t.filename, data: await res.blob() });
+        fetched.push(t._id);
       }
 
       // Ship a rekordbox collection alongside the audio, so cue points and
@@ -1358,6 +1373,8 @@ export const DJs = memo(() => {
       const count = entries.length - 1;
       setBusy(`building zip (${count} tracks)`);
       saveBlob(await buildZip(entries), zipName.replace("{n}", String(count)));
+      // Only the tracks that actually made it into the zip count.
+      void recordDownloads({ trackIds: fetched }).catch(() => {});
       setNotice(`Downloaded ${count} track${count === 1 ? "" : "s"}.`);
       return true;
     } catch (err) {
@@ -1366,7 +1383,7 @@ export const DJs = memo(() => {
     } finally {
       setBusy(null);
     }
-  }, [convex]);
+  }, [convex, recordDownloads]);
 
   const downloadSelected = useCallback(async () => {
     const chosen = (tracks ?? []).filter((t) => selected.has(t._id));
@@ -3514,13 +3531,6 @@ const TrackEditDialog = memo(
           </Flex>
 
           <Flex direction="column" gap="3">
-            <Field label="Artist">
-              <TextField.Root
-                value={artist}
-                placeholder="unknown"
-                onChange={(e) => setArtist(e.target.value)}
-              />
-            </Field>
             <Flex gap="3">
               <Field label="BPM">
                 <Flex gap="1" align="center">
@@ -3586,6 +3596,10 @@ const TrackEditDialog = memo(
               </Flex>
             </Flex>
             <ReadOnly label="Uploaded" value={`${formatTimestamp(track.uploadedAt)} (${getRelativeTime(track.uploadedAt)})`} />
+            <ReadOnly
+              label="Downloads"
+              value={`${track.downloadCount ?? 0} time${track.downloadCount === 1 ? "" : "s"}`}
+            />
             <ReadOnly label="Quality" value={QUALITY_LABEL[track.quality] + (track.bitrateKbps ? ` · ${track.bitrateKbps} kbps` : "")} />
             <ReadOnly label="Format" value={`${track.ext.toUpperCase()} · ${formatDuration(track.durationSec)} · ${formatSize(track.sizeBytes)}`} />
             <ReadOnly label="File" value={track.filename} />

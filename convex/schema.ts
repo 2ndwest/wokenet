@@ -145,6 +145,8 @@ export default defineSchema({
 
     sourceUrl: v.optional(v.string()), // SoundCloud permalink, if ripped
     uploadedAt: v.number(),
+    /** Times it's been downloaded, singly or in a zip. Plays don't count. */
+    downloadCount: v.optional(v.number()),
   })
     .index("by_dj", ["dj"])
     .index("by_uploadedAt", ["uploadedAt"]),
