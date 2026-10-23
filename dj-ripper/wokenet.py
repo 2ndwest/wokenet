@@ -61,17 +61,31 @@ def claim_rip(cfg: Config, claimed_by: str) -> dict | None:
     return claim if (claim := _post(cfg, "/dj-rip/claim", {"claimedBy": claimed_by})) else None
 
 
-def progress(cfg: Config, request_id: str, message: str) -> None:
+def progress(
+    cfg: Config,
+    request_id: str,
+    message: str,
+    done: int | None = None,
+    tried: int | None = None,
+    total: int | None = None,
+) -> bool:
     """
-    Note progress on a request that's still running.
+    Note progress on a request that's still running. Returns True if whoever
+    queued it has cancelled it since, which is the ripper's cue to stop.
 
     Best-effort: a rip that's going fine shouldn't fall over because a status
-    note didn't get through.
+    note didn't get through, so a failed note reads as "carry on".
     """
     try:
-        _post(cfg, "/dj-rip/progress", {"requestId": request_id, "message": message})
+        payload = {"requestId": request_id, "message": message}
+        # Counts for the progress bar; left out rather than sent as null.
+        for key, val in (("done", done), ("tried", tried), ("total", total)):
+            if val is not None:
+                payload[key] = val
+        res = _post(cfg, "/dj-rip/progress", payload)
     except Exception:
-        pass
+        return False
+    return bool(res and res.get("cancelled"))
 
 
 def finish_rip(

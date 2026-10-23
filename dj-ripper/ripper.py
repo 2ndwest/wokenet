@@ -18,6 +18,7 @@ Requests queue up while this isn't running and get picked up when it starts.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 import tempfile
@@ -46,6 +47,10 @@ def sweep_stale_workdirs() -> None:
     for leftover in Path(tempfile.gettempdir()).glob("wokenet-rip-*"):
         if leftover.is_dir():
             shutil.rmtree(leftover, ignore_errors=True)
+
+
+class Cancelled(Exception):
+    """The request was cancelled from the site while it was being ripped."""
 
 
 def rip_one(
@@ -107,22 +112,33 @@ def rip_one(
             # Whether or not it registered, the file has served its purpose.
             path.unlink(missing_ok=True)
 
+    def check_in(message: str, tried: int) -> None:
+        """Post a progress note, and stop here if the request was cancelled."""
+        if wokenet.progress(
+            cfg, request["requestId"], message, uploaded + skipped, tried, len(tracks)
+        ):
+            raise Cancelled(f"cancelled after {uploaded} uploaded")
+
     try:
         pending = list(enumerate(tracks, start=1))
         for rnd in range(1, max(1, rounds) + 1):
             if rnd > 1:
                 wait = backoff * (2 ** (rnd - 2))
                 print(f"    {len(pending)} rate-limited; waiting {wait:.0f}s before round {rnd}")
-                # Tell whoever submitted it why their request is still going.
-                wokenet.progress(
-                    cfg,
-                    request["requestId"],
-                    f"{uploaded} done, {len(pending)} rate-limited — retrying in {wait:.0f}s",
-                )
-                time.sleep(wait)
+                # Tell whoever submitted it why their request is still going,
+                # and keep checking in so a cancel doesn't sit out the backoff.
+                deadline = time.monotonic() + wait
+                while (left := deadline - time.monotonic()) > 0:
+                    check_in(
+                        f"{len(pending)} rate-limited — retrying in {left:.0f}s",
+                        len(tracks) - len(pending),
+                    )
+                    time.sleep(min(15, left))
 
             throttled: list[tuple[int, dict]] = []
             for n, (idx, track) in enumerate(pending, start=1):
+                # Tracks still waiting on a retry round don't count as tried.
+                check_in("ripping", len(tracks) - len(pending) + n - 1)
                 label = (track.get("title") or f"track {track['id']}")[:44]
                 print(f"    [{idx:>3}/{len(tracks)}] {label:<46}", end=" ", flush=True)
                 try:
@@ -180,7 +196,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = wokenet.Config(args.site_url, args.secret)
-    token = putz_djs.load_token(args.token)
+    token = putz_djs.load_token(args.token or os.environ.get("SC_OAUTH_TOKEN"))
     if args.token_file:
         token = sc_token.current(args.token_file)
     me = args.me.strip().lower().split("@")[0]
@@ -223,6 +239,10 @@ def main() -> None:
             status = "done" if handled else "failed"
             wokenet.finish_rip(cfg, request["requestId"], status, message, handled, stuck)
             print(f"  {status}: {message}\n")
+        except Cancelled as exc:
+            # The server keeps it cancelled; this just records how far it got.
+            wokenet.finish_rip(cfg, request["requestId"], "failed", str(exc), 0)
+            print(f"  {exc}\n")
         except Exception as exc:
             wokenet.finish_rip(cfg, request["requestId"], "failed", str(exc), 0)
             print(f"  failed: {exc}\n"[:200])
