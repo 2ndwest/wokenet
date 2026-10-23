@@ -233,6 +233,14 @@ export default defineSchema({
      * email and the queue can name them, rather than just counting them.
      */
     rateLimited: v.optional(v.array(v.string())),
+    /**
+     * Where the ripped tracks should be filed. An existing playlist is set up
+     * front; a new one is only named, and created when the first track lands,
+     * so a rip that fails or is cancelled doesn't leave an empty playlist.
+     */
+    playlistId: v.optional(v.id("djPlaylists")),
+    newPlaylistName: v.optional(v.string()),
+    newPlaylistDescription: v.optional(v.string()),
     claimedBy: v.optional(v.string()), // kerb of the machine's owner
     claimedAt: v.optional(v.number()),
     finishedAt: v.optional(v.number()),

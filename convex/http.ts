@@ -125,10 +125,15 @@ export const ripTrack = httpAction(async (ctx, req) => {
     const existing = await ctx.runQuery(internal.djs.findTrackBySourceUrl, {
       sourceUrl: body.sourceUrl,
     });
-    if (existing) return json({ trackId: existing._id, skipped: true });
+    if (existing) {
+      await ctx.runMutation(internal.djs.fileRippedTrack, { dj: body.dj, trackId: existing._id });
+      return json({ trackId: existing._id, skipped: true });
+    }
   }
 
-  return json({ trackId: await ctx.runMutation(internal.djs.insertRippedTrack, body) });
+  const trackId = await ctx.runMutation(internal.djs.insertRippedTrack, body);
+  await ctx.runMutation(internal.djs.fileRippedTrack, { dj: body.dj, trackId });
+  return json({ trackId });
 });
 
 /** Create a playlist from the CLI, selecting tracks by genre or filename. */

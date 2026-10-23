@@ -3,11 +3,12 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { CUE_SOURCE_VALIDATOR, QUALITY_VALIDATOR } from "./schema";
 import { requireAdmin, requirePutz } from "./utils/auth";
 import { normalizeGenres, normalizeUserGenres } from "./utils/genres";
@@ -275,8 +276,18 @@ export const listRipRequests = query({
       .sort((a, b) => a.createdAt - b.createdAt);
     const place = new Map(queue.map((r, i) => [r._id, i + 1]));
 
+    // Where each one's tracks are going, so the queue can say.
+    const playlistNames = new Map<string, string>();
+    for (const r of recent) {
+      if (r.playlistId && !playlistNames.has(r.playlistId)) {
+        const p = await ctx.db.get(r.playlistId);
+        if (p) playlistNames.set(r.playlistId, p.name);
+      }
+    }
+
     return recent.map((r) => ({
       ...r,
+      playlistName: (r.playlistId && playlistNames.get(r.playlistId)) || r.newPlaylistName || null,
       place: place.get(r._id) ?? null,
       // Whoever queued it can stop it; admins can stop anything stuck.
       canCancel: r.requestedBy === kerb || !!user.isAdmin,
@@ -440,33 +451,41 @@ export const deletePlaylist = mutation({
   },
 });
 
+/** Append tracks to the end of a playlist, skipping any already on it. */
+const appendToPlaylist = async (
+  ctx: MutationCtx,
+  playlistId: Id<"djPlaylists">,
+  trackIds: Id<"djTracks">[],
+  kerb: string,
+) => {
+  const existing = await ctx.db
+      .query("djPlaylistTracks")
+      .withIndex("by_playlist", (q) => q.eq("playlistId", playlistId))
+      .collect();
+  const already = new Set(existing.map((r) => r.trackId));
+  let position = existing.reduce((max, r) => Math.max(max, r.position), -1) + 1;
+
+  let added = 0;
+  for (const trackId of trackIds) {
+    if (already.has(trackId)) continue; // adding twice is a no-op, not an error
+    await ctx.db.insert("djPlaylistTracks", {
+      playlistId,
+      trackId,
+      position,
+      addedAt: Date.now(),
+      addedBy: kerb,
+    });
+    position += 1;
+    added += 1;
+  }
+  return { added, skipped: trackIds.length - added };
+};
+
 export const addTracksToPlaylist = mutation({
   args: { playlistId: v.id("djPlaylists"), trackIds: v.array(v.id("djTracks")) },
   handler: async (ctx, { playlistId, trackIds }) => {
     const { user } = await requirePutz(ctx);
-    const kerb = kerbOf(user.email);
-
-    const existing = await ctx.db
-      .query("djPlaylistTracks")
-      .withIndex("by_playlist", (q) => q.eq("playlistId", playlistId))
-      .collect();
-    const already = new Set(existing.map((r) => r.trackId));
-    let position = existing.reduce((max, r) => Math.max(max, r.position), -1) + 1;
-
-    let added = 0;
-    for (const trackId of trackIds) {
-      if (already.has(trackId)) continue; // adding twice is a no-op, not an error
-      await ctx.db.insert("djPlaylistTracks", {
-        playlistId,
-        trackId,
-        position,
-        addedAt: Date.now(),
-        addedBy: kerb,
-      });
-      position += 1;
-      added += 1;
-    }
-    return { added, skipped: trackIds.length - added };
+    return await appendToPlaylist(ctx, playlistId, trackIds, kerbOf(user.email));
   },
 });
 
@@ -1008,12 +1027,21 @@ export const deleteTrack = mutation({
 // ---------------------------------------------------------------- rip requests
 
 export const requestRip = mutation({
-  args: { url: v.string() },
-  handler: async (ctx, { url }) => {
+  args: {
+    url: v.string(),
+    /** File the tracks into this playlist as they land... */
+    playlistId: v.optional(v.id("djPlaylists")),
+    /** ...or into a new one by this name, made when the first track lands. */
+    newPlaylistName: v.optional(v.string()),
+    newPlaylistDescription: v.optional(v.string()),
+  },
+  handler: async (ctx, { url, playlistId, newPlaylistName, newPlaylistDescription }) => {
     const { user } = await requirePutz(ctx);
 
     const trimmed = url.trim();
     if (!trimmed.includes("soundcloud.com")) throw new Error("NOT_A_SOUNDCLOUD_URL");
+    if (playlistId && !(await ctx.db.get(playlistId))) throw new Error("PLAYLIST_NOT_FOUND");
+    const newName = newPlaylistName?.trim().slice(0, 60) || undefined;
 
     // Don't queue the same thing twice while it's still outstanding.
     const outstanding = await ctx.db
@@ -1028,6 +1056,10 @@ export const requestRip = mutation({
       requestedBy: kerbOf(user.email),
       status: "pending",
       createdAt: Date.now(),
+      playlistId,
+      newPlaylistName: playlistId ? undefined : newName,
+      newPlaylistDescription:
+        playlistId || !newName ? undefined : newPlaylistDescription?.trim().slice(0, 140) || undefined,
     });
 
     // Scheduled rather than awaited: a mail outage must not fail the request.
@@ -1214,6 +1246,45 @@ export const insertRippedTrack = internalMutation({
       analysisSource: args.bpm !== undefined || args.musicalKey ? ("tag" as const) : undefined,
       uploadedAt: Date.now(),
     });
+  },
+});
+
+/**
+ * File a track the ripper just registered into the playlist its request asked
+ * for, if any. Called for tracks that were already in the library too, so
+ * re-ripping a set into a playlist still fills it.
+ *
+ * The ripper doesn't say which request a track belongs to, but it works one
+ * request at a time and credits each track to whoever asked, so the request is
+ * the one currently being ripped for that person. Keeping the matching here
+ * means the ripper machine never needs updating for this.
+ */
+export const fileRippedTrack = internalMutation({
+  args: { dj: v.string(), trackId: v.id("djTracks") },
+  handler: async (ctx, { dj, trackId }) => {
+    const kerb = dj.toLowerCase();
+    const claimed = await ctx.db
+      .query("djRipRequests")
+      .withIndex("by_status", (q) => q.eq("status", "claimed"))
+      .collect();
+    const request = claimed
+      .filter((r) => r.requestedBy === kerb)
+      .sort((a, b) => (b.claimedAt ?? 0) - (a.claimedAt ?? 0))[0];
+    if (!request || (!request.playlistId && !request.newPlaylistName)) return;
+
+    let playlistId = request.playlistId;
+    if (!playlistId || !(await ctx.db.get(playlistId))) {
+      // Asked for a new one, or the chosen one was deleted mid-rip.
+      if (!request.newPlaylistName) return;
+      playlistId = await ctx.db.insert("djPlaylists", {
+        name: request.newPlaylistName,
+        description: request.newPlaylistDescription,
+        createdBy: kerb,
+        createdAt: Date.now(),
+      });
+      await ctx.db.patch(request._id, { playlistId });
+    }
+    await appendToPlaylist(ctx, playlistId, [trackId], kerb);
   },
 });
 

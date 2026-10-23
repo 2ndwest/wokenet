@@ -10,6 +10,7 @@ import {
   Heading,
   IconButton,
   Progress,
+  SegmentedControl,
   Select,
   Separator,
   Slider,
@@ -69,7 +70,11 @@ async function uploadEmbeddedCover(
 }
 
 /** listRipRequests numbers everything still waiting, oldest first. */
-type RipRequest = Doc<"djRipRequests"> & { place: number | null; canCancel: boolean };
+type RipRequest = Doc<"djRipRequests"> & {
+  place: number | null;
+  canCancel: boolean;
+  playlistName: string | null;
+};
 
 /** listTracks resolves the DJ display name and cover URL on the way out. */
 type Track = Doc<"djTracks"> & {
@@ -1451,7 +1456,7 @@ export const DJs = memo(() => {
   );
 
   const upload = useCallback(
-    async (files: File[], playlist: { name: string; description: string } | null) => {
+    async (files: File[], playlist: PlaylistTarget | null) => {
       setNotice(null);
       let done = 0;
       const rejected: string[] = [];
@@ -1513,17 +1518,20 @@ export const DJs = memo(() => {
 
       // Only worth making the playlist if something actually landed.
       if (playlist && uploadedIds.length > 0) {
-        setBusy(`creating playlist "${playlist.name}"`);
+        setBusy(playlist.kind === "new" ? `creating playlist "${playlist.name}"` : "adding to playlist");
         try {
-          const playlistId = await createPlaylist({
-            name: playlist.name,
-            description: playlist.description || undefined,
-          });
+          const playlistId =
+            playlist.kind === "new"
+              ? await createPlaylist({
+                  name: playlist.name,
+                  description: playlist.description || undefined,
+                })
+              : playlist.playlistId;
           await addTracksToPlaylist({ playlistId, trackIds: uploadedIds });
           setActivePlaylistId(playlistId);
-          parts.push(`Added to "${playlist.name}".`);
+          parts.push("Added to the playlist.");
         } catch {
-          parts.push("Couldn't create the playlist.");
+          parts.push("Couldn't add them to the playlist.");
         }
       }
 
@@ -1534,13 +1542,18 @@ export const DJs = memo(() => {
   );
 
   /** Queue a SoundCloud URL for a DJ's ripper to pick up. */
-  const submitRip = useCallback(async () => {
+  const submitRip = useCallback(async (playlist: PlaylistTarget | null) => {
     const url = ripUrl.trim();
     if (!url) return;
     setBusy("queueing rip");
     setNotice(null);
     try {
-      await requestRip({ url });
+      await requestRip({
+        url,
+        playlistId: playlist?.kind === "existing" ? playlist.playlistId : undefined,
+        newPlaylistName: playlist?.kind === "new" ? playlist.name : undefined,
+        newPlaylistDescription: playlist?.kind === "new" ? playlist.description || undefined : undefined,
+      });
       setRipUrl("");
       setNotice("Queued. It'll appear once a DJ's ripper picks it up.");
     } catch (err) {
@@ -1699,6 +1712,7 @@ export const DJs = memo(() => {
               </Button>
             )}
             <RipDialog
+              playlists={playlists ?? []}
               value={ripUrl}
               onChange={setRipUrl}
               onSubmit={submitRip}
@@ -1706,7 +1720,11 @@ export const DJs = memo(() => {
               recent={throttledRips}
               busy={busy !== null}
             />
-            <UploadDialog onRun={(f, p) => void upload(f, p)} busy={busy !== null} />
+            <UploadDialog
+              playlists={playlists ?? []}
+              onRun={(f, p) => void upload(f, p)}
+              busy={busy !== null}
+            />
             <LibraryImportDialog onRun={importLibrary} busy={busy !== null} />
             {!activePlaylist && playButton}
             {user?.isAdmin && <DuplicatesDialog />}
@@ -4107,30 +4125,135 @@ const PlaylistSidebar = memo(
  * so there's somewhere to say "and put these in a new playlist" before
  * anything is sent.
  */
+/** Where an upload or rip should file its tracks. */
+type PlaylistTarget =
+  | { kind: "new"; name: string; description: string }
+  | { kind: "existing"; playlistId: Id<"djPlaylists"> };
+
+/** What the playlist picker is showing, kept by the dialog that owns it. */
+type PlaylistDraft = {
+  on: boolean;
+  mode: "new" | "existing";
+  name: string;
+  description: string;
+  playlistId: Id<"djPlaylists"> | null;
+};
+
+const EMPTY_PLAYLIST_DRAFT: PlaylistDraft = {
+  on: false,
+  mode: "new",
+  name: "",
+  description: "",
+  playlistId: null,
+};
+
+/** The target a draft describes: null for "no playlist", "incomplete" while it's half filled in. */
+const targetOf = (d: PlaylistDraft): PlaylistTarget | null | "incomplete" => {
+  if (!d.on) return null;
+  if (d.mode === "existing") return d.playlistId ? { kind: "existing", playlistId: d.playlistId } : "incomplete";
+  return d.name.trim()
+    ? { kind: "new", name: d.name.trim(), description: d.description.trim() }
+    : "incomplete";
+};
+
+/** "Put these in a playlist": a new one, or one that already exists. Shared by upload and rip. */
+const PlaylistPicker = memo(
+  ({
+    playlists,
+    draft,
+    onChange,
+  }: {
+    playlists: PlaylistRow[];
+    draft: PlaylistDraft;
+    onChange: (d: PlaylistDraft) => void;
+  }) => {
+    const set = (patch: Partial<PlaylistDraft>) => onChange({ ...draft, ...patch });
+    return (
+      <Flex direction="column" gap="2">
+        <Text as="label" size="2">
+          <Flex gap="2" align="center">
+            <Checkbox checked={draft.on} onCheckedChange={(v) => set({ on: v === true })} />
+            Put these in a playlist
+          </Flex>
+        </Text>
+
+        {draft.on && (
+          <Flex direction="column" gap="2" pl="5">
+            <SegmentedControl.Root
+              size="1"
+              value={draft.mode}
+              onValueChange={(v) => set({ mode: v as PlaylistDraft["mode"] })}
+            >
+              <SegmentedControl.Item value="new">New playlist</SegmentedControl.Item>
+              <SegmentedControl.Item value="existing">
+                Existing playlist
+              </SegmentedControl.Item>
+            </SegmentedControl.Root>
+
+            {draft.mode === "new" ? (
+              <>
+                <TextField.Root
+                  placeholder="playlist name"
+                  value={draft.name}
+                  maxLength={60}
+                  onChange={(e) => set({ name: e.target.value })}
+                />
+                <TextField.Root
+                  placeholder="short description (optional)"
+                  value={draft.description}
+                  maxLength={140}
+                  onChange={(e) => set({ description: e.target.value })}
+                />
+              </>
+            ) : playlists.length === 0 ? (
+              <Text size="1" color="gray">
+                No playlists yet — make a new one instead.
+              </Text>
+            ) : (
+              <Select.Root
+                value={draft.playlistId ?? undefined}
+                onValueChange={(v) => set({ playlistId: v as Id<"djPlaylists"> })}
+              >
+                <Select.Trigger placeholder="choose a playlist" />
+                <Select.Content position="popper">
+                  {playlists.map((p) => (
+                    <Select.Item key={p._id} value={p._id}>
+                      {p.name} ({p.trackCount})
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
+            )}
+          </Flex>
+        )}
+      </Flex>
+    );
+  },
+);
+
 const UploadDialog = memo(
   ({
+    playlists,
     onRun,
     busy,
   }: {
-    onRun: (files: File[], playlist: { name: string; description: string } | null) => void;
+    playlists: PlaylistRow[];
+    onRun: (files: File[], playlist: PlaylistTarget | null) => void;
     busy: boolean;
   }) => {
     const input = useRef<HTMLInputElement | null>(null);
     const [files, setFiles] = useState<File[]>([]);
-    const [asPlaylist, setAsPlaylist] = useState(false);
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
+    const [draft, setDraft] = useState(EMPTY_PLAYLIST_DRAFT);
+    const target = targetOf(draft);
 
-    const ready = files.length > 0 && (!asPlaylist || name.trim().length > 0);
+    const ready = files.length > 0 && target !== "incomplete";
 
     return (
       <Dialog.Root
         onOpenChange={(open) => {
           if (!open) {
             setFiles([]);
-            setAsPlaylist(false);
-            setName("");
-            setDescription("");
+            setDraft(EMPTY_PLAYLIST_DRAFT);
           }
         }}
       >
@@ -4164,42 +4287,13 @@ const UploadDialog = memo(
               </Button>
             </Flex>
 
-            <Flex direction="column" gap="2">
-              <Text as="label" size="2">
-                <Flex gap="2" align="center">
-                  <Checkbox
-                    checked={asPlaylist}
-                    onCheckedChange={(v) => setAsPlaylist(v === true)}
-                  />
-                  Put these in a new playlist
-                </Flex>
-              </Text>
-
-              {asPlaylist && (
-                <Flex direction="column" gap="2" pl="5">
-                  <TextField.Root
-                    placeholder="playlist name"
-                    value={name}
-                    maxLength={60}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                  <TextField.Root
-                    placeholder="short description (optional)"
-                    value={description}
-                    maxLength={140}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </Flex>
-              )}
-            </Flex>
+            <PlaylistPicker playlists={playlists} draft={draft} onChange={setDraft} />
 
             <Dialog.Close>
               <Button
                 size="1"
                 disabled={!ready || busy}
-                onClick={() =>
-                  onRun(files, asPlaylist ? { name: name.trim(), description: description.trim() } : null)
-                }
+                onClick={() => target !== "incomplete" && onRun(files, target)}
               >
                 {busy ? "uploading…" : `Upload ${files.length || ""}`.trim()}
               </Button>
@@ -4318,6 +4412,7 @@ const LibraryImportDialog = memo(
 
 const RipDialog = memo(
   ({
+    playlists,
     value,
     onChange,
     onSubmit,
@@ -4325,16 +4420,25 @@ const RipDialog = memo(
     recent,
     busy,
   }: {
+    playlists: PlaylistRow[];
     value: string;
     onChange: (v: string) => void;
-    onSubmit: () => void;
+    onSubmit: (playlist: PlaylistTarget | null) => void;
     pending: RipRequest[];
     recent: RipRequest[];
     busy: boolean;
   }) => {
     const cancelRip = useMutation(api.djs.cancelRipRequest);
+    const [draft, setDraft] = useState(EMPTY_PLAYLIST_DRAFT);
+    const target = targetOf(draft);
+    const ready = value.trim().length > 0 && target !== "incomplete";
+    const queue = () => {
+      if (target === "incomplete") return;
+      onSubmit(target);
+      setDraft(EMPTY_PLAYLIST_DRAFT);
+    };
     return (
-    <Dialog.Root>
+    <Dialog.Root onOpenChange={(open) => !open && setDraft(EMPTY_PLAYLIST_DRAFT)}>
       <Dialog.Trigger>
         <Button size="1" radius="full" variant="surface">
           Rip{pending.length > 0 ? ` (${pending.length})` : ""}
@@ -4357,10 +4461,15 @@ const RipDialog = memo(
             onChange={(e) => onChange(e.target.value)}
             style={{ flex: "1 1 auto" }}
           />
-          <Button size="1" onClick={onSubmit} disabled={busy || value.trim().length === 0}>
+          <Button size="1" onClick={queue} disabled={busy || !ready}>
             Queue
           </Button>
         </Flex>
+
+        {/* Tracks are filed as they land, including ones already in the library. */}
+        <Box mt="3">
+          <PlaylistPicker playlists={playlists} draft={draft} onChange={setDraft} />
+        </Box>
 
         {pending.length > 0 && (
           <>
@@ -4388,6 +4497,11 @@ const RipDialog = memo(
                       <Text size="1" color="gray" truncate>
                         {r.url}
                       </Text>
+                      {r.playlistName && (
+                        <Text size="1" color="gray" truncate style={{ opacity: 0.6 }}>
+                          → {r.playlistName}
+                        </Text>
+                      )}
                       {/* The ripper's own note: "ripping", or what it's
                           waiting on while it backs off a rate limit. */}
                       {r.status === "claimed" && r.message && r.message !== "ripping" && (
