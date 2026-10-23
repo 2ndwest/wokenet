@@ -50,7 +50,7 @@ cat > "$PLIST" <<PLIST_EOF
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>set -a; . "$ENVFILE"; set +a; exec "$PY" "$HERE/ripper.py" --me "$KERB"</string>
+    <string>set -a; . "$ENVFILE"; set +a; exec "$PY" "$HERE/ripper.py" --me "$KERB" --token-file "$HOME/.wokenet-ripper-sc.json"</string>
   </array>
   <key>WorkingDirectory</key><string>/</string>
   <key>EnvironmentVariables</key>

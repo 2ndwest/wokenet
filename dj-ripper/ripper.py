@@ -24,6 +24,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import sc_token
 import wokenet
 
 try:
@@ -170,6 +171,7 @@ def main() -> None:
     ap.add_argument("--site-url", help="Convex site URL (or set WOKENET_SITE_URL)")
     ap.add_argument("--secret", help="DJ_RIPPER_SECRET (or set the env var)")
     ap.add_argument("--token", help="SoundCloud oauth_token (or set SC_OAUTH_TOKEN)")
+    ap.add_argument("--token-file", type=Path, help="JSON file from sc_token.py; kept fresh automatically")
     ap.add_argument("--interval", type=float, default=30.0, help="seconds between polls")
     ap.add_argument("--pace", type=float, default=2.0, help="seconds between tracks")
     ap.add_argument("--rounds", type=int, default=4, help="retry rounds for rate-limited tracks")
@@ -179,6 +181,8 @@ def main() -> None:
 
     cfg = wokenet.Config(args.site_url, args.secret)
     token = putz_djs.load_token(args.token)
+    if args.token_file:
+        token = sc_token.current(args.token_file)
     me = args.me.strip().lower().split("@")[0]
 
     print(f"ripper up as '{me}', polling {cfg.site_url} every {args.interval:.0f}s")
@@ -187,6 +191,10 @@ def main() -> None:
 
     idle_logged = False
     while True:
+        if args.token_file:
+            # Checked every poll so the token is refreshed even while idle,
+            # and a new one is picked up without a restart.
+            token = sc_token.current(args.token_file)
         try:
             request = wokenet.claim_rip(cfg, me)
         except Exception as exc:
