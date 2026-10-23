@@ -295,6 +295,56 @@ export const listRipRequests = query({
   },
 });
 
+/** How long a finished rip stays on its requester's downloads list. */
+const RIP_DOWNLOAD_DAYS = 7;
+
+/**
+ * The viewer's own finished rips from the last week, newest first, for the
+ * download list. Separate from listRipRequests so a busy week of other
+ * people's rips can't push yours out of view.
+ */
+export const myRecentRips = query({
+  args: {},
+  handler: async (ctx) => {
+    const { user } = await requirePutz(ctx);
+    const kerb = kerbOf(user.email);
+    const since = Date.now() - RIP_DOWNLOAD_DAYS * 24 * 3600 * 1000;
+
+    // A rip finishes after it's created, so anything finished this week was
+    // created at most a day or so before the window opened.
+    const recent = await ctx.db
+      .query("djRipRequests")
+      .withIndex("by_createdAt", (q) => q.gte("createdAt", since - 24 * 3600 * 1000))
+      .order("desc")
+      .collect();
+
+    const mine = recent.filter(
+      (r) =>
+        r.requestedBy === kerb &&
+        !r.dismissedAt &&
+        (r.finishedAt ?? 0) >= since &&
+        (r.trackIds?.length ?? 0) > 0,
+    );
+    return await Promise.all(
+      mine.map(async (r) => ({
+        ...r,
+        playlistName: (r.playlistId && (await ctx.db.get(r.playlistId))?.name) || r.newPlaylistName || null,
+      })),
+    );
+  },
+});
+
+/** Clear a finished rip from your downloads list. The tracks stay in the library. */
+export const dismissRip = mutation({
+  args: { requestId: v.id("djRipRequests") },
+  handler: async (ctx, { requestId }) => {
+    const { user } = await requirePutz(ctx);
+    const request = await ctx.db.get(requestId);
+    if (!request || request.requestedBy !== kerbOf(user.email)) throw new Error("NOT_YOUR_RIP");
+    await ctx.db.patch(requestId, { dismissedAt: Date.now() });
+  },
+});
+
 // ---------------------------------------------------------------- playlists
 
 /** Playlists with their track counts, oldest first. */
@@ -1250,9 +1300,10 @@ export const insertRippedTrack = internalMutation({
 });
 
 /**
- * File a track the ripper just registered into the playlist its request asked
- * for, if any. Called for tracks that were already in the library too, so
- * re-ripping a set into a playlist still fills it.
+ * Record a track the ripper just registered against its request, and file it
+ * into the playlist the request asked for, if any. Called for tracks that were
+ * already in the library too, so re-ripping a set still fills the playlist and
+ * still downloads as a whole.
  *
  * The ripper doesn't say which request a track belongs to, but it works one
  * request at a time and credits each track to whoever asked, so the request is
@@ -1270,7 +1321,13 @@ export const fileRippedTrack = internalMutation({
     const request = claimed
       .filter((r) => r.requestedBy === kerb)
       .sort((a, b) => (b.claimedAt ?? 0) - (a.claimedAt ?? 0))[0];
-    if (!request || (!request.playlistId && !request.newPlaylistName)) return;
+    if (!request) return;
+
+    const trackIds = request.trackIds ?? [];
+    if (!trackIds.includes(trackId)) {
+      await ctx.db.patch(request._id, { trackIds: [...trackIds, trackId] });
+    }
+    if (!request.playlistId && !request.newPlaylistName) return;
 
     let playlistId = request.playlistId;
     if (!playlistId || !(await ctx.db.get(playlistId))) {

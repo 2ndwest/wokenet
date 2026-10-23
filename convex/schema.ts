@@ -241,6 +241,10 @@ export default defineSchema({
     playlistId: v.optional(v.id("djPlaylists")),
     newPlaylistName: v.optional(v.string()),
     newPlaylistDescription: v.optional(v.string()),
+    /** Every track this rip put (or found) in the library, so it can be downloaded as a set. */
+    trackIds: v.optional(v.array(v.id("djTracks"))),
+    /** The requester cleared it from their downloads list. */
+    dismissedAt: v.optional(v.number()),
     claimedBy: v.optional(v.string()), // kerb of the machine's owner
     claimedAt: v.optional(v.number()),
     finishedAt: v.optional(v.number()),

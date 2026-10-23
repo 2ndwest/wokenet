@@ -70,6 +70,12 @@ async function uploadEmbeddedCover(
 }
 
 /** listRipRequests numbers everything still waiting, oldest first. */
+/** One of your finished rips, with its tracks narrowed to the ones still in the library. */
+type FinishedRip = Doc<"djRipRequests"> & {
+  trackIds: Id<"djTracks">[];
+  playlistName: string | null;
+};
+
 type RipRequest = Doc<"djRipRequests"> & {
   place: number | null;
   canCancel: boolean;
@@ -655,6 +661,7 @@ export const DJs = memo(() => {
 
   const tracks = useQuery(api.djs.listTracks);
   const ripRequests = useQuery(api.djs.listRipRequests);
+  const myRecentRips = useQuery(api.djs.myRecentRips);
   const playlists = useQuery(api.djs.listPlaylists);
   const tagStyles = useQuery(api.djs.listTagStyles);
 
@@ -1311,9 +1318,9 @@ export const DJs = memo(() => {
   );
 
   /** Zip up the selected tracks and hand them over as one download. */
-  const downloadSelected = useCallback(async () => {
-    const chosen = (tracks ?? []).filter((t) => selected.has(t._id));
-    if (chosen.length === 0) return;
+  /** Zip up tracks with a rekordbox collection alongside, and save it. Returns whether it worked. */
+  const downloadTracks = useCallback(async (chosen: Track[], zipName: string) => {
+    if (chosen.length === 0) return false;
 
     setNotice(null);
     const entries: ZipEntry[] = [];
@@ -1347,17 +1354,41 @@ export const DJs = memo(() => {
         data: new Blob([xml], { type: "application/xml" }),
       });
 
-      setBusy(`building zip (${entries.length - 1} tracks)`);
-      saveBlob(await buildZip(entries), `wokenet-${entries.length - 1}-tracks.zip`);
-      setNotice(`Downloaded ${entries.length} track${entries.length === 1 ? "" : "s"}.`);
-      setSelectMode(false);
-      setSelected(new Set());
+      // The last entry is the XML, not a track.
+      const count = entries.length - 1;
+      setBusy(`building zip (${count} tracks)`);
+      saveBlob(await buildZip(entries), zipName.replace("{n}", String(count)));
+      setNotice(`Downloaded ${count} track${count === 1 ? "" : "s"}.`);
+      return true;
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Couldn't build that download.");
+      return false;
     } finally {
       setBusy(null);
     }
-  }, [convex, selected, tracks]);
+  }, [convex]);
+
+  const downloadSelected = useCallback(async () => {
+    const chosen = (tracks ?? []).filter((t) => selected.has(t._id));
+    if (await downloadTracks(chosen, "wokenet-{n}-tracks.zip")) {
+      setSelectMode(false);
+      setSelected(new Set());
+    }
+  }, [downloadTracks, selected, tracks]);
+
+  /** Everything a finished rip landed, in the order it landed, named after the link. */
+  const downloadRip = useCallback(
+    (request: FinishedRip) => {
+      const byId = new Map((tracks ?? []).map((t) => [t._id, t]));
+      // Tracks deleted since the rip simply drop out.
+      const chosen = (request.trackIds ?? []).flatMap((id) => byId.get(id) ?? []);
+      const slug =
+        request.url.replace(/[?#].*$/, "").replace(/\/+$/, "").split("/").pop()?.replace(/[^\w-]+/g, "-") ||
+        "rip";
+      void downloadTracks(chosen, `wokenet-${slug}.zip`);
+    },
+    [downloadTracks, tracks],
+  );
 
   /**
    * Quietly fill in missing BPMs in the background.
@@ -1571,6 +1602,18 @@ export const DJs = memo(() => {
     [ripRequests],
   );
 
+  /**
+   * Your own finished rips from the last week, newest first, to download as a
+   * set. Counted by the tracks still in the library, and dropped once none are.
+   */
+  const myFinishedRips = useMemo(() => {
+    const have = new Set((tracks ?? []).map((t) => t._id));
+    return (myRecentRips ?? [])
+      .map((r) => ({ ...r, trackIds: (r.trackIds ?? []).filter((id) => have.has(id)) }))
+      .filter((r) => r.trackIds.length > 0)
+      .slice(0, 5);
+  }, [myRecentRips, tracks]);
+
   /** Finished rips that left tracks behind, so they can be queued again. */
   const throttledRips = useMemo(
     () => (ripRequests ?? []).filter((r) => (r.rateLimited?.length ?? 0) > 0).slice(0, 3),
@@ -1718,6 +1761,8 @@ export const DJs = memo(() => {
               onSubmit={submitRip}
               pending={pendingRips}
               recent={throttledRips}
+              finished={myFinishedRips}
+              onDownload={downloadRip}
               busy={busy !== null}
             />
             <UploadDialog
@@ -4418,6 +4463,8 @@ const RipDialog = memo(
     onSubmit,
     pending,
     recent,
+    finished,
+    onDownload,
     busy,
   }: {
     playlists: PlaylistRow[];
@@ -4426,9 +4473,13 @@ const RipDialog = memo(
     onSubmit: (playlist: PlaylistTarget | null) => void;
     pending: RipRequest[];
     recent: RipRequest[];
+    /** The viewer's own finished rips, offered as zips. */
+    finished: FinishedRip[];
+    onDownload: (request: FinishedRip) => void;
     busy: boolean;
   }) => {
     const cancelRip = useMutation(api.djs.cancelRipRequest);
+    const dismissRip = useMutation(api.djs.dismissRip);
     const [draft, setDraft] = useState(EMPTY_PLAYLIST_DRAFT);
     const target = targetOf(draft);
     const ready = value.trim().length > 0 && target !== "incomplete";
@@ -4547,6 +4598,53 @@ const RipDialog = memo(
                     )}
                   </Flex>
                 </Flex>
+                );
+              })}
+            </Flex>
+          </>
+        )}
+
+        {finished.length > 0 && (
+          <>
+            <Separator size="4" my="4" />
+            <Text size="2" weight="bold">
+              Your rips
+            </Text>
+            <Text size="1" color="gray" as="p" mt="1" style={{ opacity: 0.8 }}>
+              Download a finished rip as a zip, with a rekordbox collection alongside. Rips
+              stay here for a week.
+            </Text>
+            <Flex direction="column" gap="2" mt="2">
+              {finished.map((r) => {
+                const n = r.trackIds?.length ?? 0;
+                return (
+                  <Flex key={r._id} justify="between" gap="2" align="center">
+                    <Flex direction="column" style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <Text size="1" color="gray" truncate>
+                        {r.url}
+                      </Text>
+                      <Text size="1" color="gray" style={{ opacity: 0.6 }}>
+                        {n} track{n === 1 ? "" : "s"}
+                        {r.finishedAt ? ` · ${new Date(r.finishedAt).toLocaleDateString()}` : ""}
+                        {r.playlistName ? ` · → ${r.playlistName}` : ""}
+                      </Text>
+                    </Flex>
+                    <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
+                      <Button size="1" variant="surface" disabled={busy} onClick={() => onDownload(r)}>
+                        Download zip
+                      </Button>
+                      <IconButton
+                        size="1"
+                        variant="ghost"
+                        color="gray"
+                        title="Remove from this list (the tracks stay in the library)"
+                        aria-label="Remove from this list"
+                        onClick={() => void dismissRip({ requestId: r._id })}
+                      >
+                        ✕
+                      </IconButton>
+                    </Flex>
+                  </Flex>
                 );
               })}
             </Flex>
