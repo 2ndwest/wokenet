@@ -78,7 +78,7 @@ export const sendRipQueued = internalAction({
       wrap(
         "Request received",
         `We've queued <span style="color:#ededef">${escapeHtml(url)}</span>.<br><br>
-         The ripping itself runs on a Mac mini at the house rather than on the website
+         The ripping itself runs on a Mac mini in Halo rather than on the website
          &mdash; SoundCloud rips need tools a web server can't run. The mini checks for
          new requests every 30 seconds.<br><br>
          ${place}<br><br>

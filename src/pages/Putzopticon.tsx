@@ -203,6 +203,11 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }:
   );
 });
 
+// Caps a font size so the text spans at most `fill`% of its box's width, given the font's widest
+// average glyph (in em). Height alone can't size text: a long label in a short, narrow row wraps.
+const fitWidth = (text: string, glyphEm: number, fill: number) =>
+  `${(fill / (Math.max(text.length, 1) * glyphEm)).toFixed(2)}cqw`;
+
 export const PersonRow = memo(
   ({
     id,
@@ -247,9 +252,11 @@ export const PersonRow = memo(
             containerType: "size", // So we can use cqh units
             fontFamily: "Mondwest",
             fontWeight: "bold",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: "min(85cqh, 25cqw)" }}>{name}</span>
+          <span style={{ fontSize: `min(85cqh, 25cqw, ${fitWidth(name, 0.65, 95)})` }}>{name}</span>
         </Flex>
 
         <Flex
@@ -263,9 +270,12 @@ export const PersonRow = memo(
             containerType: "size", // So we can use cqh units
             backgroundColor: COLOR_HEX[color] ?? color,
             fontWeight: "bold",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: "min(80cqh, 14cqw)" }}>{label}</span>
+          {/* Berkeley Mono glyphs are 0.6em wide. */}
+          <span style={{ fontSize: `min(80cqh, 14cqw, ${fitWidth(label, 0.6, 92)})` }}>{label}</span>
         </Flex>
       </Flex>
     );

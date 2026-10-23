@@ -366,18 +366,19 @@ const FilterChip = memo(
       // Unset follows the theme accent; a DJ colour wins when there is one.
       color={color ?? (active ? undefined : "gray")}
       onClick={onClick}
-      style={
-        loud
-          ? {
-              height: "24px",
-              backgroundColor: loud.bg,
-              color: loud.fg,
-              fontWeight: 800,
-              // Its own colours don't change when selected, so it glows instead.
-              boxShadow: active ? `0 0 10px rgba(${hexToRgb(loud.bg)}, 0.75)` : undefined,
-            }
-          : { height: "24px" }
-      }
+      style={{
+        height: "24px",
+        // Nothing left under this chip with the current filters: still
+        // clickable, just quieter.
+        opacity: count === 0 && !active ? 0.4 : undefined,
+        ...(loud && {
+          backgroundColor: loud.bg,
+          color: loud.fg,
+          fontWeight: 800,
+          // Its own colours don't change when selected, so it glows instead.
+          boxShadow: active ? `0 0 10px rgba(${hexToRgb(loud.bg)}, 0.75)` : undefined,
+        }),
+      }}
     >
       <Text weight="bold">{children}</Text>
       {count !== undefined && (
@@ -388,6 +389,21 @@ const FilterChip = memo(
     </Button>
   ),
 );
+
+/** Phone-sized screens, where the sidebar folds away and rows stack. Matches index.css. */
+const NARROW_QUERY = "(max-width: 767px)";
+
+/** Tracks a media query, so layout that CSS can't reach can follow the screen size. */
+const useMediaQuery = (query: string) => {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+};
 
 /** Drag payload: the track ids being dropped onto a playlist. */
 const DRAG_TRACKS = "application/x-wokenet-tracks";
@@ -475,6 +491,9 @@ const ShowMore = memo(
     </>
   ),
 );
+
+/** The filter rows, so one can be left out when counting its own chips. */
+type Facet = "tags" | "dj" | "quality" | "bpm" | "cues";
 
 type SortMode = "alphabetical" | "added" | "bpm" | "key" | "quality" | "dj" | "genre";
 type SortDir = "asc" | "desc";
@@ -709,6 +728,11 @@ export const DJs = memo(() => {
   // it to one line until asked for more.
   const [showAllGenres, setShowAllGenres] = useState(false);
   const [showAllDjs, setShowAllDjs] = useState(false);
+  const narrow = useMediaQuery(NARROW_QUERY);
+  // On a phone the playlists live in a drawer rather than a column.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // The filter rows run a screen tall on a phone, so they fold behind a toggle.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [djFilter, setDjFilter] = useState<Set<string>>(new Set());
   const [qualityFilter, setQualityFilter] = useState<Set<Quality>>(new Set());
   const [bpmFilter, setBpmFilter] = useState<Set<string>>(new Set());
@@ -753,6 +777,84 @@ export const DJs = memo(() => {
     return all.filter((t) => order.has(t._id)).sort((a, b) => order.get(a._id)! - order.get(b._id)!);
   }, [tracks, activePlaylistId, playlistTrackIds]);
 
+  /**
+   * Whether a track passes every active filter, optionally ignoring one facet.
+   * Each facet's chip counts come from skipping that facet, so the numbers
+   * answer "how many would I see if I clicked this" given everything else
+   * that's selected.
+   */
+  const passes = useCallback(
+    (t: Track, skip?: Facet) => {
+      const q = search.trim().toLowerCase();
+      if (q) {
+        // Search both the kerb and the DJ's chosen name.
+        const haystack =
+          `${t.title} ${t.artist ?? ""} ${t.dj} ${t.djDisplay} ${t.genres.join(" ")}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (skip !== "tags") {
+        if (onlyUntagged && t.genres.length > 0) return false;
+        if (genreFilter.size > 0) {
+          const hits = [...genreFilter].filter((g) => t.genres.includes(g));
+          if (matchAllGenres ? hits.length !== genreFilter.size : hits.length === 0) return false;
+        }
+      }
+      if (skip !== "dj" && djFilter.size > 0 && !djFilter.has(t.dj)) return false;
+      if (skip !== "quality" && qualityFilter.size > 0 && !qualityFilter.has(t.quality)) return false;
+      if (skip !== "bpm" && bpmFilter.size > 0) {
+        const bucket = bucketForBpm(t.bpm);
+        if (!bucket || !bpmFilter.has(bucket)) return false;
+      }
+      if (skip !== "cues") {
+        if (needHotCues && !(t.hotCues && t.hotCues.length > 0)) return false;
+        if (needMemoryCues && !(t.memoryCues && t.memoryCues.length > 0)) return false;
+      }
+      return true;
+    },
+    [
+      search,
+      genreFilter,
+      matchAllGenres,
+      onlyUntagged,
+      djFilter,
+      qualityFilter,
+      bpmFilter,
+      needHotCues,
+      needMemoryCues,
+    ],
+  );
+
+  const filtered = useMemo(() => scoped.filter((t) => passes(t)), [scoped, passes]);
+
+  /** The tracks each facet counts over: everything the other facets let through. */
+  const facetPool = useMemo(() => {
+    const pool = (skip: Facet) => scoped.filter((t) => passes(t, skip));
+    return {
+      tags: pool("tags"),
+      dj: pool("dj"),
+      quality: pool("quality"),
+      bpm: pool("bpm"),
+      cues: pool("cues"),
+    };
+  }, [scoped, passes]);
+
+  /**
+   * Tag counts. With "match all" on, ticking another tag narrows rather than
+   * widens, so each count is what you'd get with that tag added to the ones
+   * already ticked.
+   */
+  const genreCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const pool =
+      matchAllGenres && genreFilter.size > 0
+        ? facetPool.tags.filter((t) => [...genreFilter].every((g) => t.genres.includes(g)))
+        : facetPool.tags;
+    for (const t of pool) {
+      for (const g of t.genres) counts.set(g, (counts.get(g) ?? 0) + 1);
+    }
+    return counts;
+  }, [facetPool, matchAllGenres, genreFilter]);
+
   const allGenres = useMemo(() => {
     const counts = new Map<string, number>();
     for (const t of scoped) {
@@ -761,10 +863,13 @@ export const DJs = memo(() => {
     // Alphabetical, so a given genre is always in the same place. localeCompare
     // keeps accented names (Guarachatón) next to their unaccented neighbours.
     // A one-off tag isn't worth a chip, unless it's selected and needs unticking.
+    // Which chips exist is decided by the whole scope, so they don't jump
+    // around as filters change; the number on each follows the filters.
     return [...counts.entries()]
       .filter(([g, n]) => n >= MIN_TAG_TRACKS || genreFilter.has(g))
+      .map(([g]) => [g, genreCounts.get(g) ?? 0] as [string, number])
       .sort((a, b) => a[0].localeCompare(b[0]));
-  }, [scoped, genreFilter]);
+  }, [scoped, genreFilter, genreCounts]);
 
   const visibleGenres = useMemo(
     () => collapseFacet(allGenres, genreFilter, showAllGenres),
@@ -780,11 +885,11 @@ export const DJs = memo(() => {
     >();
     for (const t of scoped) {
       const entry = byKerb.get(t.dj);
-      if (entry) entry.count += 1;
-      else byKerb.set(t.dj, { label: t.djDisplay, count: 1, color: t.djColor, tag: t.djTag });
+      if (!entry) byKerb.set(t.dj, { label: t.djDisplay, count: 0, color: t.djColor, tag: t.djTag });
     }
+    for (const t of facetPool.dj) byKerb.get(t.dj)!.count += 1;
     return [...byKerb.entries()].sort((a, b) => a[1].label.localeCompare(b[1].label));
-  }, [scoped]);
+  }, [scoped, facetPool]);
 
   const visibleDjs = useMemo(
     () => collapseFacet(allDjs, djFilter, showAllDjs),
@@ -797,57 +902,22 @@ export const DJs = memo(() => {
   );
 
   const availableQualities = useMemo(() => {
+    const present = new Set(scoped.map((t) => t.quality));
     const counts = new Map<Quality, number>();
-    for (const t of scoped) counts.set(t.quality, (counts.get(t.quality) ?? 0) + 1);
-    return QUALITY_ORDER.filter((q) => counts.has(q)).map(
-      (q) => [q, counts.get(q)!] as const,
+    for (const t of facetPool.quality) counts.set(t.quality, (counts.get(t.quality) ?? 0) + 1);
+    return QUALITY_ORDER.filter((q) => present.has(q)).map(
+      (q) => [q, counts.get(q) ?? 0] as const,
     );
-  }, [scoped]);
+  }, [scoped, facetPool]);
 
-  const cueCounts = useMemo(
+  /** Whether any track in scope has each kind of cue, so the chip exists at all. */
+  const cuesPresent = useMemo(
     () => ({
-      hot: scoped.filter((t) => (t.hotCues?.length ?? 0) > 0).length,
-      memory: scoped.filter((t) => (t.memoryCues?.length ?? 0) > 0).length,
+      hot: scoped.some((t) => (t.hotCues?.length ?? 0) > 0),
+      memory: scoped.some((t) => (t.memoryCues?.length ?? 0) > 0),
     }),
     [scoped],
   );
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return scoped.filter((t) => {
-      if (q) {
-        // Search both the kerb and the DJ's chosen name.
-        const haystack =
-          `${t.title} ${t.artist ?? ""} ${t.dj} ${t.djDisplay} ${t.genres.join(" ")}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      if (onlyUntagged && t.genres.length > 0) return false;
-      if (genreFilter.size > 0) {
-        const hits = [...genreFilter].filter((g) => t.genres.includes(g));
-        if (matchAllGenres ? hits.length !== genreFilter.size : hits.length === 0) return false;
-      }
-      if (djFilter.size > 0 && !djFilter.has(t.dj)) return false;
-      if (qualityFilter.size > 0 && !qualityFilter.has(t.quality)) return false;
-      if (bpmFilter.size > 0) {
-        const bucket = bucketForBpm(t.bpm);
-        if (!bucket || !bpmFilter.has(bucket)) return false;
-      }
-      if (needHotCues && !(t.hotCues && t.hotCues.length > 0)) return false;
-      if (needMemoryCues && !(t.memoryCues && t.memoryCues.length > 0)) return false;
-      return true;
-    });
-  }, [
-    scoped,
-    search,
-    genreFilter,
-    matchAllGenres,
-    onlyUntagged,
-    djFilter,
-    qualityFilter,
-    bpmFilter,
-    needHotCues,
-    needMemoryCues,
-  ]);
 
   /** Filtering decides what's shown; this decides the order it's shown in. */
   const ordered = useMemo(
@@ -857,19 +927,29 @@ export const DJs = memo(() => {
 
   /** Only show BPM buckets that something actually falls into. */
   const availableBpmBuckets = useMemo(() => {
+    const present = new Set(scoped.map((t) => bucketForBpm(t.bpm)));
     const counts = new Map<string, number>();
-    for (const t of scoped) {
+    for (const t of facetPool.bpm) {
       const b = bucketForBpm(t.bpm);
       if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
     }
-    return BPM_BUCKETS.filter((b) => counts.has(b.label)).map(
-      (b) => [b.label, counts.get(b.label)!] as const,
+    return BPM_BUCKETS.filter((b) => present.has(b.label)).map(
+      (b) => [b.label, counts.get(b.label) ?? 0] as const,
     );
-  }, [scoped]);
+  }, [scoped, facetPool]);
 
+  const hasUntagged = useMemo(() => scoped.some((t) => t.genres.length === 0), [scoped]);
   const untaggedCount = useMemo(
-    () => scoped.filter((t) => t.genres.length === 0).length,
-    [scoped],
+    () => facetPool.tags.filter((t) => t.genres.length === 0).length,
+    [facetPool],
+  );
+
+  const cueCounts = useMemo(
+    () => ({
+      hot: facetPool.cues.filter((t) => (t.hotCues?.length ?? 0) > 0).length,
+      memory: facetPool.cues.filter((t) => (t.memoryCues?.length ?? 0) > 0).length,
+    }),
+    [facetPool],
   );
 
   const anyFilter =
@@ -1504,6 +1584,11 @@ export const DJs = memo(() => {
 
   return (
     <Flex width="100%" height="100%" style={{ minHeight: 0 }}>
+      {narrow && sidebarOpen && (
+        <Box className="djs-drawer-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
+      {(!narrow || sidebarOpen) && (
+      <Box className={narrow ? "djs-drawer" : undefined} style={{ display: "flex" }}>
       <PlaylistSidebar
         playlists={playlists}
         activeId={activePlaylistId}
@@ -1517,6 +1602,7 @@ export const DJs = memo(() => {
           setShowAllGenres(false);
           setSelected(new Set());
           setSelectMode(false);
+          setSidebarOpen(false);
         }}
         onCreate={(name, description) =>
           void createPlaylist({ name, description: description || undefined }).then(
@@ -1529,28 +1615,40 @@ export const DJs = memo(() => {
         }}
         onReorder={(playlistIds) => void reorderPlaylists({ playlistIds })}
       />
+      </Box>
+      )}
 
       {/* Left-aligned against the sidebar rather than centred, so the page
           doesn't leave a dead gutter on wide screens. */}
       <Flex
         direction="column"
-        p="5"
+        p={{ initial: "3", sm: "5" }}
         style={{
           flex: "1 1 auto",
           minWidth: 0,
           overflowY: "auto",
           // Keep the list clear of the card in the corner, with the same gap
-          // either side of it: row to card, card to window edge.
-          paddingRight: nowPlaying
+          // either side of it: row to card, card to window edge. On a phone
+          // the player is a bar along the bottom instead, so clear that.
+          paddingRight: nowPlaying && !narrow
             ? PLAYER_WIDTH[playerSize] + PLAYER_GAP * 2
             : undefined,
+          paddingBottom: nowPlaying && narrow ? 150 : undefined,
         }}
       >
         <Flex direction="column" width="100%" style={{ maxWidth: 1600 }} gap="4" pb="9">
-        <Flex justify="between" align="center" wrap="wrap" gap="3">
-          <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
-            <Flex align="baseline" gap="3" wrap="wrap">
-              <Heading size="8" truncate>
+        <Flex
+          justify="between"
+          align="center"
+          wrap="wrap"
+          gap="3"
+          // On a phone the title and its actions stack, centred.
+          direction={narrow ? "column" : "row"}
+          style={narrow ? { textAlign: "center" } : undefined}
+        >
+          <Flex direction="column" gap="1" align={narrow ? "center" : undefined} style={{ minWidth: 0 }}>
+            <Flex align="baseline" gap="3" wrap="wrap" justify={narrow ? "center" : undefined}>
+              <Heading size={{ initial: "6", sm: "8" }} truncate>
                 {activePlaylist ? activePlaylist.name : "Library"}
               </Heading>
               {/* In a playlist, play sits by its name; in the library, with the actions. */}
@@ -1588,7 +1686,18 @@ export const DJs = memo(() => {
             )}
           </Flex>
 
-          <Flex gap="2" align="center" wrap="wrap">
+          <Flex gap="2" align="center" wrap="wrap" justify={narrow ? "center" : undefined}>
+            {narrow && (
+              <Button
+                size="1"
+                radius="full"
+                variant="surface"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Show playlists"
+              >
+                ☰ Playlists
+              </Button>
+            )}
             <RipDialog
               value={ripUrl}
               onChange={setRipUrl}
@@ -1633,6 +1742,16 @@ export const DJs = memo(() => {
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ flex: "1 1 240px" }}
               />
+              {narrow && (
+                <Button
+                  size="1"
+                  radius="full"
+                  variant={filtersOpen ? "solid" : "surface"}
+                  onClick={() => setFiltersOpen((v) => !v)}
+                >
+                  Filters {filtersOpen ? "▴" : "▾"}
+                </Button>
+              )}
               {anyFilter && (
                 <Button size="1" variant="soft" color="gray" onClick={clearFilters}>
                   Clear
@@ -1695,8 +1814,10 @@ export const DJs = memo(() => {
               </Flex>
             )}
 
-            <FacetRow label="Tags" empty={allGenres.length === 0 && untaggedCount === 0}>
-              {untaggedCount > 0 && (
+            {(!narrow || filtersOpen) && (
+            <>
+            <FacetRow label="Tags" empty={allGenres.length === 0 && !hasUntagged}>
+              {hasUntagged && (
                 <FilterChip
                   active={onlyUntagged}
                   count={untaggedCount}
@@ -1778,8 +1899,8 @@ export const DJs = memo(() => {
 
             {/* Same rule as the tags: a filter that would match nothing isn't
                 worth a chip. */}
-            <FacetRow label="Cues" empty={cueCounts.hot === 0 && cueCounts.memory === 0}>
-              {cueCounts.hot > 0 && (
+            <FacetRow label="Cues" empty={!cuesPresent.hot && !cuesPresent.memory}>
+              {cuesPresent.hot && (
                 <FilterChip
                   active={needHotCues}
                   count={cueCounts.hot}
@@ -1788,7 +1909,7 @@ export const DJs = memo(() => {
                   hot cues
                 </FilterChip>
               )}
-              {cueCounts.memory > 0 && (
+              {cuesPresent.memory && (
                 <FilterChip
                   active={needMemoryCues}
                   count={cueCounts.memory}
@@ -1798,10 +1919,19 @@ export const DJs = memo(() => {
                 </FilterChip>
               )}
             </FacetRow>
+            </>
+            )}
           </Flex>
         </Card>
 
-        <Flex justify="between" align="center" gap="3" wrap="wrap">
+        {/* On a phone the count sits centred above the controls. */}
+        <Flex
+          justify={narrow ? "center" : "between"}
+          align="center"
+          gap={narrow ? "2" : "3"}
+          wrap="wrap"
+          direction={narrow ? "column" : "row"}
+        >
           <Text size="2" color="gray">
             {tracks === undefined
               ? "Loading…"
@@ -1809,7 +1939,7 @@ export const DJs = memo(() => {
           </Text>
 
           {/* Selection controls sit on the count line, next to what they act on. */}
-          <Flex gap="2" align="center" wrap="wrap">
+          <Flex gap="2" align="center" wrap="wrap" justify={narrow ? "center" : undefined}>
             {selectMode ? (
               <>
                 <Button
@@ -1884,6 +2014,8 @@ export const DJs = memo(() => {
                     Sort by
                   </Text>
                   <Select.Root
+                    // Smaller on a phone, so the whole row fits on one line.
+                    size={narrow ? "1" : "2"}
                     value={sortBy}
                     onValueChange={(v) => {
                       const mode = v as SortMode;
@@ -1926,7 +2058,7 @@ export const DJs = memo(() => {
                   variant="surface"
                   onClick={() => setSelectMode(true)}
                 >
-                  Select tracks
+                  {narrow ? "Select" : "Select tracks"}
                 </Button>
               </>
             )}
@@ -2004,6 +2136,7 @@ export const DJs = memo(() => {
           direction="column"
           gap="2"
           p="2"
+          className="djs-player"
           style={{
             position: "fixed",
             right: PLAYER_GAP,
@@ -2041,6 +2174,7 @@ export const DJs = memo(() => {
           {/* Click the artwork to cycle the player through its sizes. */}
           <Box
             onClick={cyclePlayerSize}
+            className="djs-player-cover"
             style={{ cursor: "pointer" }}
             title="Click to resize the player"
           >
@@ -2162,7 +2296,7 @@ export const DJs = memo(() => {
 
 const FacetRow = memo(
   ({ label, empty, children }: { label: string; empty?: boolean; children: React.ReactNode }) => (
-    <Flex gap="2" align="start">
+    <Flex gap="2" align="start" className="djs-facet-row">
       <Text size="2" color="gray" style={{ minWidth: 68, paddingTop: 2 }}>
         {label}
       </Text>
@@ -2254,6 +2388,7 @@ const TrackRow = memo(
           draggable
           onDragStart={onDragStart}
           onClick={() => (selectMode ? onToggleSelected() : onPlay())}
+          className="djs-track-row"
           style={{ cursor: selectMode ? "pointer" : "grab", minWidth: 0 }}
         >
           <IconButton
@@ -2289,7 +2424,7 @@ const TrackRow = memo(
             }}
           />
 
-          <Flex direction="column" style={{ minWidth: 0, flex: "1 1 220px" }}>
+          <Flex direction="column" className="djs-track-title" style={{ minWidth: 0, flex: "1 1 220px" }}>
             <Text size="3" weight="bold" truncate>
               {track.title}
             </Text>
@@ -2304,6 +2439,7 @@ const TrackRow = memo(
             align="center"
             wrap="wrap"
             justify="end"
+            className="djs-track-tags"
             style={{ flex: "1 1 auto", minWidth: 0 }}
           >
             <span
@@ -4206,15 +4342,13 @@ const RipDialog = memo(
       </Dialog.Trigger>
       <Dialog.Content maxWidth="520px">
         <Dialog.Title>Rip from SoundCloud</Dialog.Title>
-        <Dialog.Description size="2" color="gray" mb="3">
-          Queues a playlist or track. The ripping runs on a Mac mini at the house, which checks for
+        <Dialog.Description size="2" color="gray" mb="4">
+          Queues a playlist or track. The ripping runs on a Mac mini in Halo, which checks for
           new requests every 30 seconds — requests wait in line rather than failing when it's off.
         </Dialog.Description>
-
-        <Text size="1" color="gray" mb="4" as="p" style={{ opacity: 0.8 }}>
-          You'll get an email confirming the request was submitted, and another once the tracks are
-          in the library.
-        </Text>
+        {/* Rips also send "queued" and "ready" emails (convex/email.ts), but only once
+            RESEND_API_KEY is set on the deployment; until then they're skipped. Mention
+            the emails here again when they're switched on. See dj-ripper/README.md. */}
 
         <Flex gap="2" align="center">
           <TextField.Root

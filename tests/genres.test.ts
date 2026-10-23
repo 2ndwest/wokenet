@@ -128,4 +128,18 @@ describe("normalizeGenre", () => {
   it("drops long unknown strings that are pack or track names", () => {
     expect(normalizeGenre("Pack do kLap")).toEqual([]);
   });
+
+  it("treats hip hop and rap as one tag, however it's spelled", () => {
+    for (const raw of ["Hip-hop & Rap", "hip hop", "Hip-Hop", "HIPHOP", "rap", "Hip-hop/Rap", "UK Rap"]) {
+      expect(normalizeGenre(raw)).toEqual(["Hip Hop"]);
+    }
+  });
+
+  it("folds hyphen, spacing and trailing 'music' variants", () => {
+    expect(normalizeGenre("Lo-Fi")).toEqual(["Lo-Fi"]);
+    expect(normalizeGenre("uk-garage")).toEqual(["UK Garage"]);
+    expect(normalizeGenre("Club Music")).toEqual(["Club"]);
+    expect(normalizeGenre("house music")).toEqual(["House"]);
+    expect(normalizeGenre("R&B & Soul")).toEqual(["R&B"]);
+  });
 });

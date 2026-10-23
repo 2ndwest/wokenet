@@ -27,6 +27,20 @@ const ATOMIC_ALIASES: Record<string, string> = {
   "rock & roll": "Rock & Roll",
   "rock and roll": "Rock & Roll",
   "drill & bass": "Drill & Bass",
+  // SoundCloud's own upload categories. Most uploads carry one of these
+  // verbatim, so the compound ones fold onto the tag we already use.
+  "hip-hop & rap": "Hip Hop",
+  "hip hop & rap": "Hip Hop",
+  "hip hop and rap": "Hip Hop",
+  "rap & hip hop": "Hip Hop",
+  "r&b & soul": "R&B",
+  "jazz & blues": "Jazz",
+  "folk & singer-songwriter": "Folk",
+  "folk & singer songwriter": "Folk",
+  "alternative rock": "Rock",
+  "drum 'n' bass": "Drum & Bass",
+  "drum n' bass": "Drum & Bass",
+  "drumnbass": "Drum & Bass",
 };
 
 /** Maps a single normalized fragment onto its canonical display name. */
@@ -89,10 +103,27 @@ const ALIASES: Record<string, string> = {
   latin: "Latin",
   tribal: "Tribal",
   kremayera: "Kremayera",
-  // Rap / pop
+  // Rap / pop. Hip hop and rap are one tag: SoundCloud files them together
+  // and nobody wants to tick both chips.
   "hip hop": "Hip Hop",
   hiphop: "Hip Hop",
   rap: "Hip Hop",
+  "hip hop rap": "Hip Hop",
+  "rap music": "Hip Hop",
+  "us rap": "Hip Hop",
+  "uk rap": "Hip Hop",
+  "underground rap": "Hip Hop",
+  "underground hip hop": "Hip Hop",
+  "gangsta rap": "Hip Hop",
+  "east coast": "Hip Hop",
+  "west coast": "Hip Hop",
+  "southern hip hop": "Hip Hop",
+  "trap rap": "Trap",
+  "uk drill": "Drill",
+  "ny drill": "Drill",
+  "bronx drill": "Drill",
+  "brooklyn drill": "Drill",
+  "chicago drill": "Drill",
   trap: "Trap",
   phonk: "Phonk",
   drill: "Drill",
@@ -235,6 +266,100 @@ const ALIASES: Record<string, string> = {
   "hyper techno": "Hypertechno",
   "girl edm": "Girl EDM",
   "world": "World",
+
+  // --- more of the long tail ---
+  // House / techno
+  "electro house": "Electro House",
+  "big room": "Big Room",
+  "melodic house": "Melodic House",
+  "organic house": "Organic House",
+  "slap house": "Slap House",
+  "minimal house": "Minimal",
+  "deep tech": "Deep House",
+  "uk house": "House",
+  "chicago house": "House",
+  "classic house": "House",
+  "peak time techno": "Techno",
+  "industrial techno": "Techno",
+  "raw techno": "Hard Techno",
+  "hard house": "Hard House",
+  psytrance: "Psytrance",
+  "psy trance": "Psytrance",
+  psy: "Psytrance",
+  goa: "Psytrance",
+  "progressive trance": "Trance",
+  "uplifting trance": "Trance",
+  "tech trance": "Trance",
+  // Bass / breaks
+  "uk bass": "UK Bass",
+  "bass music": "Bass",
+  breakcore: "Breakcore",
+  idm: "IDM",
+  "uk hardcore": "Hardcore",
+  "uk garage 2step": "UK Garage",
+  "2 step": "UK Garage",
+  "2step": "UK Garage",
+  "liquid": "Drum & Bass",
+  "liquid funk": "Drum & Bass",
+  // Club / regional
+  "club music": "Club",
+  "club edit": "Club",
+  "jersey club music": "Jersey Club",
+  "jerz": "Jersey Club",
+  "sexy drill": "Jersey Drill",
+  "bmore club": "Baltimore Club",
+  "bmore": "Baltimore Club",
+  "booty bass": "Miami Bass",
+  ghettotech: "Ghettotech",
+  "ghetto tech": "Ghettotech",
+  "detroit ghettotech": "Ghettotech",
+  "funk bh": "Baile Funk",
+  "funk rj": "Baile Funk",
+  "funk sp": "Baile Funk",
+  "funk mtg": "Baile Funk",
+  mtg: "Baile Funk",
+  montagem: "Baile Funk",
+  "phonk brasileiro": "Phonk",
+  "brazilian phonk": "Phonk",
+  "drift phonk": "Phonk",
+  // Caribbean / African
+  dancehall: "Dancehall",
+  reggae: "Reggae",
+  soca: "Soca",
+  afroswing: "Afrobeats",
+  "afro beats": "Afrobeats",
+  "afro pop": "Afrobeats",
+  // Latin
+  "reggaeton viejo": "Reggaeton",
+  "latin trap": "Latin Trap",
+  "trap latino": "Latin Trap",
+  "dembow dominicano": "Dembow",
+  moombahton: "Moombahton",
+  "rkt": "RKT",
+  "cachengue": "Cachengue",
+  "cumbia villera": "Cumbia",
+  // Pop / other
+  "k pop": "K-Pop",
+  kpop: "K-Pop",
+  "j pop": "J-Pop",
+  jpop: "J-Pop",
+  "pop rap": "Hip Hop",
+  "r b": "R&B",
+  "rnb soul": "R&B",
+  "neo soul": "Soul",
+  "electro pop": "Synthpop",
+  electropop: "Synthpop",
+  folk: "Folk",
+  country: "Country",
+  classical: "Classical",
+  piano: "Piano",
+  soundtrack: "Soundtrack",
+  "trip-hop": "Trip Hop",
+  triphop: "Trip Hop",
+  chill: "Chill",
+  chillout: "Chill",
+  "chill out": "Chill",
+  experimental: "Experimental",
 };
 
 /**
@@ -332,6 +457,22 @@ const JUNK = new Set([
  */
 const SPAM_FRAGMENT_THRESHOLD = 2;
 
+/**
+ * Find the canonical tag for one cleaned fragment, trying the spellings people
+ * actually use for the same thing: "hip-hop", "hip hop" and "hiphop" are one
+ * genre, and "house music" is just house.
+ */
+function lookup(frag: string): string | undefined {
+  const candidates = [frag, frag.replace(/-/g, " "), frag.replace(/[-\s]/g, "")];
+  const withoutMusic = frag.replace(/\s+(?:music|musik|musica)$/, "");
+  if (withoutMusic !== frag) candidates.push(withoutMusic, withoutMusic.replace(/-/g, " "));
+  for (const c of candidates) {
+    const hit = ATOMIC_ALIASES[c] ?? ALIASES[c];
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 /** Technical metadata that leaks into the genre field. */
 function isTechnicalJunk(frag: string): boolean {
   return frag.includes("=") || frag.includes(":") || frag.startsWith("soundcloud");
@@ -384,8 +525,8 @@ export function normalizeGenre(raw: string | undefined | null): string[] {
   if (base.length === 0 || JUNK.has(base)) return [];
 
   // Whole-string match first, so "drum & bass" survives splitting.
-  const atomic = ATOMIC_ALIASES[base];
-  if (atomic) return [atomic];
+  const whole = lookup(base);
+  if (whole) return [whole];
 
   const fragments = base
     .split(SPLIT_PATTERN)
@@ -400,7 +541,7 @@ export function normalizeGenre(raw: string | undefined | null): string[] {
     if (JUNK.has(frag) || isTechnicalJunk(frag)) continue;
     if (/^\d+$/.test(frag)) continue;
 
-    const known = ATOMIC_ALIASES[frag] ?? ALIASES[frag];
+    const known = lookup(frag);
     if (!known && knownOnly) continue;
     // Unknown multi-word fragments are usually track/pack names, not genres.
     if (!known && wordCount(frag) > 2) continue;
@@ -428,10 +569,7 @@ export function normalizeUserGenre(raw: string | undefined | null): string[] {
 
   // Known genres still fold to one canonical spelling, so the library doesn't
   // end up with "Techno" and "TECHNO" as separate chips.
-  const atomic = ATOMIC_ALIASES[base];
-  if (atomic) return [atomic];
-
-  const known = ALIASES[base];
+  const known = lookup(base);
   if (known) return [known];
 
   // For anything we don't recognize, respect how it was typed: any capital

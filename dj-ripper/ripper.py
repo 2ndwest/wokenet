@@ -196,9 +196,10 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = wokenet.Config(args.site_url, args.secret)
-    token = putz_djs.load_token(args.token or os.environ.get("SC_OAUTH_TOKEN"))
-    if args.token_file:
-        token = sc_token.current(args.token_file)
+    # A token file, when there is one, wins: it's the one that stays fresh. Without
+    # it (a new machine that hasn't run sc_token.py seed) the plain token still works.
+    plain_token = putz_djs.load_token(args.token or os.environ.get("SC_OAUTH_TOKEN"))
+    token = (sc_token.current(args.token_file) if args.token_file else None) or plain_token
     me = args.me.strip().lower().split("@")[0]
 
     print(f"ripper up as '{me}', polling {cfg.site_url} every {args.interval:.0f}s")
@@ -210,7 +211,7 @@ def main() -> None:
         if args.token_file:
             # Checked every poll so the token is refreshed even while idle,
             # and a new one is picked up without a restart.
-            token = sc_token.current(args.token_file)
+            token = sc_token.current(args.token_file) or plain_token
         try:
             request = wokenet.claim_rip(cfg, me)
         except Exception as exc:

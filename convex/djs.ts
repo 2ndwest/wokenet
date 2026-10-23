@@ -570,6 +570,28 @@ export const renameTag = mutation({
   },
 });
 
+/**
+ * Re-run the tag normalizer over the whole library, so tags stored before an
+ * alias was added fold onto it ("Hip-hop & Rap" onto "Hip Hop"). Uses the
+ * gentle normalizer: tags someone typed by hand are left as they are.
+ *
+ *   npx convex run djs:renormalizeGenres
+ */
+export const renormalizeGenres = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const tracks = await ctx.db.query("djTracks").collect();
+    let changed = 0;
+    for (const t of tracks) {
+      const next = normalizeUserGenres(t.genres);
+      if (next.join("\u0000") === t.genres.join("\u0000")) continue;
+      await ctx.db.patch(t._id, { genres: next });
+      changed += 1;
+    }
+    return { changed };
+  },
+});
+
 // ---------------------------------------------------------------- uploading
 
 export const generateUploadUrl = mutation({
