@@ -14,15 +14,14 @@ export const Unauthorized = memo(({ authenticated }: { authenticated: boolean })
 
       {!authenticated ? (
         <Text align="center" size="4">
-          You must{" "}
           <SignInButton>
             <Text
               style={{ cursor: "pointer", color: "var(--accent-9)", textDecoration: "underline" }}
             >
-              sign in
+              Sign in
             </Text>
           </SignInButton>{" "}
-          to continue.
+          for full access.
         </Text>
       ) : (
         <Text align="center" size="4">
