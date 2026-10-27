@@ -41,7 +41,8 @@ const App = memo(() => {
             // Signed in, not putz:
             <Routes>
               <Route path="/" element={<Unauthorized authenticated={true} />} />
-              {/* In case we want to support public pages, we can add them here. */}
+              <Route path="/classrooms" element={<Classrooms />} />
+              <Route path="/bathrooms" element={<Bathrooms />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )

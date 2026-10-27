@@ -1,7 +1,7 @@
 import { mutation, query, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
-import { requireAdmin, requirePutz } from "./utils/auth";
+import { getUser, requireAdmin } from "./utils/auth";
 
 const getMyReport = (ctx: MutationCtx, userId: Id<"users">, room: string) =>
   ctx.db
@@ -13,7 +13,7 @@ const getMyReport = (ctx: MutationCtx, userId: Id<"users">, room: string) =>
 export const getMyReports = query({
   args: {},
   handler: async (ctx) => {
-    const { user } = await requirePutz(ctx);
+    const { user } = await getUser(ctx);
 
     const reports = await ctx.db
       .query("classroomReports")
@@ -28,7 +28,7 @@ export const getMyReports = query({
 export const getReportCounts = query({
   args: {},
   handler: async (ctx) => {
-    await requirePutz(ctx);
+    await getUser(ctx);
 
     const counts = new Map<string, number>();
     for (const { room } of await ctx.db.query("classroomReports").collect())
@@ -41,7 +41,7 @@ export const getReportCounts = query({
 export const reportClassroom = mutation({
   args: { room: v.string(), note: v.string() },
   handler: async (ctx, args) => {
-    const { user } = await requirePutz(ctx);
+    const { user } = await getUser(ctx);
     const { room } = args;
     const note = args.note.trim().slice(0, 500);
     if (!note) throw new Error("EMPTY_NOTE");
@@ -62,7 +62,7 @@ export const reportClassroom = mutation({
 export const unreportClassroom = mutation({
   args: { room: v.string() },
   handler: async (ctx, { room }) => {
-    const { user } = await requirePutz(ctx);
+    const { user } = await getUser(ctx);
 
     const existing = await getMyReport(ctx, user._id, room);
     if (existing) await ctx.db.delete(existing._id);

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import { requirePutz } from "./utils/auth";
+import { getUser } from "./utils/auth";
 import schema from "./schema";
 
 // Every classroom's open windows for today and tomorrow, as last pushed by the availability scraper
@@ -8,7 +8,7 @@ import schema from "./schema";
 export const getClassroomAvailability = query({
   args: {},
   handler: async (ctx) => {
-    await requirePutz(ctx);
+    await getUser(ctx);
 
     return await ctx.db.query("classroomAvailability").collect();
   },
