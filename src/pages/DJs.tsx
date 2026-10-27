@@ -40,7 +40,14 @@ import {
   rejectReason,
 } from "../utils/audio";
 import { shrinkImage } from "../utils/image";
-import { buildRekordboxXml, matchKey, parseRekordboxXml } from "../utils/rekordbox";
+import {
+  buildRekordboxXml,
+  matchKey,
+  parseRekordboxXml,
+  type ParsedXml,
+  type ParsedXmlPlaylist,
+  type ParsedXmlTrack,
+} from "../utils/rekordbox";
 import { formatTimestamp, getRelativeTime } from "../utils/time";
 import { buildZip, saveBlob, type ZipEntry } from "../utils/zip";
 import { useAuthStatus } from "../utils/useAuthStatus";
@@ -668,6 +675,8 @@ const ActiveFilterBubble = memo(
 export const DJs = memo(() => {
   const convex = useConvex();
   const { user } = useAuthStatus();
+  /** Same as the server's kerbOf, to tell which playlists are this DJ's own. */
+  const myKerb = user?.email?.split("@")[0].split("+")[0].toLowerCase() ?? null;
 
   const tracks = useQuery(api.djs.listTracks);
   const ripRequests = useQuery(api.djs.listRipRequests);
@@ -1234,13 +1243,24 @@ export const DJs = memo(() => {
    *
    * With a playlist chosen, everything matched goes in -- tracks already in the
    * library as well as new ones -- in the export's order.
+   *
+   * The export's own playlists can come over too, each as a playlist here with
+   * the same name. One this DJ already made under that name is added to rather
+   * than duplicated, so re-running an import only tops them up.
    */
   const importLibrary = useCallback(
-    async (xmlFile: File, audioFiles: File[], playlist: PlaylistTarget | null) => {
+    async (
+      xml: ParsedXml,
+      audioFiles: File[],
+      playlist: PlaylistTarget | null,
+      rb: { playlists: ParsedXmlPlaylist[]; onlyTheirTracks: boolean },
+    ) => {
       setNotice(null);
-      setBusy("reading rekordbox.xml");
+      setBusy("matching files");
       try {
-        const parsed = parseRekordboxXml(await xmlFile.text());
+        // Only what's in the chosen rekordbox playlists, if that's what was asked.
+        const wanted = rb.onlyTheirTracks ? new Set(rb.playlists.flatMap((p) => p.entries)) : null;
+        const parsed = xml.tracks.filter((_, i) => !wanted || wanted.has(i));
 
         const byName = new Map<string, File>();
         for (const f of audioFiles) byName.set(matchKey(f.name), f);
@@ -1251,16 +1271,16 @@ export const DJs = memo(() => {
 
         // Split into tracks we need to upload and tracks we already hold,
         // which only need rekordbox's analysis attaching.
-        const queue: { entry: (typeof parsed)[number]; file: File }[] = [];
+        const queue: { entry: ParsedXmlTrack; file: File }[] = [];
         const attach: {
           trackId: Id<"djTracks">;
-          hotCues: typeof parsed[number]["hotCues"];
-          memoryCues: typeof parsed[number]["memoryCues"];
+          hotCues: ParsedXmlTrack["hotCues"];
+          memoryCues: ParsedXmlTrack["memoryCues"];
           bpm?: number;
           musicalKey?: string;
         }[] = [];
         // The library track each export entry ended up as, for the playlist.
-        const landed = new Map<(typeof parsed)[number], Id<"djTracks">>();
+        const landed = new Map<ParsedXmlTrack, Id<"djTracks">>();
 
         for (const entry of parsed) {
           const key = matchKey(entry.filename);
@@ -1359,6 +1379,40 @@ export const DJs = memo(() => {
         if (playlist && trackIds.length > 0) {
           notice += " " + (await fileIntoPlaylist(playlist, trackIds));
         }
+
+        if (rb.playlists.length > 0) {
+          const mine = new Map(
+            (playlists ?? [])
+              .filter((p) => p.createdBy === myKerb)
+              .map((p) => [p.name.trim().toLowerCase(), p._id]),
+          );
+          let made = 0;
+          let toppedUp = 0;
+          let failedLists = 0;
+          for (const [n, p] of rb.playlists.entries()) {
+            const ids = p.entries.flatMap((i) => landed.get(xml.tracks[i]) ?? []);
+            if (ids.length === 0) continue;
+            setBusy(`playlist ${n + 1}/${rb.playlists.length}: ${p.name.slice(0, 40)}`);
+            try {
+              const name = p.name.slice(0, 60);
+              let playlistId = mine.get(name.trim().toLowerCase());
+              if (playlistId) toppedUp += 1;
+              else {
+                playlistId = await createPlaylist({ name });
+                mine.set(name.trim().toLowerCase(), playlistId);
+                made += 1;
+              }
+              await addTracksToPlaylist({ playlistId, trackIds: ids });
+            } catch {
+              failedLists += 1;
+            }
+          }
+          const lists = [];
+          if (made > 0) lists.push(`made ${made} playlist${made === 1 ? "" : "s"}`);
+          if (toppedUp > 0) lists.push(`added to ${toppedUp} you already had`);
+          if (failedLists > 0) lists.push(`${failedLists} couldn't be made`);
+          if (lists.length > 0) notice += " From rekordbox: " + lists.join(", ") + ".";
+        }
         setNotice(notice);
       } catch (err) {
         setNotice(err instanceof Error ? err.message : "Couldn't read that export.");
@@ -1366,7 +1420,16 @@ export const DJs = memo(() => {
         setBusy(null);
       }
     },
-    [addTrack, fileIntoPlaylist, generateUploadUrl, tracks],
+    [
+      addTrack,
+      addTracksToPlaylist,
+      createPlaylist,
+      fileIntoPlaylist,
+      generateUploadUrl,
+      myKerb,
+      playlists,
+      tracks,
+    ],
   );
 
   /** Zip up the selected tracks and hand them over as one download. */
@@ -1814,7 +1877,7 @@ export const DJs = memo(() => {
             />
             <LibraryImportDialog
               playlists={playlists ?? []}
-              onRun={(x, a, p) => void importLibrary(x, a, p)}
+              onRun={(x, a, p, rb) => void importLibrary(x, a, p, rb)}
               busy={busy !== null}
             />
             {!activePlaylist && playButton}
@@ -4412,17 +4475,43 @@ const LibraryImportDialog = memo(
     busy,
   }: {
     playlists: PlaylistRow[];
-    onRun: (xml: File, audio: File[], playlist: PlaylistTarget | null) => void;
+    onRun: (
+      xml: ParsedXml,
+      audio: File[],
+      playlist: PlaylistTarget | null,
+      rb: { playlists: ParsedXmlPlaylist[]; onlyTheirTracks: boolean },
+    ) => void;
     busy: boolean;
   }) => {
     const xmlInput = useRef<HTMLInputElement | null>(null);
     const folderInput = useRef<HTMLInputElement | null>(null);
-    const [xml, setXml] = useState<File | null>(null);
+    // Read as soon as it's picked, so its playlists can be offered up front.
+    const [xml, setXml] = useState<{ name: string; parsed: ParsedXml } | null>(null);
+    const [xmlError, setXmlError] = useState<string | null>(null);
     const [audio, setAudio] = useState<File[]>([]);
     const [draft, setDraft] = useState(EMPTY_PLAYLIST_DRAFT);
     const target = targetOf(draft);
+    const [bringPlaylists, setBringPlaylists] = useState(true);
+    const [chosen, setChosen] = useState<Set<number>>(new Set());
+    const [onlyTheirTracks, setOnlyTheirTracks] = useState(false);
 
     const audioCount = audio.length;
+    const rbPlaylists = xml?.parsed.playlists ?? [];
+    const picked = bringPlaylists ? rbPlaylists.filter((_, i) => chosen.has(i)) : [];
+    const nothingPicked = bringPlaylists && onlyTheirTracks && picked.length === 0;
+
+    const readXml = async (file: File | undefined) => {
+      setXml(null);
+      setXmlError(null);
+      if (!file) return;
+      try {
+        const parsed = parseRekordboxXml(await file.text());
+        setXml({ name: file.name, parsed });
+        setChosen(new Set(parsed.playlists.map((_, i) => i)));
+      } catch (err) {
+        setXmlError(err instanceof Error ? err.message : "Couldn't read that file.");
+      }
+    };
 
     return (
       <Dialog.Root onOpenChange={(open) => !open && setDraft(EMPTY_PLAYLIST_DRAFT)}>
@@ -4452,11 +4541,22 @@ const LibraryImportDialog = memo(
                 type="file"
                 accept=".xml,application/xml,text/xml"
                 hidden
-                onChange={(e) => setXml(e.target.files?.[0] ?? null)}
+                onChange={(e) => void readXml(e.target.files?.[0])}
               />
               <Button size="1" variant="surface" onClick={() => xmlInput.current?.click()}>
                 {xml ? xml.name.slice(0, 40) : "Choose rekordbox.xml"}
               </Button>
+              {xml && (
+                <Text size="1" color="gray">
+                  {xml.parsed.tracks.length} tracks, {rbPlaylists.length} playlist
+                  {rbPlaylists.length === 1 ? "" : "s"}
+                </Text>
+              )}
+              {xmlError && (
+                <Text size="1" color="red">
+                  {xmlError}
+                </Text>
+              )}
             </Flex>
 
             <Flex direction="column" gap="1">
@@ -4464,7 +4564,8 @@ const LibraryImportDialog = memo(
                 2. Music folder
               </Text>
               <Text size="1" color="gray">
-                The folder holding those tracks. Nothing is read until you start the import.
+                The folder holding those tracks — if they're spread out, one that holds all of
+                them. Nothing is uploaded until you start the import.
               </Text>
               <input
                 ref={folderInput}
@@ -4480,20 +4581,99 @@ const LibraryImportDialog = memo(
               </Button>
             </Flex>
 
+            {rbPlaylists.length > 0 && (
+              <Flex direction="column" gap="2">
+                <Text size="2" weight="bold">
+                  3. Your rekordbox playlists
+                </Text>
+                <Text as="label" size="2">
+                  <Flex gap="2" align="center">
+                    <Checkbox
+                      checked={bringPlaylists}
+                      onCheckedChange={(v) => setBringPlaylists(v === true)}
+                    />
+                    Bring these playlists over too
+                  </Flex>
+                </Text>
+                {bringPlaylists && (
+                  <Flex direction="column" gap="2" pl="5">
+                    <Flex gap="3">
+                      <Button
+                        size="1"
+                        variant="ghost"
+                        onClick={() => setChosen(new Set(rbPlaylists.map((_, i) => i)))}
+                      >
+                        all
+                      </Button>
+                      <Button
+                        size="1"
+                        variant="ghost"
+                        onClick={() => setChosen(new Set())}
+                      >
+                        none
+                      </Button>
+                    </Flex>
+                    <Flex
+                      direction="column"
+                      gap="1"
+                      style={{ maxHeight: 180, overflowY: "auto" }}
+                    >
+                      {rbPlaylists.map((p, i) => (
+                        <Text as="label" size="1" key={i}>
+                          <Flex gap="2" align="center">
+                            <Checkbox
+                              size="1"
+                              checked={chosen.has(i)}
+                              onCheckedChange={(v) => {
+                                const next = new Set(chosen);
+                                if (v === true) next.add(i);
+                                else next.delete(i);
+                                setChosen(next);
+                              }}
+                            />
+                            {p.name} ({p.entries.length})
+                          </Flex>
+                        </Text>
+                      ))}
+                    </Flex>
+                    <Text as="label" size="2">
+                      <Flex gap="2" align="center">
+                        <Checkbox
+                          checked={onlyTheirTracks}
+                          onCheckedChange={(v) => setOnlyTheirTracks(v === true)}
+                        />
+                        Only import tracks that are in a ticked playlist
+                      </Flex>
+                    </Text>
+                  </Flex>
+                )}
+              </Flex>
+            )}
+
             <PlaylistPicker playlists={playlists} draft={draft} onChange={setDraft} />
 
             <Separator size="4" />
 
             <Button
               size="1"
-              disabled={!xml || audioCount === 0 || target === "incomplete" || busy}
-              onClick={() => xml && target !== "incomplete" && onRun(xml, audio, target)}
+              disabled={
+                !xml || audioCount === 0 || target === "incomplete" || nothingPicked || busy
+              }
+              onClick={() =>
+                xml &&
+                target !== "incomplete" &&
+                onRun(xml.parsed, audio, target, {
+                  playlists: picked,
+                  onlyTheirTracks: bringPlaylists && onlyTheirTracks,
+                })
+              }
             >
               {busy ? "importing…" : "Start import"}
             </Button>
             <Text size="1" color="gray">
-              Tracks already in the library are skipped, so running it again only adds what's new.
-              Large or unsupported files are skipped too.
+              Tracks already in the library aren't uploaded again, so running it again only adds
+              what's new, and tops up playlists it made last time. Large or unsupported files are
+              skipped too.
             </Text>
           </Flex>
 

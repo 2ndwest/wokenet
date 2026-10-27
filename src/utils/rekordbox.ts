@@ -26,6 +26,15 @@ export type ParsedXmlTrack = {
   memoryCues: Cue[];
 };
 
+/** A playlist from the export, its tracks as indexes into `tracks`, in order. */
+export type ParsedXmlPlaylist = {
+  /** Its name, prefixed by any folders it sits in: "Gigs / Halloween". */
+  name: string;
+  entries: number[];
+};
+
+export type ParsedXml = { tracks: ParsedXmlTrack[]; playlists: ParsedXmlPlaylist[] };
+
 const toHex = (r: string | null, g: string | null, b: string | null): string | undefined => {
   if (r === null || g === null || b === null) return undefined;
   const h = (s: string) => Number(s).toString(16).padStart(2, "0");
@@ -48,8 +57,12 @@ const basenameFromLocation = (location: string): string => {
  *
  * Cue points are <POSITION_MARK> children of each <TRACK>. Num="-1" is a
  * memory cue; Num="0".."7" are hot cues A..H. Start is in seconds.
+ *
+ * Playlists come along in the same file, under <PLAYLISTS>: a tree of NODEs
+ * where Type="0" is a folder and Type="1" a playlist, whose TRACKs point back
+ * into the collection by TrackID (KeyType="0") or by Location (KeyType="1").
  */
-export function parseRekordboxXml(xml: string): ParsedXmlTrack[] {
+export function parseRekordboxXml(xml: string): ParsedXml {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("That file isn't valid XML.");
 
@@ -101,7 +114,38 @@ export function parseRekordboxXml(xml: string): ParsedXmlTrack[] {
     });
   }
 
-  return out;
+  const byId = new Map<string, number>();
+  const byLocation = new Map<string, number>();
+  trackNodes.forEach((node, i) => {
+    const id = node.getAttribute("TrackID");
+    const location = node.getAttribute("Location");
+    if (id) byId.set(id, i);
+    if (location) byLocation.set(location, i);
+  });
+
+  const playlists: ParsedXmlPlaylist[] = [];
+  const walk = (node: Element, folders: string[]) => {
+    for (const child of Array.from(node.children)) {
+      if (child.tagName !== "NODE") continue;
+      const name = (child.getAttribute("Name") ?? "").trim();
+      if (child.getAttribute("Type") === "0") {
+        walk(child, [...folders, name]);
+        continue;
+      }
+      const byKey = child.getAttribute("KeyType") === "1" ? byLocation : byId;
+      const entries: number[] = [];
+      for (const t of Array.from(child.children)) {
+        const i = t.tagName === "TRACK" ? byKey.get(t.getAttribute("Key") ?? "") : undefined;
+        if (i !== undefined && !entries.includes(i)) entries.push(i);
+      }
+      if (entries.length > 0) playlists.push({ name: [...folders, name].join(" / "), entries });
+    }
+  };
+  // The tree's top NODE is a folder named ROOT; its name isn't worth showing.
+  const root = doc.querySelector("DJ_PLAYLISTS > PLAYLISTS > NODE");
+  if (root) walk(root, []);
+
+  return { tracks: out, playlists };
 }
 
 /** Loose key for matching XML entries to library tracks. */
