@@ -42,7 +42,7 @@ const App = memo(() => {
           ) : (
             // Signed in, not putz:
             <Routes>
-              <Route path="/" element={<Unauthorized authenticated={true} />} />
+              <Route path="/" element={<AuthedHome />} />
               <Route path="/classrooms" element={<Classrooms />} />
               <Route path="/bathrooms" element={<Bathrooms />} />
               <Route path="*" element={<Navigate to="/" replace />} />
@@ -50,7 +50,11 @@ const App = memo(() => {
           )
         ) : (
           // Signed out:
-          <Unauthorized authenticated={false} />
+          <Routes>
+            <Route path="/classrooms" element={<Classrooms />} />
+            <Route path="/bathrooms" element={<Bathrooms />} />
+            <Route path="*" element={<Unauthorized authenticated={false} />} />
+          </Routes>
         )}
       </Flex>
     </Flex>

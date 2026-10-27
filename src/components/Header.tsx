@@ -11,7 +11,7 @@ import {
 import { NavLink, useLocation } from "react-router";
 import { HamburgerIcon, PTZIcon } from "../utils/icons";
 import { memo, useEffect, useState } from "react";
-import { UserButton } from "@clerk/clerk-react";
+import { SignInButton, UserButton } from "@clerk/clerk-react";
 import type { Affiliation } from "../../convex/schema";
 import { useAuthStatus } from "../utils/useAuthStatus";
 import {
@@ -104,10 +104,7 @@ export const Header = memo(() => {
     <>
       <Flex
         align="center"
-        justify={{
-          initial: !isUserReady && !isAuthLoading ? "center" : "between",
-          sm: "between",
-        }}
+        justify="between"
         px="3"
         py="2"
         style={{
@@ -117,7 +114,7 @@ export const Header = memo(() => {
         }}
       >
         {/* Hamburger menu (only on mobile) */}
-        {isUserReady && (
+        {!isAuthLoading && (
           <Flex align="center" display={{ initial: "flex", sm: "none" }}>
             <IconButton variant="ghost" radius="full" onClick={() => setMenuOpen((v) => !v)}>
               <HamburgerIcon open={menuOpen} />
@@ -161,7 +158,13 @@ export const Header = memo(() => {
               </UserButton.MenuItems>
             </UserButton>
           </Flex>
-        ) : null}
+        ) : (
+          <SignInButton>
+            <Button size="1" radius="full" variant="soft">
+              Sign in
+            </Button>
+          </SignInButton>
+        )}
 
         <DisplaySettingsDialog open={displayOpen} onOpenChange={setDisplayOpen} />
       </Flex>
@@ -205,10 +208,10 @@ export const NavButtons = memo(
         <NavButton disabled={affiliation !== "PUTZ"} to="/assassins">
           Assassins
         </NavButton>
-        <NavButton disabled={!affiliation} to="/classrooms">
+        <NavButton to="/classrooms">
           Classrooms
         </NavButton>
-        <NavButton disabled={!affiliation} to="/bathrooms">
+        <NavButton to="/bathrooms">
           Bathrooms
         </NavButton>
         <NavButton disabled={affiliation !== "PUTZ"} to="/djs">

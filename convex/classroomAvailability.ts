@@ -1,15 +1,12 @@
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import { getUser } from "./utils/auth";
 import schema from "./schema";
 
 // Every classroom's open windows for today and tomorrow, as last pushed by the availability scraper
-// (each refreshed every ~6 hours).
+// (each refreshed every ~6 hours). Public: anyone can see which rooms are free.
 export const getClassroomAvailability = query({
   args: {},
   handler: async (ctx) => {
-    await getUser(ctx);
-
     return await ctx.db.query("classroomAvailability").collect();
   },
 });

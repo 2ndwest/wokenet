@@ -22,6 +22,7 @@ import { CenterSpinner } from "../utils/spinner";
 import { COLOR_HEX } from "../utils/colors";
 import { BookedIcon, ClockIcon, SortIcon, WarningIcon } from "../utils/icons";
 import { useGeolocation } from "../utils/useGeolocation";
+import { useAuthStatus } from "../utils/useAuthStatus";
 import { byName, coordsOf, distance, searchedBuilding } from "../utils/buildings";
 import { Tag, ToggleButton } from "../components/RoomList";
 import { ROOM_NAME } from "../utils/fonts";
@@ -237,15 +238,18 @@ const RoomGrid = memo(({ rooms, at, myReports, reportCounts, onSelect }: RoomGri
   );
 });
 
-// A room's details: when it's free, its seats, and reporting it as unusable (undone with one tap).
+// A room's details: when it's free, its seats, and (for putz) reporting it as unusable (undone with
+// one tap).
 const RoomDetails = ({
   room,
   at,
+  canReport,
   myNote,
   reportCount,
 }: {
   room: RoomAt;
   at: number;
+  canReport: boolean;
   myNote?: string;
   reportCount: number;
 }) => {
@@ -299,7 +303,7 @@ const RoomDetails = ({
 
       <Timeline open={room.open} at={at} />
 
-      {myNote ? (
+      {!canReport ? null : myNote ? (
         <Flex align="center" justify="between" gap="3">
           <Text size="2" color="gray">
             Reported. Thanks!
@@ -376,6 +380,7 @@ const RoomSheet = memo(
     at,
     open,
     onOpenChange,
+    canReport,
     myNote,
     reportCount,
   }: {
@@ -383,6 +388,7 @@ const RoomSheet = memo(
     at: number;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    canReport: boolean;
     myNote?: string;
     reportCount: number;
   }) => {
@@ -403,6 +409,7 @@ const RoomSheet = memo(
               key={room.room}
               room={room}
               at={at}
+              canReport={canReport}
               myNote={myNote}
               reportCount={reportCount}
             />
@@ -436,8 +443,11 @@ export const Classrooms = memo(() => {
     setSheetOpen(true);
   }, []);
 
-  const myReports = useQuery(api.classroomReports.getMyReports);
-  const reportCountsList = useQuery(api.classroomReports.getReportCounts);
+  // Reporting is just for putz; everyone else (signed out included) only sees availability.
+  const { user } = useAuthStatus();
+  const canReport = user?.affiliation === "PUTZ";
+  const myReports = useQuery(api.classroomReports.getMyReports, canReport ? {} : "skip");
+  const reportCountsList = useQuery(api.classroomReports.getReportCounts, canReport ? {} : "skip");
   const reportCounts = useMemo(
     () => new Map(reportCountsList?.map(({ room, count }) => [room, count])),
     [reportCountsList]
@@ -629,6 +639,7 @@ export const Classrooms = memo(() => {
         at={at}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        canReport={canReport}
         myNote={selected ? myReportNotes.get(selected) : undefined}
         reportCount={selected ? (reportCounts.get(selected) ?? 0) : 0}
       />
