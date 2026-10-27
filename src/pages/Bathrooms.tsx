@@ -15,7 +15,7 @@ import RESTROOMS from "../utils/restrooms.json";
 import { useGeolocation } from "../utils/useGeolocation";
 import { byName, coordsOf, distance, searchedBuilding } from "../utils/buildings";
 import { Tag } from "../components/RoomList";
-import { GROTESK } from "../utils/fonts";
+import { ROOM_NAME } from "../utils/fonts";
 import { RestroomIcon } from "../utils/icons";
 import { getCookie, setCookie } from "../utils/cookies";
 
@@ -58,7 +58,7 @@ const RestroomRow = memo(({ restroom }: { restroom: Restroom }) => (
     gap="3"
     style={{ height: "calc(var(--space-6) * 1.25)", borderBottom: "1px solid var(--gray-4)" }}
   >
-    <Text size="4" style={{ ...GROTESK, whiteSpace: "nowrap", flexGrow: 1 }}>
+    <Text size="4" style={{ ...ROOM_NAME, whiteSpace: "nowrap", flexGrow: 1 }}>
       {restroom.room}
     </Text>
     <Flex gap="1" flexShrink="0">
@@ -171,7 +171,7 @@ export const Bathrooms = memo(() => {
         {buildings.length === 0 && <Text color="gray">No bathrooms match.</Text>}
         {buildings.map(([building, restrooms]) => (
           <Flex key={building} direction="column" gap="2">
-            <Heading size="5" style={GROTESK}>
+            <Heading size="5" style={ROOM_NAME}>
               Building {building}
             </Heading>
             <Grid columns={GRID_COLUMNS} gapX={GRID_GAP_X}>

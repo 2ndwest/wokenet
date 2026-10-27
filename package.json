@@ -24,6 +24,7 @@
     "convex": "^1.24.8",
     "dotenv": "^16.5.0",
     "leaflet": "^1.9.4",
+    "music-metadata": "^12.2.3",
     "postal-mime": "^2.4.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

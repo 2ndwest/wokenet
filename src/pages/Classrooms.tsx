@@ -24,7 +24,7 @@ import { BookedIcon, ClockIcon, SortIcon, WarningIcon } from "../utils/icons";
 import { useGeolocation } from "../utils/useGeolocation";
 import { byName, coordsOf, distance, searchedBuilding } from "../utils/buildings";
 import { Tag, ToggleButton } from "../components/RoomList";
-import { GROTESK } from "../utils/fonts";
+import { ROOM_NAME } from "../utils/fonts";
 
 type When = "now" | "today" | "tomorrow";
 type Sort = "building" | "longest";
@@ -185,7 +185,7 @@ const RoomRow = memo(({ room, at, reported, reportCount, onSelect }: RoomRowProp
         <Text
           size="4"
           title={reported ? "You reported this room" : undefined}
-          style={{ ...GROTESK, whiteSpace: "nowrap", color: reported ? "var(--gray-9)" : undefined }}
+          style={{ ...ROOM_NAME, whiteSpace: "nowrap", color: reported ? "var(--gray-9)" : undefined }}
         >
           {room.room}
         </Text>
@@ -271,7 +271,7 @@ const RoomDetails = ({
     <Flex direction="column" gap="4">
       <Flex direction="column" gap="1">
         <Flex align="center" gap="2">
-          <Dialog.Title size="7" mb="0" style={GROTESK}>
+          <Dialog.Title size="7" mb="0" style={ROOM_NAME}>
             {room.room}
           </Dialog.Title>
           {isLectureHall(room) && <LectureHallTag />}
@@ -591,7 +591,7 @@ export const Classrooms = memo(() => {
             onToggle={() => setShowLectureHalls((b) => !b)}
             label="Show lecture halls"
           >
-            <Text size="2" style={GROTESK}>
+            <Text size="2" style={ROOM_NAME}>
               LH
             </Text>
           </ToggleButton>
@@ -609,7 +609,7 @@ export const Classrooms = memo(() => {
         ) : (
           buildings.map(([building, rooms]) => (
             <Flex key={building} direction="column" gap="2">
-              <Heading size="5" style={GROTESK}>
+              <Heading size="5" style={ROOM_NAME}>
                 Building {building}
               </Heading>
               <RoomGrid

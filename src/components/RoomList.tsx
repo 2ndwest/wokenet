@@ -1,5 +1,5 @@
 import { IconButton, Text } from "@radix-ui/themes";
-import { GROTESK } from "../utils/fonts";
+import { ROOM_NAME } from "../utils/fonts";
 
 // Shared bits of the room lists (Classrooms, Bathrooms).
 
@@ -16,7 +16,7 @@ export const Tag = ({
   <Text
     title={title}
     style={{
-      ...GROTESK,
+      ...ROOM_NAME,
       fontSize: "11px",
       lineHeight: "17px",
       padding: "0 4px",

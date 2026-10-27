@@ -7,6 +7,7 @@ import { Putz360 } from "./pages/Putz360";
 import { ShitMyDadSays } from "./pages/ShitMyDadSays";
 import { Classrooms } from "./pages/Classrooms";
 import { Bathrooms } from "./pages/Bathrooms";
+import { DJs } from "./pages/DJs";
 import { AuthedHome } from "./pages/AuthedHome";
 import { Unauthorized } from "./pages/Unauthorized";
 import { AdminPanel } from "./pages/AdminPanel";
@@ -34,6 +35,7 @@ const App = memo(() => {
               <Route path="/smds" element={<ShitMyDadSays />} />
               <Route path="/classrooms" element={<Classrooms />} />
               <Route path="/bathrooms" element={<Bathrooms />} />
+              <Route path="/djs" element={<DJs />} />
               {user!.isAdmin && <Route path="/adminpanel" element={<AdminPanel />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
