@@ -443,11 +443,11 @@ export const Classrooms = memo(() => {
     setSheetOpen(true);
   }, []);
 
-  // Reporting is just for putz; everyone else (signed out included) only sees availability.
+  // Anyone (signed out included) sees which rooms were reported, but only putz can report them.
   const { user } = useAuthStatus();
   const canReport = user?.affiliation === "PUTZ";
   const myReports = useQuery(api.classroomReports.getMyReports, canReport ? {} : "skip");
-  const reportCountsList = useQuery(api.classroomReports.getReportCounts, canReport ? {} : "skip");
+  const reportCountsList = useQuery(api.classroomReports.getReportCounts);
   const reportCounts = useMemo(
     () => new Map(reportCountsList?.map(({ room, count }) => [room, count])),
     [reportCountsList]

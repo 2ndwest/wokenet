@@ -23,13 +23,11 @@ export const getMyReports = query({
   },
 });
 
-// How many people have reported each reported room, so the page can flag them. Just counts: who
-// reported and what they said is for admins.
+// How many people have reported each reported room, so the page can flag them. Public, and just
+// counts: who reported and what they said is for admins.
 export const getReportCounts = query({
   args: {},
   handler: async (ctx) => {
-    await requirePutz(ctx);
-
     const counts = new Map<string, number>();
     for (const { room } of await ctx.db.query("classroomReports").collect())
       counts.set(room, (counts.get(room) ?? 0) + 1);
