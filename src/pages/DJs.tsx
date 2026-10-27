@@ -1200,15 +1200,43 @@ export const DJs = memo(() => {
   );
 
   /**
+   * File tracks into the playlist an upload or import asked for, making it
+   * first if it's new. Returns the line for the notice.
+   */
+  const fileIntoPlaylist = useCallback(
+    async (playlist: PlaylistTarget, trackIds: Id<"djTracks">[]) => {
+      setBusy(playlist.kind === "new" ? `creating playlist "${playlist.name}"` : "adding to playlist");
+      try {
+        const playlistId =
+          playlist.kind === "new"
+            ? await createPlaylist({
+                name: playlist.name,
+                description: playlist.description || undefined,
+              })
+            : playlist.playlistId;
+        await addTracksToPlaylist({ playlistId, trackIds });
+        setActivePlaylistId(playlistId);
+        return "Added to the playlist.";
+      } catch {
+        return "Couldn't add them to the playlist.";
+      }
+    },
+    [addTracksToPlaylist, createPlaylist],
+  );
+
+  /**
    * Import a whole rekordbox collection from the browser.
    *
    * The XML is only a catalogue, so the DJ also picks the folder their music
    * lives in; entries are matched to real files by name. Everything rekordbox
    * analysed -- tempo, key, cue points -- rides along, so imported tracks are
    * accurate rather than estimated.
+   *
+   * With a playlist chosen, everything matched goes in -- tracks already in the
+   * library as well as new ones -- in the export's order.
    */
   const importLibrary = useCallback(
-    async (xmlFile: File, audioFiles: File[]) => {
+    async (xmlFile: File, audioFiles: File[], playlist: PlaylistTarget | null) => {
       setNotice(null);
       setBusy("reading rekordbox.xml");
       try {
@@ -1231,11 +1259,14 @@ export const DJs = memo(() => {
           bpm?: number;
           musicalKey?: string;
         }[] = [];
+        // The library track each export entry ended up as, for the playlist.
+        const landed = new Map<(typeof parsed)[number], Id<"djTracks">>();
 
         for (const entry of parsed) {
           const key = matchKey(entry.filename);
           const existing = byLibName.get(key) ?? byLibTitle.get(matchKey(entry.title));
           if (existing) {
+            landed.set(entry, existing._id);
             const useful =
               entry.hotCues.length > 0 ||
               entry.memoryCues.length > 0 ||
@@ -1261,12 +1292,10 @@ export const DJs = memo(() => {
           await attachCues({ cues: attach, source: "rekordbox-xml" });
         }
 
-        if (queue.length === 0) {
+        if (queue.length === 0 && landed.size === 0) {
           setNotice(
-            attach.length > 0
-              ? `Updated ${attach.length} existing tracks with rekordbox analysis. Nothing new to upload.`
-              : `Matched nothing — ${parsed.length} tracks in that export, ` +
-                `${audioFiles.length} files in that folder.`,
+            `Matched nothing — ${parsed.length} tracks in that export, ` +
+              `${audioFiles.length} files in that folder.`,
           );
           return;
         }
@@ -1293,7 +1322,7 @@ export const DJs = memo(() => {
             const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
 
             const hasCues = entry.hotCues.length > 0 || entry.memoryCues.length > 0;
-            await addTrack({
+            const trackId = await addTrack({
               storageId,
               title: entry.title || tags.title || file.name.replace(/\.[^.]+$/, ""),
               artist: entry.artist || tags.artist,
@@ -1312,22 +1341,32 @@ export const DJs = memo(() => {
               memoryCues: hasCues ? entry.memoryCues : undefined,
               cueSource: "rekordbox-xml",
             });
+            landed.set(entry, trackId);
           } catch {
             failed += 1;
           }
         }
 
-        const summary = [`Imported ${done - failed} of ${queue.length} new tracks`];
+        const summary =
+          queue.length > 0
+            ? [`Imported ${done - failed} of ${queue.length} new tracks`]
+            : ["Nothing new to upload"];
         if (attach.length > 0) summary.push(`updated ${attach.length} you already had`);
         if (failed > 0) summary.push(`${failed} failed`);
-        setNotice(summary.join(", ") + ".");
+        let notice = summary.join(", ") + ".";
+
+        const trackIds = parsed.flatMap((e) => landed.get(e) ?? []);
+        if (playlist && trackIds.length > 0) {
+          notice += " " + (await fileIntoPlaylist(playlist, trackIds));
+        }
+        setNotice(notice);
       } catch (err) {
         setNotice(err instanceof Error ? err.message : "Couldn't read that export.");
       } finally {
         setBusy(null);
       }
     },
-    [addTrack, generateUploadUrl, tracks],
+    [addTrack, fileIntoPlaylist, generateUploadUrl, tracks],
   );
 
   /** Zip up the selected tracks and hand them over as one download. */
@@ -1566,27 +1605,13 @@ export const DJs = memo(() => {
 
       // Only worth making the playlist if something actually landed.
       if (playlist && uploadedIds.length > 0) {
-        setBusy(playlist.kind === "new" ? `creating playlist "${playlist.name}"` : "adding to playlist");
-        try {
-          const playlistId =
-            playlist.kind === "new"
-              ? await createPlaylist({
-                  name: playlist.name,
-                  description: playlist.description || undefined,
-                })
-              : playlist.playlistId;
-          await addTracksToPlaylist({ playlistId, trackIds: uploadedIds });
-          setActivePlaylistId(playlistId);
-          parts.push("Added to the playlist.");
-        } catch {
-          parts.push("Couldn't add them to the playlist.");
-        }
+        parts.push(await fileIntoPlaylist(playlist, uploadedIds));
       }
 
       setBusy(null);
       if (parts.length > 0) setNotice(parts.join(" "));
     },
-    [addTrack, addTracksToPlaylist, createPlaylist, generateUploadUrl],
+    [addTrack, fileIntoPlaylist, generateUploadUrl],
   );
 
   /** Queue a SoundCloud URL for a DJ's ripper to pick up. */
@@ -1787,7 +1812,11 @@ export const DJs = memo(() => {
               onRun={(f, p) => void upload(f, p)}
               busy={busy !== null}
             />
-            <LibraryImportDialog onRun={importLibrary} busy={busy !== null} />
+            <LibraryImportDialog
+              playlists={playlists ?? []}
+              onRun={(x, a, p) => void importLibrary(x, a, p)}
+              busy={busy !== null}
+            />
             {!activePlaylist && playButton}
             {user?.isAdmin && <DuplicatesDialog />}
             {activePlaylist && (
@@ -4377,16 +4406,26 @@ const UploadDialog = memo(
  * actually lives in. Anyone signed in can run this on their own library.
  */
 const LibraryImportDialog = memo(
-  ({ onRun, busy }: { onRun: (xml: File, audio: File[]) => void; busy: boolean }) => {
+  ({
+    playlists,
+    onRun,
+    busy,
+  }: {
+    playlists: PlaylistRow[];
+    onRun: (xml: File, audio: File[], playlist: PlaylistTarget | null) => void;
+    busy: boolean;
+  }) => {
     const xmlInput = useRef<HTMLInputElement | null>(null);
     const folderInput = useRef<HTMLInputElement | null>(null);
     const [xml, setXml] = useState<File | null>(null);
     const [audio, setAudio] = useState<File[]>([]);
+    const [draft, setDraft] = useState(EMPTY_PLAYLIST_DRAFT);
+    const target = targetOf(draft);
 
     const audioCount = audio.length;
 
     return (
-      <Dialog.Root>
+      <Dialog.Root onOpenChange={(open) => !open && setDraft(EMPTY_PLAYLIST_DRAFT)}>
         <Dialog.Trigger>
           <Button size="1" radius="full" variant="surface">
             Import
@@ -4441,12 +4480,14 @@ const LibraryImportDialog = memo(
               </Button>
             </Flex>
 
+            <PlaylistPicker playlists={playlists} draft={draft} onChange={setDraft} />
+
             <Separator size="4" />
 
             <Button
               size="1"
-              disabled={!xml || audioCount === 0 || busy}
-              onClick={() => xml && onRun(xml, audio)}
+              disabled={!xml || audioCount === 0 || target === "incomplete" || busy}
+              onClick={() => xml && target !== "incomplete" && onRun(xml, audio, target)}
             >
               {busy ? "importing…" : "Start import"}
             </Button>
