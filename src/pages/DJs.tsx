@@ -1452,6 +1452,17 @@ export const DJs = memo(() => {
         fetched.push(t._id);
       }
 
+      // Every playlist holding any of these tracks comes along too, cut down
+      // to the tracks in the zip, so rekordbox gets the crates as well.
+      setBusy("gathering playlists");
+      const indexOf = new Map(chosen.map((t, i) => [t._id, i]));
+      const crates = [];
+      for (const p of playlists ?? []) {
+        const ids = await convex.query(api.djs.listPlaylistTrackIds, { playlistId: p._id });
+        const entries = ids.map((id) => indexOf.get(id)).filter((i) => i !== undefined);
+        if (entries.length > 0) crates.push({ name: p.name, entries });
+      }
+
       // Ship a rekordbox collection alongside the audio, so cue points and
       // analysis travel with the download rather than being left behind.
       const xml = buildRekordboxXml(
@@ -1465,6 +1476,7 @@ export const DJs = memo(() => {
           hotCues: t.hotCues,
           memoryCues: t.memoryCues,
         })),
+        crates,
       );
       entries.push({
         name: "wokenet-rekordbox.xml",
@@ -1485,7 +1497,7 @@ export const DJs = memo(() => {
     } finally {
       setBusy(null);
     }
-  }, [convex, recordDownloads]);
+  }, [convex, playlists, recordDownloads]);
 
   const downloadSelected = useCallback(async () => {
     const chosen = (tracks ?? []).filter((t) => selected.has(t._id));

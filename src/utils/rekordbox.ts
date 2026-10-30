@@ -175,13 +175,21 @@ export type ExportTrack = {
   memoryCues?: Cue[];
 };
 
+/** A playlist to write out, its tracks as indexes into the exported tracks, in order. */
+export type ExportPlaylist = { name: string; entries: number[] };
+
 /**
  * Build a rekordbox.xml the DJ can import alongside downloaded audio.
  *
  * `folder` is where they'll keep the files. Rekordbox matches on path, so if it
  * doesn't line up they'll be asked to relocate the folder once on import.
+ * Playlists point at tracks by TrackID, so they survive a relocate.
  */
-export function buildRekordboxXml(tracks: ExportTrack[], folder = "/Users/you/Music/wokenet"): string {
+export function buildRekordboxXml(
+  tracks: ExportTrack[],
+  playlists: ExportPlaylist[] = [],
+  folder = "/Users/you/Music/wokenet",
+): string {
   const base = folder.replace(/\/+$/, "");
 
   const marks = (cues: Cue[] | undefined, isHot: boolean): string =>
@@ -225,12 +233,31 @@ export function buildRekordboxXml(tracks: ExportTrack[], folder = "/Users/you/Mu
     })
     .join("\n");
 
+  const lists = playlists
+    .map((p) => ({ ...p, entries: p.entries.filter((i) => i >= 0 && i < tracks.length) }))
+    .filter((p) => p.entries.length > 0);
+  const nodes = lists
+    .map((p) => {
+      const keys = p.entries.map((i) => `        <TRACK Key="${i + 1}"/>`).join("\n");
+      return `      <NODE Type="1" Name="${escapeXml(p.name)}" KeyType="0" Entries="${p.entries.length}">\n${keys}\n      </NODE>`;
+    })
+    .join("\n");
+  const tree =
+    lists.length > 0
+      ? `  <PLAYLISTS>
+    <NODE Type="0" Name="ROOT" Count="${lists.length}">
+${nodes}
+    </NODE>
+  </PLAYLISTS>
+`
+      : "";
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <DJ_PLAYLISTS Version="1.0.0">
   <PRODUCT Name="wokenet" Version="1.0.0" Company="PUTZ"/>
   <COLLECTION Entries="${tracks.length}">
 ${entries}
   </COLLECTION>
-</DJ_PLAYLISTS>
+${tree}</DJ_PLAYLISTS>
 `;
 }
