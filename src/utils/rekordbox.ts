@@ -190,7 +190,8 @@ export function buildRekordboxXml(
   playlists: ExportPlaylist[] = [],
   folder = "/Users/you/Music/wokenet",
 ): string {
-  const base = folder.replace(/\/+$/, "");
+  // Windows paths come in as C:/Users/..., which a file URL wants as /C:/Users/...
+  const base = folder.replace(/\/+$/, "").replace(/^(?=[A-Za-z]:\/)/, "/");
 
   const marks = (cues: Cue[] | undefined, isHot: boolean): string =>
     (cues ?? [])
@@ -217,7 +218,9 @@ export function buildRekordboxXml(
         `TrackID="${i + 1}"`,
         `Name="${escapeXml(t.title)}"`,
         `Artist="${escapeXml(t.artist ?? "")}"`,
-        `Location="file://localhost${encodeURI(`${base}/${t.filename}`)}"`,
+        // encodeURI leaves & and # alone, but a bare & isn't valid XML and
+        // rekordbox stops reading at the first one.
+        `Location="file://localhost${encodeURI(`${base}/${t.filename}`).replace(/[&#]/g, encodeURIComponent)}"`,
       ];
       if (t.durationSec) attrs.push(`TotalTime="${Math.round(t.durationSec)}"`);
       if (t.bpm) attrs.push(`AverageBpm="${t.bpm.toFixed(2)}"`);
@@ -236,21 +239,35 @@ export function buildRekordboxXml(
   const lists = playlists
     .map((p) => ({ ...p, entries: p.entries.filter((i) => i >= 0 && i < tracks.length) }))
     .filter((p) => p.entries.length > 0);
-  const nodes = lists
-    .map((p) => {
-      const keys = p.entries.map((i) => `        <TRACK Key="${i + 1}"/>`).join("\n");
-      return `      <NODE Type="1" Name="${escapeXml(p.name)}" KeyType="0" Entries="${p.entries.length}">\n${keys}\n      </NODE>`;
-    })
-    .join("\n");
-  const tree =
-    lists.length > 0
-      ? `  <PLAYLISTS>
-    <NODE Type="0" Name="ROOT" Count="${lists.length}">
-${nodes}
-    </NODE>
-  </PLAYLISTS>
-`
-      : "";
+
+  // Imports flatten rekordbox folders into "Gigs / Halloween"; put them back,
+  // so a playlist comes home in the folder it left from.
+  type Folder = { name: string; children: (Folder | ExportPlaylist)[] };
+  const root: Folder = { name: "ROOT", children: [] };
+  for (const p of lists) {
+    const parts = p.name.split(" / ").map((s) => s.trim());
+    const leaf = parts.pop() || p.name;
+    let at = root;
+    for (const part of parts.filter((s) => s.length > 0)) {
+      let next = at.children.find((c): c is Folder => "children" in c && c.name === part);
+      if (!next) {
+        next = { name: part, children: [] };
+        at.children.push(next);
+      }
+      at = next;
+    }
+    at.children.push({ name: leaf, entries: p.entries });
+  }
+  const write = (node: Folder | ExportPlaylist, depth: number): string => {
+    const pad = "  ".repeat(depth);
+    if ("children" in node) {
+      const inner = node.children.map((c) => write(c, depth + 1)).join("\n");
+      return `${pad}<NODE Type="0" Name="${escapeXml(node.name)}" Count="${node.children.length}">\n${inner}\n${pad}</NODE>`;
+    }
+    const keys = node.entries.map((i) => `${pad}  <TRACK Key="${i + 1}"/>`).join("\n");
+    return `${pad}<NODE Type="1" Name="${escapeXml(node.name)}" KeyType="0" Entries="${node.entries.length}">\n${keys}\n${pad}</NODE>`;
+  };
+  const tree = lists.length > 0 ? `  <PLAYLISTS>\n${write(root, 2)}\n  </PLAYLISTS>\n` : "";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <DJ_PLAYLISTS Version="1.0.0">

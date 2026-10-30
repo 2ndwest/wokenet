@@ -682,6 +682,7 @@ export const DJs = memo(() => {
   const ripRequests = useQuery(api.djs.listRipRequests);
   const myRecentRips = useQuery(api.djs.myRecentRips);
   const playlists = useQuery(api.djs.listPlaylists);
+  const mySettings = useQuery(api.djs.myDjSettings);
   const tagStyles = useQuery(api.djs.listTagStyles);
 
   /** Custom tag colours, keyed by tag, overriding the built-in house rules. */
@@ -741,6 +742,7 @@ export const DJs = memo(() => {
   const activePlaylist = (playlists ?? []).find((p) => p._id === activePlaylistId) ?? null;
 
   const generateUploadUrl = useMutation(api.djs.generateUploadUrl);
+  const saveRekordboxImport = useMutation(api.djs.saveRekordboxImport);
   const addTrack = useMutation(api.djs.addTrack);
   const setGenres = useMutation(api.djs.setGenres);
   const updateTrack = useMutation(api.djs.updateTrack);
@@ -1254,10 +1256,33 @@ export const DJs = memo(() => {
       audioFiles: File[],
       playlist: PlaylistTarget | null,
       rb: { playlists: ParsedXmlPlaylist[]; onlyTheirTracks: boolean },
+      xmlFile: File,
     ) => {
       setNotice(null);
-      setBusy("matching files");
       try {
+        // Keep the file itself first, before anything that could fail, so the
+        // import can always be redone from wokenet's copy.
+        setBusy("saving your rekordbox.xml");
+        try {
+          const uploadUrl = await generateUploadUrl();
+          const res = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/xml" },
+            body: xmlFile,
+          });
+          if (!res.ok) throw new Error(`upload failed (${res.status})`);
+          const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+          await saveRekordboxImport({
+            storageId,
+            filename: xmlFile.name,
+            trackCount: xml.tracks.length,
+            playlistCount: xml.playlists.length,
+          });
+        } catch {
+          // Worth having, not worth stopping the import over.
+        }
+
+        setBusy("matching files");
         // Only what's in the chosen rekordbox playlists, if that's what was asked.
         const wanted = rb.onlyTheirTracks ? new Set(rb.playlists.flatMap((p) => p.entries)) : null;
         const parsed = xml.tracks.filter((_, i) => !wanted || wanted.has(i));
@@ -1428,20 +1453,25 @@ export const DJs = memo(() => {
       generateUploadUrl,
       myKerb,
       playlists,
+      saveRekordboxImport,
       tracks,
     ],
   );
 
   /** Zip up the selected tracks and hand them over as one download. */
-  /** Zip up tracks with a rekordbox collection alongside, and save it. Returns whether it worked. */
-  const downloadTracks = useCallback(async (chosen: Track[], zipName: string) => {
+  /**
+   * Zip up tracks with a rekordbox collection alongside, and save it. Returns
+   * whether it worked. With `xmlOnly` it saves just the collection, for a DJ
+   * who already has the audio and only wants the cues and playlists.
+   */
+  const downloadTracks = useCallback(async (chosen: Track[], zipName: string, xmlOnly = false) => {
     if (chosen.length === 0) return false;
 
     setNotice(null);
     const entries: ZipEntry[] = [];
     const fetched: Id<"djTracks">[] = [];
     try {
-      for (let i = 0; i < chosen.length; i += 1) {
+      for (let i = 0; i < (xmlOnly ? 0 : chosen.length); i += 1) {
         const t = chosen[i];
         setBusy(`fetching ${i + 1}/${chosen.length}: ${t.title.slice(0, 36)}`);
         const url = await convex.query(api.djs.getTrackUrl, { trackId: t._id });
@@ -1477,7 +1507,16 @@ export const DJs = memo(() => {
           memoryCues: t.memoryCues,
         })),
         crates,
+        mySettings?.rekordboxFolder || undefined,
       );
+      if (xmlOnly) {
+        saveBlob(new Blob([xml], { type: "application/xml" }), "wokenet-rekordbox.xml");
+        setNotice(
+          `Saved a rekordbox.xml for ${chosen.length} track${chosen.length === 1 ? "" : "s"}` +
+            (crates.length > 0 ? ` and ${crates.length} playlist${crates.length === 1 ? "" : "s"}.` : "."),
+        );
+        return true;
+      }
       entries.push({
         name: "wokenet-rekordbox.xml",
         data: new Blob([xml], { type: "application/xml" }),
@@ -1497,11 +1536,11 @@ export const DJs = memo(() => {
     } finally {
       setBusy(null);
     }
-  }, [convex, playlists, recordDownloads]);
+  }, [convex, mySettings?.rekordboxFolder, playlists, recordDownloads]);
 
-  const downloadSelected = useCallback(async () => {
+  const downloadSelected = useCallback(async (xmlOnly = false) => {
     const chosen = (tracks ?? []).filter((t) => selected.has(t._id));
-    if (await downloadTracks(chosen, "wokenet-{n}-tracks.zip")) {
+    if (await downloadTracks(chosen, "wokenet-{n}-tracks.zip", xmlOnly)) {
       setSelectMode(false);
       setSelected(new Set());
     }
@@ -1889,7 +1928,7 @@ export const DJs = memo(() => {
             />
             <LibraryImportDialog
               playlists={playlists ?? []}
-              onRun={(x, a, p, rb) => void importLibrary(x, a, p, rb)}
+              onRun={(x, a, p, rb, file) => void importLibrary(x, a, p, rb, file)}
               busy={busy !== null}
             />
             {!activePlaylist && playButton}
@@ -2172,6 +2211,16 @@ export const DJs = memo(() => {
                   onClick={() => void downloadSelected()}
                 >
                   Download {selected.size} track{selected.size === 1 ? "" : "s"}
+                </Button>
+                <Button
+                  size="1"
+                  radius="full"
+                  variant="surface"
+                  disabled={selected.size === 0 || busy !== null}
+                  onClick={() => void downloadSelected(true)}
+                  title="Just the cues and playlists, for tracks you already have"
+                >
+                  Download rekordbox.xml
                 </Button>
                 <Button
                   size="1"
@@ -3209,6 +3258,7 @@ const DjSettingsDialog = memo(() => {
   const [bgDraft, setBgDraft] = useState<string | null>(null);
   const [fgDraft, setFgDraft] = useState<string | null>(null);
   const [glowDraft, setGlowDraft] = useState<boolean | null>(null);
+  const [folderDraft, setFolderDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
@@ -3219,6 +3269,9 @@ const DjSettingsDialog = memo(() => {
   const bg = bgDraft ?? me?.tagBg ?? "";
   const fg = fgDraft ?? me?.tagFg ?? "";
   const glow = glowDraft ?? me?.tagGlow ?? false;
+  const folder = folderDraft ?? me?.rekordboxFolder ?? "";
+  // rekordbox wants a full path: /Users/... on a Mac, C:\... on Windows.
+  const folderLooksWrong = folder.trim() !== "" && !/^(\/|[A-Za-z]:[\\/])/.test(folder.trim());
   const custom = bg !== "" && fg !== "";
   const preview = name.trim() || me?.kerb || "you";
 
@@ -3229,6 +3282,7 @@ const DjSettingsDialog = memo(() => {
     setBgDraft(null);
     setFgDraft(null);
     setGlowDraft(null);
+    setFolderDraft(null);
     setError(null);
   };
 
@@ -3242,6 +3296,7 @@ const DjSettingsDialog = memo(() => {
         tagBg: bg,
         tagFg: fg,
         tagGlow: glow,
+        rekordboxFolder: folder,
       });
       reset();
     } finally {
@@ -3499,6 +3554,51 @@ const DjSettingsDialog = memo(() => {
               </Button>
             )}
           </Flex>
+        </Flex>
+
+        <Flex direction="column" gap="1" mt="4">
+          <Text size="2" weight="bold">
+            rekordbox folder
+          </Text>
+          <TextField.Root
+            placeholder="/Users/you/Music/wokenet"
+            value={folder}
+            maxLength={400}
+            onChange={(e) => setFolderDraft(e.target.value)}
+          />
+          <Text size="1" color="gray">
+            Where you keep the tracks you download from here. Every download comes with a
+            rekordbox.xml holding the cues and playlists, and rekordbox only connects those to
+            your files if this path is exactly where they are. Your browser can't tell us, so:
+          </Text>
+          <Text as="div" size="1" color="gray">
+            <ol style={{ margin: 0, paddingLeft: "1.2em" }}>
+              <li>Pick a folder for your wokenet music and paste its full path here.</li>
+              <li>
+                Unzip each download straight into it — the tracks loose in the folder, not in a
+                subfolder.
+              </li>
+              <li>
+                In rekordbox, Preferences → Advanced → Database → rekordbox xml, choose the
+                wokenet-rekordbox.xml in that folder.
+              </li>
+              <li>
+                Under rekordbox xml in the sidebar: All Tracks → Import to Collection, then
+                right-click each playlist → Import Playlist.
+              </li>
+            </ol>
+          </Text>
+          <Text size="1" color="gray">
+            To copy a folder's path: on a Mac, select it in Finder and press Option-Cmd-C; on
+            Windows, Shift-right-click it and choose Copy as path. Already have the tracks? Select
+            them and use Download rekordbox.xml for just the cues and playlists.
+          </Text>
+          {folderLooksWrong && (
+            <Text size="1" color="red">
+              That needs to be a full path, starting with / on a Mac or a drive letter like C:\ on
+              Windows — rekordbox doesn't understand ~ or relative paths.
+            </Text>
+          )}
         </Flex>
 
         {error && (
@@ -4492,13 +4592,15 @@ const LibraryImportDialog = memo(
       audio: File[],
       playlist: PlaylistTarget | null,
       rb: { playlists: ParsedXmlPlaylist[]; onlyTheirTracks: boolean },
+      xmlFile: File,
     ) => void;
     busy: boolean;
   }) => {
     const xmlInput = useRef<HTMLInputElement | null>(null);
     const folderInput = useRef<HTMLInputElement | null>(null);
     // Read as soon as it's picked, so its playlists can be offered up front.
-    const [xml, setXml] = useState<{ name: string; parsed: ParsedXml } | null>(null);
+    const [xml, setXml] = useState<{ file: File; parsed: ParsedXml } | null>(null);
+    const saved = useQuery(api.djs.myRekordboxImports);
     const [xmlError, setXmlError] = useState<string | null>(null);
     const [audio, setAudio] = useState<File[]>([]);
     const [draft, setDraft] = useState(EMPTY_PLAYLIST_DRAFT);
@@ -4518,7 +4620,7 @@ const LibraryImportDialog = memo(
       if (!file) return;
       try {
         const parsed = parseRekordboxXml(await file.text());
-        setXml({ name: file.name, parsed });
+        setXml({ file, parsed });
         setChosen(new Set(parsed.playlists.map((_, i) => i)));
       } catch (err) {
         setXmlError(err instanceof Error ? err.message : "Couldn't read that file.");
@@ -4556,7 +4658,7 @@ const LibraryImportDialog = memo(
                 onChange={(e) => void readXml(e.target.files?.[0])}
               />
               <Button size="1" variant="surface" onClick={() => xmlInput.current?.click()}>
-                {xml ? xml.name.slice(0, 40) : "Choose rekordbox.xml"}
+                {xml ? xml.file.name.slice(0, 40) : "Choose rekordbox.xml"}
               </Button>
               {xml && (
                 <Text size="1" color="gray">
@@ -4577,7 +4679,8 @@ const LibraryImportDialog = memo(
               </Text>
               <Text size="1" color="gray">
                 The folder holding those tracks — if they're spread out, one that holds all of
-                them. Nothing is uploaded until you start the import.
+                them. Nothing is uploaded until you start the import. Already imported them? Skip
+                this, and the import just brings over cues and playlists for what's here.
               </Text>
               <input
                 ref={folderInput}
@@ -4669,15 +4772,18 @@ const LibraryImportDialog = memo(
             <Button
               size="1"
               disabled={
-                !xml || audioCount === 0 || target === "incomplete" || nothingPicked || busy
+                !xml || target === "incomplete" || nothingPicked || busy
               }
               onClick={() =>
                 xml &&
                 target !== "incomplete" &&
-                onRun(xml.parsed, audio, target, {
-                  playlists: picked,
-                  onlyTheirTracks: bringPlaylists && onlyTheirTracks,
-                })
+                onRun(
+                  xml.parsed,
+                  audio,
+                  target,
+                  { playlists: picked, onlyTheirTracks: bringPlaylists && onlyTheirTracks },
+                  xml.file,
+                )
               }
             >
               {busy ? "importing…" : "Start import"}
@@ -4687,6 +4793,30 @@ const LibraryImportDialog = memo(
               what's new, and tops up playlists it made last time. Large or unsupported files are
               skipped too.
             </Text>
+            {saved && saved.length > 0 && (
+              <Flex direction="column" gap="1">
+                <Text size="1" weight="bold">
+                  Your past imports
+                </Text>
+                <Text size="1" color="gray">
+                  Every rekordbox.xml you import is kept here. Download one and choose it above to
+                  run that import again — say, to bring over playlists it missed.
+                </Text>
+                {saved.slice(0, 5).map((s) =>
+                  s.url ? (
+                    <Text size="1" key={s._id}>
+                      <a href={s.url} download={s.filename} target="_blank" rel="noreferrer">
+                        {s.filename}
+                      </a>{" "}
+                      <Text color="gray">
+                        · {new Date(s.importedAt).toLocaleDateString()} · {s.trackCount} tracks,{" "}
+                        {s.playlistCount} playlist{s.playlistCount === 1 ? "" : "s"}
+                      </Text>
+                    </Text>
+                  ) : null,
+                )}
+              </Flex>
+            )}
           </Flex>
 
           <Flex justify="end" mt="4">

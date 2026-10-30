@@ -169,12 +169,31 @@ export default defineSchema({
     tagFg: v.optional(v.string()),
     /** Whether the tag glows, the same option genre tags get. */
     tagGlow: v.optional(v.boolean()),
+    /**
+     * Where this DJ keeps wokenet downloads on their own computer, written
+     * into exported rekordbox.xml so rekordbox finds the files without a
+     * relocate. A browser can't see real paths, so they tell us once.
+     */
+    rekordboxFolder: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_kerb", ["kerb"]),
 
   // Shared playlists over the DJ library. Anyone in PUTZ can make one, and
   // membership is a join table so a track can sit in several playlists and
   // deleting a playlist never touches the audio.
+  // Every rekordbox.xml anyone imports, kept as-is. The import reads it in the
+  // browser, so without this a playlist step that broke or predated a fix
+  // could only be redone by finding the file again on the DJ's own machine.
+  djRekordboxImports: defineTable({
+    kerb: v.string(),
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    sizeBytes: v.number(),
+    trackCount: v.number(),
+    playlistCount: v.number(),
+    importedAt: v.number(),
+  }).index("by_kerb", ["kerb"]),
+
   djPlaylists: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
@@ -249,6 +268,8 @@ export default defineSchema({
     dismissedAt: v.optional(v.number()),
     claimedBy: v.optional(v.string()), // kerb of the machine's owner
     claimedAt: v.optional(v.number()),
+    /** The ripper's last check-in, which it sends before every track. */
+    lastProgressAt: v.optional(v.number()),
     finishedAt: v.optional(v.number()),
     createdAt: v.number(),
   })

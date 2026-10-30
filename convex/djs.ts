@@ -121,6 +121,7 @@ export const myDjSettings = query({
       tagBg: profile?.tagBg ?? "",
       tagFg: profile?.tagFg ?? "",
       tagGlow: !!profile?.tagGlow,
+      rekordboxFolder: profile?.rekordboxFolder ?? "",
       avatarUrl: profile?.avatarId ? await ctx.storage.getUrl(profile.avatarId) : null,
     };
   },
@@ -166,8 +167,10 @@ export const setMyDjSettings = mutation({
     tagBg: v.optional(v.string()),
     tagFg: v.optional(v.string()),
     tagGlow: v.optional(v.boolean()),
+    /** Absolute path on their computer; an empty string clears it. */
+    rekordboxFolder: v.optional(v.string()),
   },
-  handler: async (ctx, { djName, djColor, djBio, tagBg, tagFg, tagGlow }) => {
+  handler: async (ctx, { djName, djColor, djBio, tagBg, tagFg, tagGlow, rekordboxFolder }) => {
     const { user } = await requirePutz(ctx);
     const kerb = kerbOf(user.email);
     const existing = await profileFor(ctx, kerb);
@@ -188,6 +191,12 @@ export const setMyDjSettings = mutation({
     };
     const bg = hexOr(tagBg, existing?.tagBg);
     const fg = hexOr(tagFg, existing?.tagFg);
+    // Same rule: left out keeps it. Windows backslashes become slashes, since
+    // a file URL wants them that way, and trailing ones are dropped.
+    const folder =
+      rekordboxFolder === undefined
+        ? existing?.rekordboxFolder
+        : rekordboxFolder.trim().replace(/\\/g, "/").replace(/\/+$/, "").slice(0, 400) || undefined;
 
     const fields = {
       djName: trimmedName.length > 0 ? trimmedName : undefined,
@@ -197,6 +206,7 @@ export const setMyDjSettings = mutation({
       tagBg: bg && fg ? bg : undefined,
       tagFg: bg && fg ? fg : undefined,
       tagGlow: bg && fg && (tagGlow ?? existing?.tagGlow) ? true : undefined,
+      rekordboxFolder: folder,
       updatedAt: Date.now(),
     };
     if (existing) await ctx.db.patch(existing._id, fields);
@@ -688,6 +698,60 @@ export const generateUploadUrl = mutation({
   },
 });
 
+/** A rekordbox.xml is a few hundred KB; this is a very large collection. */
+const MAX_XML_BYTES = 50 * 1024 * 1024;
+
+/** Keep a copy of a rekordbox.xml as it's imported. */
+export const saveRekordboxImport = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    filename: v.string(),
+    trackCount: v.number(),
+    playlistCount: v.number(),
+  },
+  handler: async (ctx, { storageId, filename, trackCount, playlistCount }) => {
+    const { user } = await requirePutz(ctx);
+    const meta = await ctx.db.system.get(storageId);
+    if (!meta) throw new Error("UPLOAD_NOT_FOUND");
+    if (meta.size > MAX_XML_BYTES) {
+      await ctx.storage.delete(storageId);
+      throw new Error("XML_TOO_LARGE");
+    }
+    await ctx.db.insert("djRekordboxImports", {
+      kerb: kerbOf(user.email),
+      storageId,
+      filename: filename.slice(0, 200),
+      sizeBytes: meta.size,
+      trackCount,
+      playlistCount,
+      importedAt: Date.now(),
+    });
+  },
+});
+
+/** The caller's own saved rekordbox.xml files, newest first, to download again. */
+export const myRekordboxImports = query({
+  args: {},
+  handler: async (ctx) => {
+    const { user } = await requirePutz(ctx);
+    const rows = await ctx.db
+      .query("djRekordboxImports")
+      .withIndex("by_kerb", (q) => q.eq("kerb", kerbOf(user.email)))
+      .collect();
+    rows.sort((a, b) => b.importedAt - a.importedAt);
+    return await Promise.all(
+      rows.map(async (r) => ({
+        _id: r._id,
+        filename: r.filename,
+        trackCount: r.trackCount,
+        playlistCount: r.playlistCount,
+        importedAt: r.importedAt,
+        url: await ctx.storage.getUrl(r.storageId),
+      })),
+    );
+  },
+});
+
 export const addTrack = mutation({
   args: {
     storageId: v.id("_storage"),
@@ -1172,9 +1236,32 @@ export const cancelRipRequest = mutation({
 // machine does the ripping. It talks to the HTTP routes in convex/http.ts,
 // authenticated with DJ_RIPPER_SECRET, and drives these internal functions.
 
+/**
+ * How long a claimed rip can go without a check-in before it's given up on.
+ * The ripper checks in before every track and every 15s while backing off, so
+ * this much silence means it died or hung, not that it's busy.
+ */
+const RIP_SILENCE_MS = 30 * 60 * 1000;
+
 export const claimNextRipRequest = internalMutation({
   args: { claimedBy: v.string() },
   handler: async (ctx, { claimedBy }) => {
+    // A ripper that died mid-request would otherwise leave it "ripping"
+    // forever. Polls are a good moment to notice, since one comes every 30s.
+    const now = Date.now();
+    const running = await ctx.db
+      .query("djRipRequests")
+      .withIndex("by_status", (q) => q.eq("status", "claimed"))
+      .collect();
+    for (const r of running) {
+      if (now - (r.lastProgressAt ?? r.claimedAt ?? r.createdAt) < RIP_SILENCE_MS) continue;
+      await ctx.db.patch(r._id, {
+        status: "failed",
+        message: "The ripper stopped responding partway — submit it again to pick up the rest.",
+        finishedAt: now,
+      });
+    }
+
     const pending = await ctx.db
       .query("djRipRequests")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
@@ -1214,6 +1301,7 @@ export const noteRipProgress = internalMutation({
     if (!request || request.status !== "claimed") return { cancelled: false };
     await ctx.db.patch(requestId, {
       message: message.slice(0, 200),
+      lastProgressAt: Date.now(),
       tracksDone: done,
       tracksTried: tried,
       tracksTotal: total,
