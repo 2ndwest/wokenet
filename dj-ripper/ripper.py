@@ -75,7 +75,12 @@ def rip_one(
     url = request["url"]
     credit = request.get("requestedBy", "unknown")
 
-    tracks, name, is_playlist = putz_djs.resolve_input(url, token)
+    try:
+        tracks, name, is_playlist = putz_djs.resolve_input(url, token)
+    except SystemExit as exc:
+        # putz_djs is also a CLI and exits on a page it can't read; here that
+        # would take the whole ripper down, so fail just this request.
+        raise RuntimeError(str(exc) or "couldn't read that page") from None
     putz_djs.fill_titles(tracks, token)
     print(f"    {name}: {len(tracks)} track(s)")
 

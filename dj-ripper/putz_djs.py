@@ -33,7 +33,9 @@ except ImportError:
     sys.exit("yt-dlp is not installed.  Run:  pip install -r requirements.txt")
 
 ROOT = Path(__file__).resolve().parent
-FORMAT_LADDER = "download/hls_aac_256k/hls_aac_160k/hls_aac_96k/bestaudio"
+# Never the 30-second preview: SoundCloud offers one even for DRM-locked
+# tracks, and taking it would pass a clip off as the song.
+FORMAT_LADDER = "download/hls_aac_256k/hls_aac_160k/hls_aac_96k/bestaudio[format_id!*=preview]"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
 AUDIO_EXT = (".m4a", ".mp3", ".wav", ".flac", ".aiff", ".aif", ".opus", ".ogg")
 
@@ -293,6 +295,8 @@ def download_one(track, idx, token, out_dir, numbered):
         "quiet": True, "no_warnings": True, "noprogress": True,
         "overwrites": False,
         "retries": 3, "fragment_retries": 5,
+        # A stalled stream should fail and move on, not hang the whole queue.
+        "socket_timeout": 30,
         "writethumbnail": True,
         "postprocessors": [
             {"key": "FFmpegMetadata", "add_metadata": True},
@@ -323,12 +327,16 @@ def download_one(track, idx, token, out_dir, numbered):
     try:
         with YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
-    except Exception:
+    except Exception as exc:
         # Artwork embedding is fragile across wav/flac/m4a. If the audio
         # actually landed, treat the track as done rather than failing it.
         got = salvage()
         if got:
             return got, infer_quality(got)
+        # Nothing left once the preview is ruled out means every real stream
+        # is locked; say so, so it's counted as DRM rather than a failure.
+        if "requested format is not available" in str(exc).lower():
+            raise RuntimeError("DRM-locked: only a 30s preview is available") from exc
         raise
 
     fmt = info.get("format_id") or "unknown"
