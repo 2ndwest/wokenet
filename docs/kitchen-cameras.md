@@ -1,10 +1,10 @@
 # Kitchen camera review
 
-This route uses Wokenet's existing PUTZ navigation and current Clerk identity.
+This route uses Wokenet's existing Putz navigation and current Clerk identity.
 For the requested all-member policy, the Pi calls the existing `users:listUsers`
 query, which requires `requirePutz`;
-set `wokenet_access=putz` on the Pi. Both ends require current PUTZ membership;
-signed-out and non-PUTZ accounts are denied. No individual email list is needed
+set `wokenet_access=putz` on the Pi. Both ends require current Putz membership;
+signed-out and non-Putz accounts are denied. No individual email list is needed
 in this mode. No new Convex environment flag is needed. A visible navigation
 item is not authorization.
 
@@ -22,8 +22,8 @@ The browser sends short-lived tokens only in Authorization headers and footage
 does not pass through Convex storage. API failures remain fail-closed.
 After Convex authenticates the exact bearer token and returns a successful user
 directory, the Pi reads that token's email and requires exactly one matching
-directory entry with current PUTZ membership. It never grants access merely
-because another listed user is PUTZ. Responses are streamed with a 1 MiB limit;
+directory entry with current Putz membership. It never grants access merely
+because another listed user is Putz. Responses are streamed with a 1 MiB limit;
 the directory is not saved or cached. The existing query's membership guard has
 regression coverage. Changes to its access policy or response may require a Pi
 update; errors deny camera access.

@@ -34,7 +34,7 @@ used by automated playback tests are separate and labelled.
 
 The actual application navigation/settings work normally. Fixture routes for
 automated UI checks are `?mirror-role=other`, `?mirror-role=signed-out`,
-`?mirror-role=loading` and `?mirror-role=admin`; default is a preview PUTZ member.
+`?mirror-role=loading` and `?mirror-role=admin`; default is a preview Putz member.
 They do not grant production membership or change anyone's Wokenet account.
 
 Run `node --test scripts/mirror/proxy-checks.mjs` for proxy boundary tests and
