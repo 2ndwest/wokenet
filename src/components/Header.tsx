@@ -103,6 +103,7 @@ export const Header = memo(() => {
   return (
     <>
       <Flex
+        role="banner"
         align="center"
         justify="between"
         px="3"
@@ -111,12 +112,15 @@ export const Header = memo(() => {
           maxHeight: "50px",
           minHeight: "50px",
           borderBottom: "1px solid var(--gray-3)",
+          flexShrink: 0,
         }}
       >
         {/* Hamburger menu (only on mobile) */}
         {!isAuthLoading && (
-          <Flex align="center" display={{ initial: "flex", sm: "none" }}>
-            <IconButton variant="ghost" radius="full" onClick={() => setMenuOpen((v) => !v)}>
+          <Flex align="center" display={{ initial: "flex", lg: "none" }}>
+            <IconButton id="navigation-toggle" aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={menuOpen} aria-controls="mobile-navigation"
+              variant="ghost" radius="full" onClick={() => setMenuOpen((v) => !v)}>
               <HamburgerIcon open={menuOpen} />
             </IconButton>
           </Flex>
@@ -138,7 +142,7 @@ export const Header = memo(() => {
         </NavLink>
 
         {/* Nav buttons (only on desktop) */}
-        <Flex gap="3" align="center" display={{ initial: "none", sm: "flex" }}>
+        <Flex role="navigation" aria-label="Primary" gap="3" align="center" display={{ initial: "none", lg: "flex" }}>
           <NavButtons affiliation={user?.affiliation} isAdmin={!!user?.isAdmin} />
         </Flex>
 
@@ -171,12 +175,22 @@ export const Header = memo(() => {
 
       {/* Mobile menu (only on mobile after clicking hamburger) */}
       <Flex
+        id="mobile-navigation"
+        role="navigation"
+        aria-label="Mobile"
+        onClick={(event) => { if ((event.target as Element).closest("a[href]")) setMenuOpen(false); }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setMenuOpen(false);
+            document.getElementById("navigation-toggle")?.focus();
+          }
+        }}
         direction="row"
         wrap="wrap"
         align="center"
         justify="center"
         gap="2"
-        display={{ initial: menuOpen ? "flex" : "none", sm: "none" }}
+        display={{ initial: !isAuthLoading && menuOpen ? "flex" : "none", lg: "none" }}
         style={{
           position: "fixed",
           top: "50px",
@@ -217,6 +231,7 @@ export const NavButtons = memo(
         <NavButton disabled={affiliation !== "PUTZ"} to="/djs">
           DJs
         </NavButton>
+        <NavButton disabled={affiliation !== "PUTZ"} to="/kitchen-cameras">Kitchen cameras</NavButton>
         {isAdmin && <NavButton to="/adminpanel">Admin Panel</NavButton>}
       </>
     );
@@ -225,19 +240,11 @@ export const NavButtons = memo(
 
 export const NavButton = memo(
   ({ to, disabled, children }: { to: string; disabled?: boolean; children: React.ReactNode }) => {
-    return (
-      <NavLink to={to}>
-        {({ isActive }) => (
-          <Button
-            style={{ height: "24px" }}
-            radius="full"
-            variant={isActive ? "solid" : "surface"}
-            disabled={disabled}
-          >
-            {children}
-          </Button>
-        )}
-      </NavLink>
-    );
+    if (disabled) return <Button style={{ height: "24px" }} radius="full" variant="surface" disabled>{children}</Button>;
+    return <NavLink to={to} style={{ textDecoration: "none" }}>
+      {({ isActive }) => <Button asChild style={{ height: "24px" }} radius="full" variant={isActive ? "solid" : "surface"}>
+        <span>{children}</span>
+      </Button>}
+    </NavLink>;
   },
 );
