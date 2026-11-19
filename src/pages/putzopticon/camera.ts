@@ -34,8 +34,9 @@ export const frameBounds = (bounds: Bounds, size: Size, insets: Insets, maxScale
 };
 
 export const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
-// The camera's easing: off at full speed, then a long, soft glide in (exponential ease-out).
-export const easeFlight = (t: number) => (t >= 1 ? 1 : (1 - 2 ** (-10 * t)) / (1 - 2 ** -10));
+// The camera's easing: ease in and out (cubic), so a flight builds up, sweeps across and settles in
+// without the long crawl at the end that an ease-out spends barely moving.
+export const easeFlight = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
 
 // A flight between two cameras along van Wijk and Nuij's smooth zoom-and-pan path (the one MapLibre's
 // flyTo takes): pull back as far as the hop needs, cross, and settle in. Returns the camera at
