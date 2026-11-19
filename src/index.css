@@ -131,6 +131,69 @@ html[data-accent="purple"] {
   --backdrop-filter-panel: none;
 }
 
+/* The Bathrooms filter's None / Single stall / All. Radix makes every segment as wide as the widest, too wide for a
+   phone here, so these are as wide as their labels. Radix's sliding indicator counts on equal widths, so the chosen
+   segment is filled in itself instead: in the accent, or gray for None so a kind that's off looks off.
+   It's drawn as a bordered track with the chosen segment a pill inset 2px inside it. The inset and the 2px between
+   pills are padding on the items (not the track), so the whole track stays tappable; the label padding gives that
+   width back so the popover still fits a 320px phone. */
+.rt-SegmentedControlRoot.restroom-levels {
+  --restroom-track-radius: var(--radius-4);
+  grid-auto-columns: auto;
+  box-sizing: border-box;
+  height: calc(var(--space-6) + 2px);
+  border: 1px solid var(--gray-a5);
+  border-radius: var(--restroom-track-radius);
+}
+
+.restroom-levels .rt-SegmentedControlIndicator,
+.restroom-levels .rt-SegmentedControlItemSeparator {
+  display: none;
+}
+
+.restroom-levels .rt-SegmentedControlItem {
+  padding: 2px 1px;
+}
+
+.restroom-levels .rt-SegmentedControlItem:first-child {
+  padding-left: 2px;
+}
+
+.restroom-levels .rt-SegmentedControlItem:nth-last-child(2) {
+  padding-right: 2px;
+}
+
+.restroom-levels .rt-SegmentedControlItemLabel {
+  padding-left: calc(var(--space-2) - 2px);
+  padding-right: calc(var(--space-2) - 2px);
+  border-radius: calc(var(--restroom-track-radius) - 2px);
+  color: var(--gray-11);
+}
+
+.restroom-levels .rt-SegmentedControlItem[data-state="off"]:hover .rt-SegmentedControlItemLabel {
+  color: var(--gray-12);
+}
+
+.restroom-levels .rt-SegmentedControlItem[data-state="on"] .rt-SegmentedControlItemLabel {
+  background-color: var(--accent-9);
+  color: var(--accent-contrast);
+}
+
+.restroom-levels .rt-SegmentedControlItem:first-child[data-state="on"] .rt-SegmentedControlItemLabel {
+  background-color: var(--gray-a6);
+  color: var(--gray-12);
+}
+
+/* The focus ring goes around the pill, clear of it by a hair so it shows on the orange one too. */
+.restroom-levels .rt-SegmentedControlItem:focus-visible {
+  outline: none;
+}
+
+.restroom-levels .rt-SegmentedControlItem:focus-visible .rt-SegmentedControlItemLabel {
+  outline: 2px solid var(--focus-8);
+  outline-offset: 1px;
+}
+
 /* Classroom details float near the bottom on phones, within thumb reach, lifted above the keyboard
    (Radix's dialog rules use :where, so these win). */
 @media (max-width: 519px) {

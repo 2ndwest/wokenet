@@ -1,16 +1,5 @@
-import {
-  Checkbox,
-  CheckboxGroup,
-  Flex,
-  Grid,
-  Heading,
-  IconButton,
-  Popover,
-  Separator,
-  Text,
-  TextField,
-} from "@radix-ui/themes";
-import { memo, useMemo, useState } from "react";
+import { Flex, Grid, Heading, IconButton, Popover, SegmentedControl, Text, TextField } from "@radix-ui/themes";
+import { Fragment, memo, useMemo, useState } from "react";
 import RESTROOMS from "../utils/restrooms.json";
 import { useGeolocation } from "../utils/useGeolocation";
 import { byName, coordsOf, distance, searchedBuilding } from "../utils/buildings";
@@ -18,8 +7,16 @@ import { Tag } from "../components/RoomList";
 import { ROOM_NAME } from "../utils/fonts";
 import { RestroomIcon } from "../utils/icons";
 import { getCookie, setCookie } from "../utils/cookies";
+import {
+  isListed,
+  KINDS,
+  parseFilter,
+  serializeFilter,
+  type Filter,
+  type Kind,
+  type Level,
+} from "../utils/restroomFilter";
 
-type Kind = "men" | "women" | "all-gender";
 type Restroom = {
   room: string;
   building: string; // Wings are folded in, e.g. "14" for room "14N-133".
@@ -35,18 +32,11 @@ type Restroom = {
 const ALL = RESTROOMS as Restroom[];
 const BUILDINGS = new Set(ALL.map((r) => r.building));
 
-const KINDS: Kind[] = ["all-gender", "women", "men"];
 const KIND_LABEL: Record<Kind, string> = { men: "Men", women: "Women", "all-gender": "All-gender" };
 
-// Which restrooms you chose to list are remembered in a cookie, as the kinds plus "single" if only single stalls, e.g.
-// "all-gender,women,single". Until you choose, every kind, any number of stalls.
-type Filter = { kinds: Kind[]; singleOnly: boolean };
+// Which restrooms you chose to list are remembered in a cookie.
 const FILTER_COOKIE = "bathroomFilter";
-const savedFilter = (): Filter => {
-  const saved = getCookie(FILTER_COOKIE)?.split(",");
-  if (!saved) return { kinds: KINDS, singleOnly: false };
-  return { kinds: KINDS.filter((kind) => saved.includes(kind)), singleOnly: saved.includes("single") };
-};
+const savedFilter = () => parseFilter(getCookie(FILTER_COOKIE));
 
 const GRID_COLUMNS = { initial: "1", md: "2", lg: "3" } as const;
 const GRID_GAP_X = { initial: "0", md: "6" } as const;
@@ -76,10 +66,10 @@ const RestroomRow = memo(({ restroom }: { restroom: Restroom }) => (
 export const Bathrooms = memo(() => {
   const here = useGeolocation();
   const [search, setSearch] = useState("");
-  const [{ kinds, singleOnly }, setFilter] = useState(savedFilter);
+  const [filter, setFilter] = useState(savedFilter);
   const choose = (chosen: Filter) => {
     setFilter(chosen);
-    setCookie(FILTER_COOKIE, [...chosen.kinds, ...(chosen.singleOnly ? ["single"] : [])].join(","));
+    setCookie(FILTER_COOKIE, serializeFilter(chosen));
   };
 
   const query = search.replace(/\s/g, "").toUpperCase();
@@ -98,9 +88,7 @@ export const Bathrooms = memo(() => {
     const tier = (r: Restroom) => (matches(r) ? 0 : r.building === searched ? 1 : 2);
     const origin = searched ? coordsOf(searched) : query ? undefined : here;
 
-    const shown = ALL.filter(
-      (r) => (searched || matches(r)) && kinds.includes(r.kind) && (!singleOnly || r.single)
-    ).sort(
+    const shown = ALL.filter((r) => (searched || matches(r)) && isListed(filter, r)).sort(
       (a, b) =>
         (searched ? tier(a) - tier(b) : 0) ||
         distance(origin, a.building) - distance(origin, b.building) ||
@@ -111,7 +99,7 @@ export const Bathrooms = memo(() => {
     const groups = new Map<string, Restroom[]>();
     for (const r of shown) groups.set(r.building, [...(groups.get(r.building) ?? []), r]);
     return [...groups];
-  }, [query, searched, here, kinds, singleOnly]);
+  }, [query, searched, here, filter]);
 
   return (
     <Flex direction="column" width="100%" p="5" align="center">
@@ -135,35 +123,31 @@ export const Bathrooms = memo(() => {
           <Popover.Root>
             <Popover.Trigger>
               <IconButton
-                variant={kinds.length === KINDS.length && !singleOnly ? "surface" : "solid"}
+                variant={KINDS.every((kind) => filter[kind] === "all") ? "surface" : "solid"}
                 aria-label="Which restrooms"
               >
                 <RestroomIcon />
               </IconButton>
             </Popover.Trigger>
             <Popover.Content size="1" align="end">
-              <Flex direction="column" gap="3">
-                <CheckboxGroup.Root
-                  value={kinds}
-                  onValueChange={(v) => choose({ kinds: v as Kind[], singleOnly })}
-                >
-                  {KINDS.map((kind) => (
-                    <CheckboxGroup.Item key={kind} value={kind}>
-                      {KIND_LABEL[kind]}
-                    </CheckboxGroup.Item>
-                  ))}
-                </CheckboxGroup.Root>
-                <Separator size="4" />
-                <Text as="label" size="2">
-                  <Flex gap="2" align="center">
-                    <Checkbox
-                      checked={singleOnly}
-                      onCheckedChange={(checked) => choose({ kinds, singleOnly: checked === true })}
-                    />
-                    Single stall only
-                  </Flex>
-                </Text>
-              </Flex>
+              {/* Each kind on its own: none of it, only its single stalls, or all of it. */}
+              <Grid columns="auto auto" gapX="3" gapY="2" align="center">
+                {KINDS.map((kind) => (
+                  <Fragment key={kind}>
+                    <Text size="2">{KIND_LABEL[kind]}</Text>
+                    <SegmentedControl.Root
+                      className="restroom-levels"
+                      aria-label={KIND_LABEL[kind]}
+                      value={filter[kind]}
+                      onValueChange={(level) => choose({ ...filter, [kind]: level as Level })}
+                    >
+                      <SegmentedControl.Item value="none">None</SegmentedControl.Item>
+                      <SegmentedControl.Item value="single">Single stall</SegmentedControl.Item>
+                      <SegmentedControl.Item value="all">All</SegmentedControl.Item>
+                    </SegmentedControl.Root>
+                  </Fragment>
+                ))}
+              </Grid>
             </Popover.Content>
           </Popover.Root>
         </Flex>
