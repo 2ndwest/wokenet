@@ -16,6 +16,14 @@
   overflow: hidden;
 }
 
+/* All-caps labels (the pills, the clock): trim the line box to the capitals, cap height to baseline,
+   so centering the box centers the letters at any size. Untrimmed, the box keeps room for descenders
+   these labels never use, and bigger labels sit visibly higher than smaller ones. */
+.putz-caps {
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
+}
+
 .putz-map-clock {
   container-type: size;
   display: flex;

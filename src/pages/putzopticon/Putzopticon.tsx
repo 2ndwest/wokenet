@@ -78,7 +78,9 @@ const ClockCell = memo(({ color }: { color?: string }) => {
   return (
     <div className="putz-map-clock" style={color ? { backgroundColor: color, color: "inherit" } : undefined}>
       {/* Berkeley Mono glyphs are 0.6em wide. */}
-      <span style={{ fontSize: `min(64cqh, ${(86 / (text.length * 0.6)).toFixed(2)}cqw)` }}>{text}</span>
+      <span className="putz-caps" style={{ fontSize: `min(64cqh, ${(86 / (text.length * 0.6)).toFixed(2)}cqw)` }}>
+        {text}
+      </span>
     </div>
   );
 });

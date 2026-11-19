@@ -3,27 +3,28 @@
 Sources (all public-domain or public government data):
 - Boston-area streets and water: U.S. Census Bureau 2024 TIGER/Line
   https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.2024.html
-- State outlines: U.S. Census Bureau cartographic boundaries
-  https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html
 - Building footprints around campus: MassGIS Building Structures
   https://www.mass.gov/info-details/massgis-data-building-structures-2-d
-- World land: Natural Earth 1:110m land
-  https://www.naturalearthdata.com/downloads/110m-physical-vectors/110m-land/
+- The far-away map (land, lakes, state and province borders): Natural Earth 1:50m, all from the one
+  source so coastlines and borders line up. https://www.naturalearthdata.com/downloads/50m-physical-vectors/
 
 Input files (put them in design-proposal/data/):
 - {county}-roads.zip, {county}-areawater.zip: 2024 TIGER/Line Roads and Area Hydrography
   for counties 25009, 25017, 25021 and 25025.
-- states.zip: Census cb_2024_us_state_20m.zip.
-- world.json: Natural Earth ne_110m_land.geojson.
+- ne_50m_land.zip, ne_50m_lakes.zip (naciscdn.org/naturalearth/50m/physical/) and
+  ne_50m_admin_1_states_provinces_lines.zip (naciscdn.org/naturalearth/50m/cultural/).
 - buildings.json: the MassGIS Building Structures feature layer as GeoJSON
   (https://services1.arcgis.com/hGdibHYSPO59RG1h/ArcGIS/rest/services/Building_Structures/FeatureServer/0),
   clipped to the Cambridge and Boston neighborhoods by campus. Combine paginated bounding-box
   queries in WGS84 (-71.120 to -71.060, 42.344 to 42.374) and deduplicate by OBJECTID.
 
 Run: uv run --no-project --with pyshp --with shapely python scripts/gen-putzopticon-basemap.py
+Add --far-only to rebuild just the far-away layers into the existing basemap.json (needs only the
+Natural Earth files), and --input DIR to read the files from somewhere other than design-proposal/data.
 """
 import json
 import math
+import sys
 from collections import defaultdict
 from pathlib import Path
 from zipfile import ZipFile
@@ -33,7 +34,7 @@ from shapely import make_valid
 from shapely.geometry import box, shape
 from shapely.ops import unary_union
 
-INPUT = Path("design-proposal/data")
+INPUT = Path(sys.argv[sys.argv.index("--input") + 1]) if "--input" in sys.argv else Path("design-proposal/data")
 OUTPUT = Path("src/pages/putzopticon/basemap.json")
 BOUNDS = box(-71.265, 42.24, -70.90, 42.48)
 COUNTIES = ("25017", "25021", "25025", "25009")
@@ -88,6 +89,29 @@ def tiles(layers):
         }
 
 
+def far_layers():
+    """Land, lakes and state/province borders for the far-away map, from Natural Earth 1:50m,
+    simplified to ~700 m and kept to 100 m (under a pixel or two at that zoom)."""
+    world = box(-180, -56, 180, 72)  # skip Antarctica and the high Arctic, where nobody's stop will be
+
+    def paths(archive):
+        return "".join(
+            path(make_valid(shape(feature.shape.__geo_interface__)).intersection(world).simplify(0.007), 1)
+            for feature in records(archive)
+        )
+    return {
+        "land": paths("ne_50m_land"),
+        "lakes": paths("ne_50m_lakes"),
+        "states": paths("ne_50m_admin_1_states_provinces_lines"),
+    }
+
+
+if "--far-only" in sys.argv:
+    layers = json.loads(OUTPUT.read_text())
+    layers.update(far_layers())
+    OUTPUT.write_text(json.dumps(layers, separators=(",", ":")) + "\n")
+    sys.exit()
+
 roads = {"streets": [], "arterials": [], "highways": []}
 waters = []
 for county in COUNTIES:
@@ -110,13 +134,9 @@ roads["buildings"] = [
     for feature in building_features if feature["geometry"]
     if (geometry := shape(feature["geometry"])).area >= 0.000000010
 ]
-world = json.loads((INPUT / "world.json").read_text())["features"]
 layers = {
     "detail": list(tiles(roads)),
     "water": path(unary_union(waters).simplify(0.000035)),
-    "land": "".join(path(shape(feature["geometry"]).simplify(0.12), 0) for feature in world),
-    "states": "".join(path(shape(feature.shape.__geo_interface__).simplify(0.035), 0)
-                      for feature in records("states") if feature.record.STATEFP not in
-                      {"02", "15", "60", "66", "69", "72", "78"}),
+    **far_layers(),
 }
 OUTPUT.write_text(json.dumps(layers, separators=(",", ":")) + "\n")

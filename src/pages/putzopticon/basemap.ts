@@ -2,12 +2,12 @@ import basemapUrl from "./basemap.json?url";
 import type { Camera, Size } from "./camera";
 
 // The bundled grayscale basemap (sources in scripts/gen-putzopticon-basemap.py): Boston-area streets, shorelines and campus
-// roofs in detail tiles, plus land and state outlines for the far-away views. All in the flat km
+// roofs in detail tiles, plus land, lakes and state/province borders for the far-away views. All in the flat km
 // projection from stops.ts, drawn to a canvas.
 
 type Layer = "buildings" | "streets" | "arterials" | "highways";
 type Tile<T> = { bounds: [number, number, number, number] } & Partial<Record<Layer, T>>;
-type Basemap<T> = { land: T; states: T; water: T; detail: Tile<T>[] };
+type Basemap<T> = { land: T; lakes: T; states: T; water: T; detail: Tile<T>[] };
 export type Paths = Basemap<Path2D>;
 
 let request: Promise<Paths> | undefined;
@@ -18,8 +18,9 @@ export const loadBasemap = () =>
       if (!response.ok) throw new Error(`Basemap returned ${response.status}`);
       return response.json() as Promise<Basemap<string>>;
     })
-    .then(({ land, states, water, detail }) => ({
+    .then(({ land, lakes, states, water, detail }) => ({
       land: new Path2D(land),
+      lakes: new Path2D(lakes),
       states: new Path2D(states),
       water: new Path2D(water),
       detail: detail.map(({ bounds, ...layers }) => ({
@@ -68,7 +69,9 @@ export const drawBasemap = (
 
   if (paths && detail < 1) {
     fill(paths.land, "#111113");
+    fill(paths.lakes, "#000000");
     stroke(paths.land, "#34363a", 0.9);
+    stroke(paths.lakes, "#34363a", 0.9);
     stroke(paths.states, "#2a2c2f", 0.8);
   }
   if (detail > 0) {

@@ -5,6 +5,7 @@ import { memo, useEffect, useState, useMemo, createElement } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { COLOR_HEX } from "../../utils/colors";
 import { toMins } from "../../utils/time";
+import "./putzopticon.css";
 
 // The Putzopticon's board: the SMDS marquee and the name/location rows above the map.
 
@@ -188,7 +189,6 @@ export const PersonRow = memo(
           direction="row"
           justify="center"
           align="center"
-          pb="0.1em"
           style={{
             containerType: "size", // So we can use cqh units
             backgroundColor: COLOR_HEX[color] ?? color,
@@ -199,7 +199,9 @@ export const PersonRow = memo(
           }}
         >
           {/* Berkeley Mono glyphs are 0.6em wide. */}
-          <span style={{ fontSize: `min(80cqh, 14cqw, ${fitWidth(label.length, 0.6, 92)})` }}>{label}</span>
+          <span className="putz-caps" style={{ fontSize: `min(80cqh, 14cqw, ${fitWidth(label.length, 0.6, 92)})` }}>
+            {label}
+          </span>
         </Flex>
       </Flex>
     );
