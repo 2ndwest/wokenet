@@ -5,26 +5,29 @@ import {
   streetDetail,
   type Paths,
 } from "./basemap";
-import { easeOutCubic, flightPath, toScreen, type Camera, type Size } from "./camera";
+import { easeFlight, easeOutCubic, flightPath, toScreen, type Camera, type Size } from "./camera";
 import { baseUnit, planVisit, type Tag } from "./layout";
-import { FAR_KM, HOME, hexOf, type Located, type Point, type Stop } from "./stops";
+import { hexOf, type Located, type Point, type Stop } from "./stops";
 
 // The bottom half of /putzopticon/map: the grayscale basemap on a canvas, everyone as a dot in their
 // pill color, and the current stop's people named in columns of tags beside it. The camera eases out
-// to each stop along a zoom-and-pan arc; far-away stops keep Putz in frame, with a line back home.
+// to each stop along a zoom-and-pan arc; far-away stops keep Putz in frame.
 
 const GROW_MS = 450; // the stop's dots swelling (and its names fading in) on arrival
-const ARC_MS = 1400; // lines home drawing out, on far-away stops
 const FADE_MS = 200; // the last stop's names leaving
+// Between flights the camera keeps creeping in, so a stop never sits dead still: up to DRIFT (6%)
+// closer, easing off over DRIFT_MS, until the next flight takes it from wherever it got to.
+const DRIFT = 0.06;
+const DRIFT_MS = 5000;
 
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
 // How far into a flight (as a share of its time) the camera is as good as there: within a couple of
 // pixels of its final framing anywhere in view. Ease-out spends its last stretch barely moving, so
-// names can go up then without sliding (a short hop gets there around 80%, a long one nearer 95%).
+// names can go up then without sliding instead of waiting out the whole glide.
 const settledAt = (path: (s: number) => Camera, to: Camera, size: Size) => {
-  for (let t = 0.5; t < 1; t += 0.01) {
-    const at = path(easeOutCubic(t));
+  for (let t = 0.3; t < 1; t += 0.01) {
+    const at = path(easeFlight(t));
     const zoom = Math.abs(1 - at.scale / to.scale);
     const dx = Math.abs((to.x - at.x) * at.scale) + (zoom * size.width) / 2;
     const dy = Math.abs((to.y - at.y) * at.scale) + (zoom * size.height) / 2;
@@ -68,6 +71,9 @@ type Motion = {
   duration: number;
   arrivedAt: number;
   departedAt: number;
+  base: Camera | null; // where the camera settled, which the drift creeps in from
+  baseAt: number;
+  drifts: boolean; // off under reduced motion
   raf: number;
 };
 
@@ -80,27 +86,6 @@ const dot = (context: CanvasRenderingContext2D, { x, y }: Point, radius: number,
   context.arc(x, y, radius, 0, Math.PI * 2);
   context.fillStyle = color;
   context.fill();
-  context.globalAlpha = 1;
-};
-
-// From Putz out to someone far away, bowed north like a great circle, drawn `reach` of the way.
-const lineHome = (context: CanvasRenderingContext2D, from: Point, to: Point, reach: number, color: string) => {
-  let nx = from.y - to.y;
-  let ny = to.x - from.x;
-  if (ny > 0) [nx, ny] = [-nx, -ny];
-  const cx = (from.x + to.x) / 2 + nx * 0.22;
-  const cy = (from.y + to.y) / 2 + ny * 0.22;
-  context.beginPath();
-  context.moveTo(from.x, from.y);
-  for (let i = 1; i <= 64; i++) {
-    const s = (i / 64) * reach;
-    const u = 1 - s;
-    context.lineTo(u * u * from.x + 2 * u * s * cx + s * s * to.x, u * u * from.y + 2 * u * s * cy + s * s * to.y);
-  }
-  context.globalAlpha = 0.5;
-  context.lineWidth = 1;
-  context.strokeStyle = color;
-  context.stroke();
   context.globalAlpha = 1;
 };
 
@@ -148,11 +133,20 @@ const paint = (
   let flying = false;
   if (motion.path) {
     const t = motion.duration > 0 ? clamp01((now - motion.start) / motion.duration) : 1;
-    motion.camera = motion.path(easeOutCubic(t));
+    motion.camera = motion.path(easeFlight(t));
     if (t < 1) flying = true;
-    else motion.path = null;
+    else {
+      motion.path = null;
+      motion.base = motion.camera;
+      motion.baseAt = now;
+    }
   }
-  const camera = motion.camera;
+  const drifting = !motion.path && !!motion.base && motion.drifts;
+  if (drifting) {
+    const creep = 1 + DRIFT * (1 - Math.exp(-(now - motion.baseAt) / DRIFT_MS));
+    motion.camera = { ...motion.base!, scale: motion.base!.scale * creep };
+  }
+  const camera = motion.camera!;
 
   const density = Math.min(window.devicePixelRatio || 1, 2);
   const width = Math.round(size.width * density);
@@ -187,19 +181,13 @@ const paint = (
   for (const person of scene.located) {
     if (!lit.has(person.providerId)) dot(context, at(person.point), radius.idle, hexOf(person.color), false);
   }
-  if (stop?.far && scene.arrived) {
-    const reach = easeOutCubic(clamp01(since / ARC_MS));
-    for (const person of stop.people) {
-      if (person.km > FAR_KM) lineHome(context, at(HOME), at(person.point), reach, hexOf(stop.color));
-    }
-  }
   const grow = scene.arrived ? easeOutCubic(clamp01(since / GROW_MS)) : 0;
   for (const person of stop?.people ?? []) {
     dot(context, at(person.point), radius.idle + (radius.lit - radius.idle) * grow, hexOf(person.color), true);
   }
 
-  if (scene.arrived) return flying || since < (stop?.far ? ARC_MS : GROW_MS);
-  return flying || now - motion.departedAt < FADE_MS;
+  if (scene.arrived) return flying || drifting || since < GROW_MS;
+  return flying || drifting || now - motion.departedAt < FADE_MS;
 };
 
 export const TourMap = memo(
@@ -297,6 +285,9 @@ export const TourMap = memo(
       duration: 0,
       arrivedAt: -Infinity,
       departedAt: -Infinity,
+      base: null,
+      baseAt: 0,
+      drifts: true,
       raf: 0,
     });
     const scene = useRef<Scene>({ size, located, stop, arrived, shown });
@@ -337,13 +328,17 @@ export const TourMap = memo(
       const m = motion.current;
       const fresh = flown.current !== visit;
       flown.current = visit;
+      m.drifts = flightMs > 0;
       if (fresh && m.camera && flightMs > 0) {
         m.path = flightPath(m.camera, plan.camera, size);
         m.start = performance.now();
         m.duration = flightMs;
+        m.base = null;
       } else {
         m.path = null;
         m.camera = plan.camera;
+        m.base = plan.camera;
+        m.baseAt = performance.now();
       }
       if (landed.current === visit) return;
       const wait = m.path ? settledAt(m.path, plan.camera, size) * flightMs : 0;

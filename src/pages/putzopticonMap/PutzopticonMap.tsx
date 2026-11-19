@@ -16,8 +16,8 @@ import "./putzopticon-map.css";
 // people and names them; their rows light up with the usual refresh flash while the rest sit back.
 // The classic full-height board stays at /putzopticon.
 
-const NEAR_FLIGHT_MS = 2600;
-const FAR_FLIGHT_MS = 4200; // to or from a far-away stop
+const NEAR_FLIGHT_MS = 3200;
+const FAR_FLIGHT_MS = 5200; // to or from a far-away stop
 const OPENING_MS = 1200; // on the shot of everyone nearby, before the first stop
 const FLASH_MS = 750; // the board's refresh flash
 
