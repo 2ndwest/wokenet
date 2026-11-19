@@ -100,7 +100,7 @@
 
 .putz-tour-tags[data-shown="true"] {
   opacity: 1;
-  transition: opacity 450ms ease-out;
+  transition: none; /* each line and name brings itself in (below) */
 }
 
 .putz-tour-leaders {
@@ -110,7 +110,7 @@
 }
 
 /* Dotted: round white dots 3.5px apart, a step below the names so the name stays the focus. */
-.putz-tour-leaders polyline {
+.putz-tour-leader {
   stroke: rgba(230, 232, 234, 0.75);
   fill: none;
   stroke-linejoin: round;
@@ -144,6 +144,51 @@
   transform: translate(-100%, -50%);
 }
 
+/* Entrances, staggered top to bottom by --i: the line draws out from the dot, then the name fades
+   in a beat later, sliding the last 6px in toward it. */
+.putz-tour-leader-reveal {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 8px;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  animation: putz-leader-draw 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+@keyframes putz-leader-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.putz-tour-tag {
+  animation: putz-tag-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--i, 0) * 40ms + 140ms);
+}
+
+.putz-tour-tag[data-side="right"] {
+  --slide: 6px;
+}
+
+.putz-tour-tag[data-side="left"] {
+  --slide: -6px;
+}
+
+@keyframes putz-tag-in {
+  from {
+    opacity: 0;
+    translate: var(--slide) 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
 /* Where the map is headed, as a location pill. */
 
 
@@ -163,5 +208,9 @@
   .putz-tour-tags,
   .putz-tour-tags[data-shown="true"] {
     transition: none;
+  }
+  .putz-tour-leader-reveal,
+  .putz-tour-tag {
+    animation: none;
   }
 }

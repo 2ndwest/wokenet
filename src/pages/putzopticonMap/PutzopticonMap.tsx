@@ -7,8 +7,8 @@ import { CenterSpinner } from "../../utils/spinner";
 import { useIdleCursor } from "../../utils/useIdleCursor";
 import { PersonRows, SMDSMarquee } from "../Putzopticon";
 import { toPersonRows } from "../putzopticonRows";
-import { TourMap } from "./TourMap";
-import { buildStops, hexOf, locate, nextStop, type Located, type Person, type Stop } from "./stops";
+import { LEAVE_MS, TourMap } from "./TourMap";
+import { HOME, buildStops, hexOf, locate, nextStop, type Located, type Person, type Point, type Stop } from "./stops";
 import "./putzopticon-map.css";
 
 // /putzopticon/map: the Putzopticon board squeezed into the top half (same marquee, same rows, more
@@ -16,8 +16,17 @@ import "./putzopticon-map.css";
 // people and names them; their rows light up with the usual refresh flash while the rest sit back.
 // The classic full-height board stays at /putzopticon.
 
-const NEAR_FLIGHT_MS = 3200;
 const FAR_FLIGHT_MS = 5200; // to or from a far-away stop
+// Nearby hops take longer the further they go: a building over is ~2.4 s, across campus ~3.3 s.
+const nearFlightMs = (km: number) => Math.round(Math.min(4000, Math.max(2200, 2200 + 1200 * Math.log10(1 + km / 0.25))));
+const centerOf = (stop: Stop | null): Point => {
+  if (!stop?.people.length) return HOME;
+  const n = stop.people.length;
+  return {
+    x: stop.people.reduce((sum, p) => sum + p.point.x, 0) / n,
+    y: stop.people.reduce((sum, p) => sum + p.point.y, 0) / n,
+  };
+};
 const OPENING_MS = 1200; // on the shot of everyone nearby, before the first stop
 const FLASH_MS = 750; // the board's refresh flash
 
@@ -124,6 +133,8 @@ const PutzMapBoard = memo(
       dwelling: false,
     }));
     const latest = useRef({ stops, located, reducedMotion });
+    const visitRef = useRef(visit);
+    visitRef.current = visit;
     useLayoutEffect(() => {
       latest.current = { stops, located, reducedMotion };
     });
@@ -140,10 +151,36 @@ const PutzMapBoard = memo(
             return { n, stop, located, flightMs: 0, arrived: true, dwelling: true };
           }
           const far = stop.far || !!current.stop?.far;
-          const flightMs = reducedMotion ? 0 : far ? FAR_FLIGHT_MS : NEAR_FLIGHT_MS;
+          const [a, b] = [centerOf(current.stop), centerOf(stop)];
+          const km = Math.hypot(b.x - a.x, b.y - a.y);
+          const flightMs = reducedMotion ? 0 : far ? FAR_FLIGHT_MS : nearFlightMs(km);
           return { n, stop, located, flightMs, arrived: false, dwelling: false };
         }),
       []
+    );
+
+    // Moving on starts with a short beat where the names leave and the dots settle back (the map
+    // draws it), and only then the flight, so nothing is still on screen as the camera whips away.
+    const [leaving, setLeaving] = useState(false);
+    const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+    useEffect(() => () => clearTimeout(leaveTimer.current), []);
+    const depart = useCallback(
+      (target?: Stop) => {
+        const { stops, reducedMotion } = latest.current;
+        clearTimeout(leaveTimer.current);
+        const next = target ?? nextStop(stops, visitRef.current.stop?.key ?? null);
+        if (reducedMotion || !visitRef.current.stop || !next || next.key === visitRef.current.stop.key) {
+          setLeaving(false);
+          go(target);
+          return;
+        }
+        setLeaving(true);
+        leaveTimer.current = setTimeout(() => {
+          setLeaving(false);
+          go(target);
+        }, LEAVE_MS);
+      },
+      [go]
     );
 
     // The tour's clock: fly, linger, move on. The map says when it has as good as landed (names up,
@@ -163,8 +200,8 @@ const PutzMapBoard = memo(
           setVisit((current) => (current.n === visit.n ? { ...current, arrived: true, dwelling: true } : current))
         );
       }
-      return after(dwellMs, () => go());
-    }, [visit.n, visit.dwelling, visit.flightMs, dwellMs, go]);
+      return after(dwellMs, () => depart());
+    }, [visit.n, visit.dwelling, visit.flightMs, dwellMs, go, depart]);
 
     // Rows at the stop light up as the camera sets off, and flash as it gets there.
     const litKeys = useMemo(
@@ -186,9 +223,9 @@ const PutzMapBoard = memo(
     const visitPerson = useCallback(
       (key: string) => {
         const stop = latest.current.stops.find((s) => s.people.some((p) => p.providerId === key));
-        if (stop) go(stop);
+        if (stop) depart(stop);
       },
-      [go]
+      [depart]
     );
 
     const roster = useRef<HTMLElement>(null);
@@ -241,6 +278,7 @@ const PutzMapBoard = memo(
             visit={visit.n}
             flightMs={visit.flightMs}
             arrived={visit.arrived}
+            leaving={leaving}
             onArrive={arrive}
           />
         </section>
