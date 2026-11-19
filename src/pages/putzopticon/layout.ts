@@ -3,8 +3,9 @@ import { HOME, stopPoints, type Located, type Stop } from "./stops";
 
 // Name tags for the people at a stop: a column of tags either side of it, each tied to its dot by a
 // thin leader, so a building full of people still gets one legible name apiece. Each column sits its
-// tags a little above their dots (so leaders leave at an angle) as near as they'll go without touching. The camera frames the stop with room
-// left for both columns, so tags never cover the stop or run off the map.
+// tags a little above their dots (so leaders leave at an angle), as near as they'll go without
+// touching. The camera frames the stop with room left for both columns, so tags never cover the stop
+// or run off the map.
 
 export type TagInput = { id: string; x: number; y: number; width: number; more?: number }; // dot on screen, tag width
 export type Tag = {
@@ -91,7 +92,7 @@ export const tagMetrics = (unit: number): TagMetrics => ({
 });
 const tagWidth = (nameWidth: number, unit: number) => nameWidth * unit + 0.4 * unit; // the name and a little air
 
-export type Reserved = { top: number; bottom: number }; // px kept clear for the caption and credits
+export type Reserved = { top: number; bottom: number }; // px to keep clear along the top and bottom edges
 
 export type VisitPlan = { camera: Camera; unit: number; tags: Tag[] };
 
@@ -100,13 +101,13 @@ export const planVisit = ({
   stop,
   located,
   nameWidth,
-  reserved,
+  reserved = { top: 0, bottom: 0 },
 }: {
   size: Size;
   stop: Stop | null; // null: the opening shot of everyone nearby
   located: Located[];
   nameWidth: (name: string) => number; // a name's width at 1px
-  reserved: Reserved;
+  reserved?: Reserved;
 }): VisitPlan => {
   const unit0 = baseUnit(size);
   const area: Area = {

@@ -1,7 +1,7 @@
-import { COLOR_ORDER } from "../utils/colors";
-import type { PersonRowData } from "./Putzopticon";
+import { COLOR_ORDER } from "../../utils/colors";
+import type { PersonRowData } from "./PersonRows";
 
-// Location data -> board rows (for the board and the map view), sorted by, in order:
+// Location data -> board rows, sorted by, in order:
 // 1) color (using COLOR_ORDER)
 // 2) label length (alternating longer/shorter first per color)
 // 3) label (alphabetically)

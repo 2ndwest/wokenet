@@ -1,13 +1,12 @@
-import { Box, Flex, Grid } from "@radix-ui/themes";
-import { api } from "../../convex/_generated/api";
+import { Flex, Grid } from "@radix-ui/themes";
+import { api } from "../../../convex/_generated/api";
 import { useQuery } from "convex/react";
-import { memo, useEffect, useState, useMemo, createElement, useSyncExternalStore } from "react";
+import { memo, useEffect, useState, useMemo, createElement } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import { CenterSpinner } from "../utils/spinner";
-import { COLOR_HEX } from "../utils/colors";
-import { toMins } from "../utils/time";
-import { useIdleCursor } from "../utils/useIdleCursor";
-import { toPersonRows } from "./putzopticonRows";
+import { COLOR_HEX } from "../../utils/colors";
+import { toMins } from "../../utils/time";
+
+// The Putzopticon's board: the SMDS marquee and the name/location rows above the map.
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
@@ -30,12 +29,6 @@ const getSMDSBlackoutMessage = (): string | null => {
   return null;
 };
 
-export const Putzopticon = memo(() => {
-  const data = useQuery(api.locations.getLocations);
-  const rows = useMemo(() => data && toPersonRows(data), [data]);
-  return <PersonBoard rows={rows} />;
-});
-
 export type PersonRowData = {
   key: string;
   name: string;
@@ -44,66 +37,18 @@ export type PersonRowData = {
   dimmed?: boolean;
 };
 
-// SMDS marquee over a full-height stack of name/label rows, in the given order.
-// Landscape screens (desktops) get two columns; the portrait hall TV and phones get one.
-const WIDE_QUERY = "(orientation: landscape) and (min-width: 768px)";
-const subscribeToWide = (onChange: () => void) => {
-  const media = matchMedia(WIDE_QUERY);
-  media.addEventListener("change", onChange);
-  return () => media.removeEventListener("change", onChange);
-};
-const useColumnCount = () =>
-  useSyncExternalStore(subscribeToWide, () => matchMedia(WIDE_QUERY).matches) ? 2 : 1;
-
 type RowsProps = {
   rows: PersonRowData[];
   columns: number;
   rowsPerColumn: number;
   lastCell?: React.ReactNode; // Optional row-sized cell placed after the rows (bottom right).
   onRowClick?: (key: string) => void;
-  gapX?: "4" | "8"; // Radix space step between columns.
-  dividers?: boolean; // The thin line between columns (the map view goes without).
-  pillRadius?: string; // Corner rounding on the location pills (the map view softens them).
-  // The map view: rows outside `litKeys` sit back, and `flash` sets off the lit ones like a refresh.
+  // Rows outside `litKeys` sit back, and `flash` sets off the lit ones like a refresh.
   litKeys?: ReadonlySet<string>;
   flash?: boolean;
 };
 
-export const PersonBoard = memo(
-  ({
-    rows,
-    lastCell,
-    onRowClick,
-  }: {
-    rows: PersonRowData[] | undefined;
-    lastCell?: React.ReactNode;
-    onRowClick?: (key: string) => void;
-  }) => {
-    useIdleCursor();
-    const columns = useColumnCount();
-    const rowsPerColumn = Math.ceil(((rows?.length ?? 0) + (lastCell ? 1 : 0)) / columns);
-
-    return (
-      <Flex direction="column" width="100%" height="100%" overflow="hidden">
-        <SMDSMarquee height={`${100 / (rowsPerColumn + 1)}%`} />
-
-        {rows ? (
-          <PersonRows
-            rows={rows}
-            columns={columns}
-            rowsPerColumn={rowsPerColumn}
-            lastCell={lastCell}
-            onRowClick={onRowClick}
-          />
-        ) : (
-          <CenterSpinner />
-        )}
-      </Flex>
-    );
-  }
-);
-
-export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick, gapX = "8", dividers = true, pillRadius, litKeys, flash = false }: RowsProps) => {
+export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick, litKeys, flash = false }: RowsProps) => {
   // Track which people are currently being "scanned" for location refresh effect.
   const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
@@ -131,7 +76,6 @@ export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowC
   }, [rows]);
 
   const [autoAnimate] = useAutoAnimate();
-  const gap = `var(--space-${gapX})`;
   // Every row makes its name column wide enough for the board's longest name at full size.
   const longestName = useMemo(() => Math.max(1, ...rows.map((row) => row.name.length)), [rows]);
 
@@ -144,28 +88,13 @@ export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowC
       columns={`repeat(${columns}, 1fr)`}
       width="100%"
       flexGrow="1"
-      gapX={gapX}
+      gapX="4"
       gapY="0.4%"
       px="8px"
       py="8px"
       overflow="hidden"
       position="relative"
     >
-      {dividers && Array.from({ length: columns - 1 }, (_, i) => (
-        // Thin line down the middle of each gap so the columns read as separate lists
-        // (with two columns, that's exactly 50%).
-        <Box
-          key={`divider-${i}`}
-          position="absolute"
-          top="8px"
-          bottom="8px"
-          width="1px"
-          style={{
-            left: `calc(8px + ${(i + 1) / columns} * (100% - 16px + ${gap}) - ${gap} / 2)`,
-            backgroundColor: "var(--gray-5)",
-          }}
-        />
-      ))}
       {rows.map((row, index) => (
         <PersonRow
           key={row.key} // Names can collide (two Aidens), so key on something unique.
@@ -175,7 +104,6 @@ export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowC
           label={row.label}
           dimmed={row.dimmed}
           nameFit={longestName}
-          pillRadius={pillRadius}
           muted={litKeys && !litKeys.has(row.key)}
           height="100%" // Let the CSS engine deal with this.
           isScanning={scanningIndices.has(index) || (flash && !!litKeys?.has(row.key))}
@@ -202,7 +130,6 @@ export const PersonRow = memo(
     dimmed = false,
     isScanning = false,
     nameFit = name.length,
-    pillRadius,
     muted,
     onClick,
   }: {
@@ -214,8 +141,7 @@ export const PersonRow = memo(
     dimmed?: boolean;
     isScanning?: boolean;
     nameFit?: number; // Characters the name column should fit at full size (the board's longest name).
-    pillRadius?: string;
-    muted?: boolean; // Only the map view sets this (rows away from its current stop).
+    muted?: boolean; // Away from the map's current stop.
     onClick?: (id: string) => void;
   }) => {
     return (
@@ -266,7 +192,7 @@ export const PersonRow = memo(
           style={{
             containerType: "size", // So we can use cqh units
             backgroundColor: COLOR_HEX[color] ?? color,
-            borderRadius: pillRadius,
+            borderRadius: "2px",
             fontWeight: "bold",
             whiteSpace: "nowrap",
             overflow: "hidden",

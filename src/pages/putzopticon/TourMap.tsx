@@ -9,7 +9,7 @@ import { easeFlight, easeOutCubic, flightPath, toScreen, type Camera, type Size 
 import { baseUnit, planVisit, type Tag } from "./layout";
 import { hexOf, type Located, type Point, type Stop } from "./stops";
 
-// The bottom half of /putzopticon/map: the grayscale basemap on a canvas, everyone as a dot in their
+// The bottom half of /putzopticon: the grayscale basemap on a canvas, everyone as a dot in their
 // pill color, and the current stop's people named in columns of tags beside it. The camera eases out
 // to each stop along a zoom-and-pan arc; far-away stops keep Putz in frame.
 
@@ -58,7 +58,7 @@ const nameWidth = (name: string) => {
   return width;
 };
 
-type Shown = { tags: (Tag & { name: string; color: string })[]; camera: Camera; unit: number; serial: number };
+type Shown = { tags: (Tag & { name: string })[]; camera: Camera; unit: number; serial: number };
 type Scene = {
   size: Size;
   paths?: Paths;
@@ -241,7 +241,7 @@ const Tags = ({ shown, size, dotRadius }: { shown: Shown; size: Size; dotRadius:
           key={tag.id}
           className="putz-tour-tag"
           data-side={tag.side < 0 ? "left" : "right"}
-          style={{ left: tag.x, top: tag.y, "--c": hexOf(tag.color), "--i": order.get(tag.id) } as CSSProperties}
+          style={{ left: tag.x, top: tag.y, "--i": order.get(tag.id) } as CSSProperties}
         >
           {tag.name}
         </div>
@@ -319,7 +319,7 @@ export const TourMap = memo(
     const plan = useMemo(
       () =>
         ready
-          ? planVisit({ size, stop, located, nameWidth, reserved: { top: 0, bottom: 0 } })
+          ? planVisit({ size, stop, located, nameWidth })
           : null,
       [ready, size, stop, located]
     );
@@ -337,7 +337,7 @@ export const TourMap = memo(
         unit: plan.unit,
         tags: plan.tags.map((tag) => {
           const person = people.get(tag.id);
-          return { ...tag, name: person?.name ?? `+${tag.more}`, color: person?.color ?? "dimgray" };
+          return { ...tag, name: person?.name ?? `+${tag.more}` };
         }),
       });
     }, [arrived, plan, stop]);

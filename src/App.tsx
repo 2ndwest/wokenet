@@ -1,8 +1,7 @@
 import { Flex } from "@radix-ui/themes";
 import { Routes, Route, Navigate } from "react-router";
 import { Header } from "./components/Header";
-import { Putzopticon } from "./pages/Putzopticon";
-import { Assassins } from "./pages/Assassins";
+import { Putzopticon } from "./pages/putzopticon/Putzopticon";
 import { Putz360 } from "./pages/Putz360";
 import { ShitMyDadSays } from "./pages/ShitMyDadSays";
 import { Classrooms } from "./pages/Classrooms";
@@ -11,12 +10,9 @@ import { DJs } from "./pages/DJs";
 import { AuthedHome } from "./pages/AuthedHome";
 import { Unauthorized } from "./pages/Unauthorized";
 import { AdminPanel } from "./pages/AdminPanel";
-import { lazy, memo, Suspense } from "react";
+import { memo } from "react";
 import { CenterSpinner } from "./utils/spinner";
 import { useAuthStatus } from "./utils/useAuthStatus";
-
-// The map view brings a basemap along, so only load it for whoever opens it.
-const PutzopticonMap = lazy(() => import("./pages/putzopticonMap/PutzopticonMap"));
 
 const App = memo(() => {
   const { user, isAuthLoading, isUserReady } = useAuthStatus();
@@ -33,15 +29,9 @@ const App = memo(() => {
             <Routes>
               <Route path="/" element={<AuthedHome />} />
               <Route path="/putzopticon" element={<Putzopticon />} />
-              <Route
-                path="/putzopticon/map"
-                element={
-                  <Suspense fallback={<CenterSpinner />}>
-                    <PutzopticonMap />
-                  </Suspense>
-                }
-              />
-              <Route path="/assassins" element={<Assassins />} />
+              {/* Old links: the map view's own URL, and Assassins (retired). */}
+              <Route path="/putzopticon/map" element={<Navigate to="/putzopticon" replace />} />
+              <Route path="/assassins" element={<Navigate to="/putzopticon" replace />} />
               <Route path="/putz360" element={<Putz360 />} />
               <Route path="/smds" element={<ShitMyDadSays />} />
               <Route path="/classrooms" element={<Classrooms />} />

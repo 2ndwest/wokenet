@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { toPersonRows } from "../src/pages/putzopticonRows";
-import { flightPath, frameBounds, toScreen, type Camera } from "../src/pages/putzopticonMap/camera";
-import { leftCount, planVisit, stack, type Tag } from "../src/pages/putzopticonMap/layout";
-import { buildStops, HOME, locate, nextStop, type Person } from "../src/pages/putzopticonMap/stops";
+import { toPersonRows } from "../src/pages/putzopticon/rows";
+import { flightPath, frameBounds, toScreen, type Camera } from "../src/pages/putzopticon/camera";
+import { leftCount, planVisit, stack, type Tag } from "../src/pages/putzopticon/layout";
+import { buildStops, HOME, locate, nextStop, type Person } from "../src/pages/putzopticon/stops";
 
 const person = (name: string, label: string, color: string, latitude: number, longitude: number): Person => ({
   providerId: name.toLowerCase(),

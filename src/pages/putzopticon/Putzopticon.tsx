@@ -1,21 +1,20 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { useSearchParams } from "react-router";
 import { useQuery } from "convex/react";
 import { Flex, Heading, Text } from "@radix-ui/themes";
 import { api } from "../../../convex/_generated/api";
 import { CenterSpinner } from "../../utils/spinner";
 import { useIdleCursor } from "../../utils/useIdleCursor";
-import { PersonRows, SMDSMarquee } from "../Putzopticon";
-import { toPersonRows } from "../putzopticonRows";
+import { PersonRows, SMDSMarquee } from "./PersonRows";
+import { toPersonRows } from "./rows";
 import { LEAVE_MS, TourMap } from "./TourMap";
 import { HOME, buildStops, hexOf, locate, nextStop, type Located, type Person, type Point, type Stop } from "./stops";
-import "./putzopticon-map.css";
+import "./putzopticon.css";
 
-// /putzopticon/map: the Putzopticon board squeezed into the top half (same marquee, same rows, more
-// columns), over a map that tours where everyone is. At each stop the camera eases in on one color's
-// people and names them; their rows light up with the usual refresh flash while the rest sit back.
-// The classic full-height board stays at /putzopticon.
+// /putzopticon: the board (marquee and name/location rows) in the top half, over a map that tours
+// where everyone is. At each stop the camera eases in on one color's people and names them; their
+// rows light up with the usual refresh flash while the rest sit back.
 
+const DWELL_MS = 6000; // lingering at each stop
 const FAR_FLIGHT_MS = 5200; // to or from a far-away stop
 // Nearby hops take longer the further they go: a building over is ~2.4 s, across campus ~3.3 s.
 const nearFlightMs = (km: number) => Math.round(Math.min(4000, Math.max(2200, 2200 + 1200 * Math.log10(1 + km / 0.25))));
@@ -30,7 +29,7 @@ const centerOf = (stop: Stop | null): Point => {
 const OPENING_MS = 1200; // on the shot of everyone nearby, before the first stop
 const FLASH_MS = 750; // the board's refresh flash
 
-export default function PutzopticonMap() {
+export function Putzopticon() {
   const data = useQuery(api.locations.getLocations);
   const tooWide = useSyncExternalStore(subscribeToWide, () => matchMedia(TOO_WIDE).matches);
   if (tooWide) return <ShrinkWindow />;
@@ -115,9 +114,6 @@ type Visit = {
 const PutzMapBoard = memo(
   ({ people }: { people: Person[] }) => {
     useIdleCursor();
-    const [params] = useSearchParams();
-    // Seconds to linger at each stop (?dwell=8), for tuning on the TV without a deploy.
-    const dwellMs = Math.max(1, Number(params.get("dwell")) || 6) * 1000;
     const reducedMotion = useSyncExternalStore(subscribeToMotion, () => matchMedia(REDUCED_MOTION).matches);
 
     const rows = useMemo(() => toPersonRows(people), [people]);
@@ -200,8 +196,8 @@ const PutzMapBoard = memo(
           setVisit((current) => (current.n === visit.n ? { ...current, arrived: true, dwelling: true } : current))
         );
       }
-      return after(dwellMs, () => depart());
-    }, [visit.n, visit.dwelling, visit.flightMs, dwellMs, go, depart]);
+      return after(DWELL_MS, () => depart());
+    }, [visit.n, visit.dwelling, visit.flightMs, go, depart]);
 
     // Rows at the stop light up as the camera sets off, and flash as it gets there.
     const litKeys = useMemo(
@@ -249,9 +245,6 @@ const PutzMapBoard = memo(
             rows={rows}
             columns={columns}
             rowsPerColumn={rowsPerColumn}
-            gapX="4"
-            dividers={false}
-            pillRadius="2px"
             litKeys={litKeys}
             flash={flash}
             onRowClick={visitPerson}
@@ -268,7 +261,7 @@ const PutzMapBoard = memo(
               data-phase={visit.dwelling ? "dwell" : "flying"}
               style={{
                 backgroundColor: hexOf(visit.stop.color),
-                animationDuration: `${visit.dwelling ? dwellMs : visit.flightMs}ms`,
+                animationDuration: `${visit.dwelling ? DWELL_MS : visit.flightMs}ms`,
               }}
             />
           )}

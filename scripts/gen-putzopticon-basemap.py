@@ -1,4 +1,4 @@
-"""Build src/pages/putzopticonMap/basemap.json, the Putzopticon map's bundled vector geometry.
+"""Build src/pages/putzopticon/basemap.json, the Putzopticon map's bundled vector geometry.
 
 Sources (all public-domain or public government data):
 - Boston-area streets and water: U.S. Census Bureau 2024 TIGER/Line
@@ -34,7 +34,7 @@ from shapely.geometry import box, shape
 from shapely.ops import unary_union
 
 INPUT = Path("design-proposal/data")
-OUTPUT = Path("src/pages/putzopticonMap/basemap.json")
+OUTPUT = Path("src/pages/putzopticon/basemap.json")
 BOUNDS = box(-71.265, 42.24, -70.90, 42.48)
 COUNTIES = ("25017", "25021", "25025", "25009")
 

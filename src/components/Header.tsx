@@ -205,9 +205,6 @@ export const NavButtons = memo(
         <NavButton disabled={affiliation !== "PUTZ"} to="/smds">
           SMDS
         </NavButton>
-        <NavButton disabled={affiliation !== "PUTZ"} to="/assassins">
-          Assassins
-        </NavButton>
         <NavButton to="/classrooms">
           Classrooms
         </NavButton>
