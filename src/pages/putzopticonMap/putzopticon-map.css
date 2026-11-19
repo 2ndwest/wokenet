@@ -1,0 +1,167 @@
+/* /putzopticon/map: the board's rows in the top half, a grayscale map tour in the bottom half.
+   Flat blocks and square corners, in the site's own fonts. */
+
+.putz-map-view {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.putz-map-roster {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.putz-map-clock {
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Set a little further down from the last row than rows sit from each other. */
+  height: calc(100% - 1.5px);
+  margin-top: 1.5px;
+  border-radius: 2px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-weight: bold;
+  color: var(--gray-11);
+  background-color: var(--gray-3);
+  transition: background-color 600ms ease-out;
+}
+
+.putz-map-stage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  border-top: 1px solid #414449;
+  background: #0a0a0b;
+  color: #e7e9ea;
+  color-scheme: dark;
+}
+
+/* Drains while the camera travels (on the camera's own ease-out), fills while it lingers. */
+.putz-tour-progress {
+  position: absolute;
+  z-index: 3;
+  top: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  transform-origin: left;
+  animation: putz-tour-fill linear both;
+}
+
+.putz-tour-progress[data-phase="flying"] {
+  animation-name: putz-tour-drain;
+  animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@keyframes putz-tour-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes putz-tour-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+.putz-tour {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  isolation: isolate;
+  font-size: var(--u);
+}
+
+.putz-tour canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Name tags and their leaders, laid out for the stop's camera and moved with it. */
+.putz-tour-tags {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms linear;
+}
+
+.putz-tour-tags[data-shown="true"] {
+  opacity: 1;
+  transition: opacity 450ms ease-out;
+}
+
+.putz-tour-leaders {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+/* Dotted: round white dots 3.5px apart, a step below the names so the name stays the focus. */
+.putz-tour-leaders polyline {
+  stroke: rgba(230, 232, 234, 0.75);
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-width: 1.5px;
+  stroke-dasharray: 0 3.5;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Just the name in Mondwest, knocked out of the map behind it; the dot carries the color. */
+.putz-tour-tag {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  height: 1.4em;
+  padding: 0 0.2em 0 0; /* none on the side facing the leader, so its end gap matches the dot's */
+  transform: translateY(-50%);
+  color: #e6e8ea;
+  text-shadow:
+    0 0 0.2em #0a0a0b,
+    0 0 0.45em #0a0a0b;
+  font-family: Mondwest;
+  font-size: var(--u);
+  font-weight: bold;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.putz-tour-tag[data-side="left"] {
+  padding: 0 0 0 0.2em;
+  transform: translate(-100%, -50%);
+}
+
+/* Where the map is headed, as a location pill. */
+
+
+
+
+
+
+.putz-tour-error {
+  position: absolute;
+  top: 50%;
+  width: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .putz-tour-tags,
+  .putz-tour-tags[data-shown="true"] {
+    transition: none;
+  }
+}

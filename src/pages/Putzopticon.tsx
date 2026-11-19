@@ -4,9 +4,10 @@ import { useQuery } from "convex/react";
 import { memo, useEffect, useState, useMemo, createElement, useSyncExternalStore } from "react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import { CenterSpinner } from "../utils/spinner";
-import { COLOR_ORDER, COLOR_HEX } from "../utils/colors";
+import { COLOR_HEX } from "../utils/colors";
 import { toMins } from "../utils/time";
 import { useIdleCursor } from "../utils/useIdleCursor";
+import { toPersonRows } from "./putzopticonRows";
 
 const SCAN_ANIMATION_DURATION = 750; // ms
 const SCAN_FREQUENCY = 200; // ms
@@ -31,40 +32,7 @@ const getSMDSBlackoutMessage = (): string | null => {
 
 export const Putzopticon = memo(() => {
   const data = useQuery(api.locations.getLocations);
-
-  const rows = useMemo(
-    () =>
-      data
-        ?.map(({ providerId, label, color, name }) => ({
-          key: providerId,
-          name,
-          color,
-          label,
-          dimmed: label === "UNKNOWN",
-        }))
-        .sort((a, b) => {
-          // Sort by, in order:
-          // 1) color (using COLOR_ORDER)
-          // 2) label length (alternating longer/shorter first per color)
-          // 3) label (alphabetically)
-          // 4) name (alphabetically)
-          const aOrder = COLOR_ORDER.indexOf(a.color);
-          const bOrder = COLOR_ORDER.indexOf(b.color);
-          if (aOrder !== bOrder) return aOrder - bOrder;
-          // Alternate: even color indices sorted longer
-          // first, odd color indices sorted shorter first.
-          const longerFirst = aOrder % 2 === 0;
-          const labelLengthCompare = longerFirst
-            ? b.label.length - a.label.length
-            : a.label.length - b.label.length;
-          if (labelLengthCompare !== 0) return labelLengthCompare;
-          const labelCompare = a.label.localeCompare(b.label);
-          if (labelCompare !== 0) return labelCompare;
-          return a.name.localeCompare(b.name);
-        }),
-    [data]
-  );
-
+  const rows = useMemo(() => data && toPersonRows(data), [data]);
   return <PersonBoard rows={rows} />;
 });
 
@@ -93,6 +61,12 @@ type RowsProps = {
   rowsPerColumn: number;
   lastCell?: React.ReactNode; // Optional row-sized cell placed after the rows (bottom right).
   onRowClick?: (key: string) => void;
+  gapX?: "4" | "8"; // Radix space step between columns.
+  dividers?: boolean; // The thin line between columns (the map view goes without).
+  pillRadius?: string; // Corner rounding on the location pills (the map view softens them).
+  // The map view: rows outside `litKeys` sit back, and `flash` sets off the lit ones like a refresh.
+  litKeys?: ReadonlySet<string>;
+  flash?: boolean;
 };
 
 export const PersonBoard = memo(
@@ -129,7 +103,7 @@ export const PersonBoard = memo(
   }
 );
 
-const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }: RowsProps) => {
+export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick, gapX = "8", dividers = true, pillRadius, litKeys, flash = false }: RowsProps) => {
   // Track which people are currently being "scanned" for location refresh effect.
   const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
 
@@ -157,6 +131,9 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }:
   }, [rows]);
 
   const [autoAnimate] = useAutoAnimate();
+  const gap = `var(--space-${gapX})`;
+  // Every row makes its name column wide enough for the board's longest name at full size.
+  const longestName = useMemo(() => Math.max(1, ...rows.map((row) => row.name.length)), [rows]);
 
   return (
     // Fills each column top to bottom, then moves on to the next.
@@ -167,24 +144,28 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }:
       columns={`repeat(${columns}, 1fr)`}
       width="100%"
       flexGrow="1"
-      gapX="8"
+      gapX={gapX}
       gapY="0.4%"
       px="8px"
       py="8px"
       overflow="hidden"
       position="relative"
     >
-      {columns > 1 && (
-        // Thin line down the middle of the gap so the columns read as separate lists.
+      {dividers && Array.from({ length: columns - 1 }, (_, i) => (
+        // Thin line down the middle of each gap so the columns read as separate lists
+        // (with two columns, that's exactly 50%).
         <Box
+          key={`divider-${i}`}
           position="absolute"
           top="8px"
           bottom="8px"
-          left="50%"
           width="1px"
-          style={{ backgroundColor: "var(--gray-5)" }}
+          style={{
+            left: `calc(8px + ${(i + 1) / columns} * (100% - 16px + ${gap}) - ${gap} / 2)`,
+            backgroundColor: "var(--gray-5)",
+          }}
         />
-      )}
+      ))}
       {rows.map((row, index) => (
         <PersonRow
           key={row.key} // Names can collide (two Aidens), so key on something unique.
@@ -193,8 +174,11 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }:
           color={row.color}
           label={row.label}
           dimmed={row.dimmed}
+          nameFit={longestName}
+          pillRadius={pillRadius}
+          muted={litKeys && !litKeys.has(row.key)}
           height="100%" // Let the CSS engine deal with this.
-          isScanning={scanningIndices.has(index)}
+          isScanning={scanningIndices.has(index) || (flash && !!litKeys?.has(row.key))}
           onClick={onRowClick}
         />
       ))}
@@ -205,8 +189,8 @@ const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick }:
 
 // Caps a font size so the text spans at most `fill`% of its box's width, given the font's widest
 // average glyph (in em). Height alone can't size text: a long label in a short, narrow row wraps.
-const fitWidth = (text: string, glyphEm: number, fill: number) =>
-  `${(fill / (Math.max(text.length, 1) * glyphEm)).toFixed(2)}cqw`;
+const fitWidth = (chars: number, glyphEm: number, fill: number) =>
+  `${(fill / (Math.max(chars, 1) * glyphEm)).toFixed(2)}cqw`;
 
 export const PersonRow = memo(
   ({
@@ -217,6 +201,9 @@ export const PersonRow = memo(
     height,
     dimmed = false,
     isScanning = false,
+    nameFit = name.length,
+    pillRadius,
+    muted,
     onClick,
   }: {
     id: string;
@@ -226,6 +213,9 @@ export const PersonRow = memo(
     height: string;
     dimmed?: boolean;
     isScanning?: boolean;
+    nameFit?: number; // Characters the name column should fit at full size (the board's longest name).
+    pillRadius?: string;
+    muted?: boolean; // Only the map view sets this (rows away from its current stop).
     onClick?: (id: string) => void;
   }) => {
     return (
@@ -235,20 +225,26 @@ export const PersonRow = memo(
         width="100%"
         onClick={onClick && (() => onClick(id))}
         style={{
+          containerType: "size", // The name column sizes itself against the row's height.
           cursor: onClick ? "pointer" : undefined,
           // Can't use opacity it messes with the AutoAnimate.
-          filter: dimmed ? "brightness(0.3)" : "none",
+          filter: dimmed ? "brightness(0.3)" : muted ? "brightness(0.45)" : "none",
+          transition: muted === undefined ? undefined : "filter 600ms ease-out",
           animation:
-            isScanning && !dimmed
+            isScanning && !dimmed && !muted
               ? `locationRefresh ${SCAN_ANIMATION_DURATION}ms ease-out`
               : "none",
         }}
       >
         <Flex
           height="100%"
-          width="40%"
+          flexShrink="0"
           align="center"
           style={{
+            // Wide enough for the longest name at full height (Mondwest is ~0.65em a glyph and the
+            // name is 85% of the row's height), taking room from the pill rather than shrinking
+            // names. Never less than the classic 40%, never more than 58%.
+            width: `clamp(40cqw, ${((nameFit * 0.65 * 85) / 0.95).toFixed(1)}cqh, 58cqw)`,
             containerType: "size", // So we can use cqh units
             fontFamily: "Mondwest",
             fontWeight: "bold",
@@ -256,12 +252,13 @@ export const PersonRow = memo(
             overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: `min(85cqh, 25cqw, ${fitWidth(name, 0.65, 95)})` }}>{name}</span>
+          <span style={{ fontSize: `min(85cqh, 25cqw, ${fitWidth(nameFit, 0.65, 95)})` }}>{name}</span>
         </Flex>
 
         <Flex
           height="100%"
-          width="60%"
+          flexGrow="1"
+          minWidth="0"
           direction="row"
           justify="center"
           align="center"
@@ -269,20 +266,21 @@ export const PersonRow = memo(
           style={{
             containerType: "size", // So we can use cqh units
             backgroundColor: COLOR_HEX[color] ?? color,
+            borderRadius: pillRadius,
             fontWeight: "bold",
             whiteSpace: "nowrap",
             overflow: "hidden",
           }}
         >
           {/* Berkeley Mono glyphs are 0.6em wide. */}
-          <span style={{ fontSize: `min(80cqh, 14cqw, ${fitWidth(label, 0.6, 92)})` }}>{label}</span>
+          <span style={{ fontSize: `min(80cqh, 14cqw, ${fitWidth(label.length, 0.6, 92)})` }}>{label}</span>
         </Flex>
       </Flex>
     );
   }
 );
 
-const SMDSMarquee = memo(({ height }: { height: string }) => {
+export const SMDSMarquee = memo(({ height }: { height: string }) => {
   const sayings = useQuery(api.shitMyDadSays.getSayings, { sortBy: undefined });
 
   const shuffledSayings = useMemo(() => {

@@ -1,0 +1,250 @@
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useSearchParams } from "react-router";
+import { useQuery } from "convex/react";
+import { Flex, Heading, Text } from "@radix-ui/themes";
+import { api } from "../../../convex/_generated/api";
+import { CenterSpinner } from "../../utils/spinner";
+import { useIdleCursor } from "../../utils/useIdleCursor";
+import { PersonRows, SMDSMarquee } from "../Putzopticon";
+import { toPersonRows } from "../putzopticonRows";
+import { TourMap } from "./TourMap";
+import { buildStops, hexOf, locate, nextStop, type Located, type Person, type Stop } from "./stops";
+import "./putzopticon-map.css";
+
+// /putzopticon/map: the Putzopticon board squeezed into the top half (same marquee, same rows, more
+// columns), over a map that tours where everyone is. At each stop the camera eases in on one color's
+// people and names them; their rows light up with the usual refresh flash while the rest sit back.
+// The classic full-height board stays at /putzopticon.
+
+const NEAR_FLIGHT_MS = 2600;
+const FAR_FLIGHT_MS = 4200; // to or from a far-away stop
+const OPENING_MS = 1200; // on the shot of everyone nearby, before the first stop
+const FLASH_MS = 750; // the board's refresh flash
+
+export default function PutzopticonMap() {
+  const data = useQuery(api.locations.getLocations);
+  const tooWide = useSyncExternalStore(subscribeToWide, () => matchMedia(TOO_WIDE).matches);
+  if (tooWide) return <ShrinkWindow />;
+  if (!data) return <CenterSpinner />;
+  return <PutzMapBoard people={data} />;
+}
+
+// The view is laid out for the hall's portrait TV (9:16, about 0.56 wide per unit tall) and phones,
+// so anything wider than 3:5 gets asked to narrow down rather than a stretched, many-column board.
+const TOO_WIDE = "(min-aspect-ratio: 3/5)";
+const subscribeToWide = (onChange: () => void) => {
+  const media = matchMedia(TOO_WIDE);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+};
+
+const ShrinkWindow = () => (
+  <Flex p="6" direction="column" align="center" justify="center" width="100%" height="100%">
+    <Heading size="8" align="center">
+      SCREEN TOO WIDE
+    </Heading>
+    <br />
+    <Text align="center" size="4">
+      This page is meant to be viewed on a TV or other vertical display.
+    </Text>
+  </Flex>
+);
+
+// The day and time (Eastern, like the marquee's blackouts), for the empty slot at the bottom of a
+// ragged last column: a block across the whole slot in the current stop's color (like the progress
+// bar), the time in the pills' type.
+// Reads "NOV 28 3:42 PM".
+const CLOCK_DATE = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+const CLOCK_TIME = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+const clockText = () => {
+  const now = new Date();
+  return `${CLOCK_DATE.format(now)} ${CLOCK_TIME.format(now)}`.toUpperCase();
+};
+
+const ClockCell = memo(({ color }: { color?: string }) => {
+  const [text, setText] = useState(clockText);
+  useEffect(() => {
+    const interval = setInterval(() => setText(clockText()), 10_000);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <div className="putz-map-clock" style={color ? { backgroundColor: color, color: "inherit" } : undefined}>
+      {/* Berkeley Mono glyphs are 0.6em wide. */}
+      <span style={{ fontSize: `min(64cqh, ${(86 / (text.length * 0.6)).toFixed(2)}cqw)` }}>{text}</span>
+    </div>
+  );
+});
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+const subscribeToMotion = (onChange: () => void) => {
+  const media = matchMedia(REDUCED_MOTION);
+  media.addEventListener("change", onChange);
+  return () => media.removeEventListener("change", onChange);
+};
+
+// However many columns keep the rows nearest their usual proportions in the space there is (the
+// marquee counts as a row, as on the board).
+const pickColumns = (count: number, width: number, height: number) => {
+  let best = { columns: 2, score: Infinity };
+  for (let columns = 1; columns <= 6 && width > 0 && height > 0; columns++) {
+    const aspect = width / columns / (height / (Math.ceil(count / columns) + 1));
+    const score = Math.abs(Math.log(aspect / 8));
+    if (score < best.score) best = { columns, score };
+  }
+  return best.columns;
+};
+
+type Visit = {
+  n: number;
+  stop: Stop | null; // null: the opening shot
+  located: Located[]; // who's where, as of setting off (live updates wait for the next stop)
+  flightMs: number;
+  arrived: boolean;
+  dwelling: boolean;
+};
+
+const PutzMapBoard = memo(
+  ({ people }: { people: Person[] }) => {
+    useIdleCursor();
+    const [params] = useSearchParams();
+    // Seconds to linger at each stop (?dwell=8), for tuning on the TV without a deploy.
+    const dwellMs = Math.max(1, Number(params.get("dwell")) || 6) * 1000;
+    const reducedMotion = useSyncExternalStore(subscribeToMotion, () => matchMedia(REDUCED_MOTION).matches);
+
+    const rows = useMemo(() => toPersonRows(people), [people]);
+    const located = useMemo(() => locate(people), [people]);
+    const stops = useMemo(() => buildStops(located), [located]);
+
+    const [visit, setVisit] = useState<Visit>(() => ({
+      n: 0,
+      stop: null,
+      located,
+      flightMs: 0,
+      arrived: true,
+      dwelling: false,
+    }));
+    const latest = useRef({ stops, located, reducedMotion });
+    useLayoutEffect(() => {
+      latest.current = { stops, located, reducedMotion };
+    });
+
+    // Off to `target`, or else the next stop along.
+    const go = useCallback(
+      (target?: Stop) =>
+        setVisit((current) => {
+          const { stops, located, reducedMotion } = latest.current;
+          const stop = target ?? nextStop(stops, current.stop?.key ?? null) ?? null;
+          const n = current.n + 1;
+          // Nowhere to go, or nowhere new: stay put for another dwell.
+          if (!stop || stop.key === current.stop?.key) {
+            return { n, stop, located, flightMs: 0, arrived: true, dwelling: true };
+          }
+          const far = stop.far || !!current.stop?.far;
+          const flightMs = reducedMotion ? 0 : far ? FAR_FLIGHT_MS : NEAR_FLIGHT_MS;
+          return { n, stop, located, flightMs, arrived: false, dwelling: false };
+        }),
+      []
+    );
+
+    // The tour's clock: fly, linger, move on. The map says when it has as good as landed (names up,
+    // rows flash), a little before the flight's last, barely moving stretch is over.
+    const arrive = useCallback(
+      (n: number) => setVisit((current) => (current.n === n && !current.arrived ? { ...current, arrived: true } : current)),
+      []
+    );
+    useEffect(() => {
+      const after = (ms: number, then: () => void) => {
+        const timeout = setTimeout(then, ms);
+        return () => clearTimeout(timeout);
+      };
+      if (visit.n === 0) return after(OPENING_MS, () => go());
+      if (!visit.dwelling) {
+        return after(visit.flightMs, () =>
+          setVisit((current) => (current.n === visit.n ? { ...current, arrived: true, dwelling: true } : current))
+        );
+      }
+      return after(dwellMs, () => go());
+    }, [visit.n, visit.dwelling, visit.flightMs, dwellMs, go]);
+
+    // Rows at the stop light up as the camera sets off, and flash as it gets there.
+    const litKeys = useMemo(
+      () => new Set(visit.stop ? visit.stop.people.map((p) => p.providerId) : rows.map((row) => row.key)),
+      [visit.stop, rows]
+    );
+    const [flash, setFlash] = useState(false);
+    useEffect(() => {
+      if (!visit.arrived || !visit.stop || visit.flightMs === 0) return;
+      setFlash(true);
+      const timeout = setTimeout(() => setFlash(false), FLASH_MS);
+      return () => {
+        clearTimeout(timeout);
+        setFlash(false);
+      };
+    }, [visit.arrived, visit.stop, visit.flightMs]);
+
+    // Tapping someone's row sends the map to them.
+    const visitPerson = useCallback(
+      (key: string) => {
+        const stop = latest.current.stops.find((s) => s.people.some((p) => p.providerId === key));
+        if (stop) go(stop);
+      },
+      [go]
+    );
+
+    const roster = useRef<HTMLElement>(null);
+    const [rosterSize, setRosterSize] = useState({ width: 0, height: 0 });
+    useLayoutEffect(() => {
+      const element = roster.current!;
+      const measure = () => setRosterSize({ width: element.clientWidth, height: element.clientHeight });
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }, []);
+    const columns = pickColumns(rows.length, rosterSize.width, rosterSize.height);
+    const rowsPerColumn = Math.max(1, Math.ceil(rows.length / columns));
+
+    return (
+      <div className="putz-map-view">
+        <section ref={roster} className="putz-map-roster" aria-label="Where everyone is">
+          <SMDSMarquee height={`${100 / (rowsPerColumn + 1)}%`} />
+          <PersonRows
+            rows={rows}
+            columns={columns}
+            rowsPerColumn={rowsPerColumn}
+            gapX="4"
+            dividers={false}
+            pillRadius="2px"
+            litKeys={litKeys}
+            flash={flash}
+            onRowClick={visitPerson}
+            // A ragged last column gets the time in its first empty slot.
+            lastCell={rows.length % columns !== 0 ? <ClockCell color={visit.stop ? hexOf(visit.stop.color) : undefined} /> : undefined}
+          />
+        </section>
+        <section className="putz-map-stage" aria-label="Map tour">
+          {visit.stop && (
+            // Drains as the camera travels (easing like it), then fills while it lingers.
+            <div
+              key={`${visit.n}-${visit.dwelling}`}
+              className="putz-tour-progress"
+              data-phase={visit.dwelling ? "dwell" : "flying"}
+              style={{
+                backgroundColor: hexOf(visit.stop.color),
+                animationDuration: `${visit.dwelling ? dwellMs : visit.flightMs}ms`,
+              }}
+            />
+          )}
+          <TourMap
+            located={visit.located}
+            stop={visit.stop}
+            visit={visit.n}
+            flightMs={visit.flightMs}
+            arrived={visit.arrived}
+            onArrive={arrive}
+          />
+        </section>
+      </div>
+    );
+  }
+);

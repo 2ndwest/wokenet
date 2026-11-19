@@ -11,9 +11,12 @@ import { DJs } from "./pages/DJs";
 import { AuthedHome } from "./pages/AuthedHome";
 import { Unauthorized } from "./pages/Unauthorized";
 import { AdminPanel } from "./pages/AdminPanel";
-import { memo } from "react";
+import { lazy, memo, Suspense } from "react";
 import { CenterSpinner } from "./utils/spinner";
 import { useAuthStatus } from "./utils/useAuthStatus";
+
+// The map view brings a basemap along, so only load it for whoever opens it.
+const PutzopticonMap = lazy(() => import("./pages/putzopticonMap/PutzopticonMap"));
 
 const App = memo(() => {
   const { user, isAuthLoading, isUserReady } = useAuthStatus();
@@ -30,6 +33,14 @@ const App = memo(() => {
             <Routes>
               <Route path="/" element={<AuthedHome />} />
               <Route path="/putzopticon" element={<Putzopticon />} />
+              <Route
+                path="/putzopticon/map"
+                element={
+                  <Suspense fallback={<CenterSpinner />}>
+                    <PutzopticonMap />
+                  </Suspense>
+                }
+              />
               <Route path="/assassins" element={<Assassins />} />
               <Route path="/putz360" element={<Putz360 />} />
               <Route path="/smds" element={<ShitMyDadSays />} />
