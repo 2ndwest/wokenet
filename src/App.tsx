@@ -9,7 +9,6 @@ import { Bathrooms } from "./pages/Bathrooms";
 import { DJs } from "./pages/DJs";
 import { AuthedHome } from "./pages/AuthedHome";
 import { Unauthorized } from "./pages/Unauthorized";
-import { KitchenCameras } from "./pages/KitchenCameras";
 import { AdminPanel } from "./pages/AdminPanel";
 import { memo } from "react";
 import { CenterSpinner } from "./utils/spinner";
@@ -22,7 +21,7 @@ const App = memo(() => {
     <Flex direction="column" width="100%" height="100dvh">
       <Header />
 
-      <Flex role="main" direction="column" width="100%" flexGrow="1" overflowY="auto" style={{ minHeight: 0 }}>
+      <Flex direction="column" width="100%" height="100%" overflowY="auto">
         {isAuthLoading ? (
           <CenterSpinner />
         ) : isUserReady ? (
@@ -38,7 +37,6 @@ const App = memo(() => {
               <Route path="/classrooms" element={<Classrooms />} />
               <Route path="/bathrooms" element={<Bathrooms />} />
               <Route path="/djs" element={<DJs />} />
-              <Route path="/kitchen-cameras" element={<KitchenCameras />} />
               {user!.isAdmin && <Route path="/adminpanel" element={<AdminPanel />} />}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -48,7 +46,6 @@ const App = memo(() => {
               <Route path="/" element={<AuthedHome />} />
               <Route path="/classrooms" element={<Classrooms />} />
               <Route path="/bathrooms" element={<Bathrooms />} />
-              <Route path="/kitchen-cameras" element={<Unauthorized authenticated />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           )
