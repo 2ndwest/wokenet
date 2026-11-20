@@ -17,7 +17,7 @@ const GROW_MS = 450; // the stop's dots swelling (and its names fading in) on ar
 const FADE_MS = 200; // the last stop's names leaving
 // The beat before a flight: names fade and the stop's dots shrink and dim, then the camera goes.
 export const LEAVE_MS = 300;
-const IDLE_ALPHA = 0.35; // everyone not at the stop
+const IDLE_ALPHA = 0.5; // everyone not at the stop
 // Between flights the camera keeps creeping in, so a stop never sits dead still: up to DRIFT (6%)
 // closer, easing off over DRIFT_MS, until the next flight takes it from wherever it got to.
 const DRIFT = 0.06;

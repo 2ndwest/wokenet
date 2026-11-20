@@ -9,8 +9,7 @@ import "./putzopticon.css";
 
 // The Putzopticon's board: the SMDS marquee and the name/location rows above the map.
 
-const SCAN_ANIMATION_DURATION = 750; // ms
-const SCAN_FREQUENCY = 200; // ms
+const FLASH_MS = 750; // a row's flash when the map gets to them
 const SMDS_MARQUEE_COUNT = 100; // n most recent smds
 
 // Blackout periods for SMDS marquee (eastern time, 24h format)
@@ -44,38 +43,12 @@ type RowsProps = {
   rowsPerColumn: number;
   lastCell?: React.ReactNode; // Optional row-sized cell placed after the rows (bottom right).
   onRowClick?: (key: string) => void;
-  // Rows outside `litKeys` sit back, and `flash` sets off the lit ones like a refresh.
+  // `flash` sets off the rows in `litKeys` (the people the map is on) like a refresh.
   litKeys?: ReadonlySet<string>;
   flash?: boolean;
 };
 
 export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick, litKeys, flash = false }: RowsProps) => {
-  // Track which people are currently being "scanned" for location refresh effect.
-  const [scanningIndices, setScanningIndices] = useState<Set<number>>(new Set());
-
-  useEffect(() => {
-    if (rows.length === 0) return;
-
-    const interval = setInterval(() => {
-      // Pick a random person.
-      const randomIndex = Math.floor(Math.random() * rows.length);
-
-      // Add them to the scanning set.
-      setScanningIndices((prev) => new Set(prev).add(randomIndex));
-
-      // Remove them from the set after animation completes.
-      setTimeout(() => {
-        setScanningIndices((prev) => {
-          const next = new Set(prev);
-          next.delete(randomIndex);
-          return next;
-        });
-      }, SCAN_ANIMATION_DURATION);
-    }, SCAN_FREQUENCY);
-
-    return () => clearInterval(interval);
-  }, [rows]);
-
   const [autoAnimate] = useAutoAnimate();
   // Every row makes its name column wide enough for the board's longest name at full size.
   const longestName = useMemo(() => Math.max(1, ...rows.map((row) => row.name.length)), [rows]);
@@ -96,7 +69,7 @@ export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowC
       overflow="hidden"
       position="relative"
     >
-      {rows.map((row, index) => (
+      {rows.map((row) => (
         <PersonRow
           key={row.key} // Names can collide (two Aidens), so key on something unique.
           id={row.key}
@@ -105,9 +78,8 @@ export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowC
           label={row.label}
           dimmed={row.dimmed}
           nameFit={longestName}
-          muted={litKeys && !litKeys.has(row.key)}
           height="100%" // Let the CSS engine deal with this.
-          isScanning={scanningIndices.has(index) || (flash && !!litKeys?.has(row.key))}
+          isScanning={flash && !!litKeys?.has(row.key)}
           onClick={onRowClick}
         />
       ))}
@@ -131,7 +103,6 @@ export const PersonRow = memo(
     dimmed = false,
     isScanning = false,
     nameFit = name.length,
-    muted,
     onClick,
   }: {
     id: string;
@@ -142,7 +113,6 @@ export const PersonRow = memo(
     dimmed?: boolean;
     isScanning?: boolean;
     nameFit?: number; // Characters the name column should fit at full size (the board's longest name).
-    muted?: boolean; // Away from the map's current stop.
     onClick?: (id: string) => void;
   }) => {
     return (
@@ -155,12 +125,8 @@ export const PersonRow = memo(
           containerType: "size", // The name column sizes itself against the row's height.
           cursor: onClick ? "pointer" : undefined,
           // Can't use opacity it messes with the AutoAnimate.
-          filter: dimmed ? "brightness(0.3)" : muted ? "brightness(0.45)" : "none",
-          transition: muted === undefined ? undefined : "filter 600ms ease-out",
-          animation:
-            isScanning && !dimmed && !muted
-              ? `locationRefresh ${SCAN_ANIMATION_DURATION}ms ease-out`
-              : "none",
+          filter: dimmed ? "brightness(0.3)" : "none",
+          animation: isScanning && !dimmed ? `locationRefresh ${FLASH_MS}ms ease-out` : "none",
         }}
       >
         <Flex

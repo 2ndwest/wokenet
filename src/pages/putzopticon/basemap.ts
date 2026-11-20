@@ -68,11 +68,11 @@ export const drawBasemap = (
   };
 
   if (paths && detail < 1) {
-    fill(paths.land, "#111113");
+    fill(paths.land, "#1a1b1e");
     fill(paths.lakes, "#000000");
-    stroke(paths.land, "#34363a", 0.9);
-    stroke(paths.lakes, "#34363a", 0.9);
-    stroke(paths.states, "#2a2c2f", 0.8);
+    stroke(paths.land, "#4b4e53", 0.9);
+    stroke(paths.lakes, "#4b4e53", 0.9);
+    stroke(paths.states, "#3c3f43", 0.8);
   }
   if (detail > 0) {
     const left = x - width / 2 / scale;
@@ -80,7 +80,7 @@ export const drawBasemap = (
     const right = left + width / scale;
     const bottom = top + height / scale;
     context.globalAlpha = detail;
-    context.fillStyle = "#0a0a0b";
+    context.fillStyle = "#141517";
     context.fillRect(left, top, right - left, bottom - top);
     if (paths) {
       const tiles = paths.detail.filter(
@@ -92,19 +92,19 @@ export const drawBasemap = (
         context.globalAlpha = detail * roofs;
         for (const { buildings } of tiles) {
           if (!buildings) continue;
-          fill(buildings, "#17181a");
-          stroke(buildings, "#3b3e42", 0.85);
+          fill(buildings, "#24262a");
+          stroke(buildings, "#575b61", 0.85);
         }
         context.globalAlpha = detail;
       }
-      // Every road in one faint gray, just above the land (#0a0a0b), so they read as texture.
-      const road = scale > 90 ? "#1d1e21" : "#18191b";
+      // Every road in one faint gray, just above the land (#141517), so they read as texture.
+      const road = scale > 90 ? "#2b2d31" : "#232528";
       const roadWidth = scale > 145 ? 0.85 : 0.6;
       for (const { streets } of tiles) {
         if (streets) stroke(streets, road, roadWidth);
       }
       fill(paths.water, "#000000");
-      stroke(paths.water, "#2c2e31", 0.85); // a quiet shoreline against the black
+      stroke(paths.water, "#43464b", 0.85); // a quiet shoreline against the black
       // Arterials and highways go after the water so bridges cross it.
       for (const { arterials, highways } of tiles) {
         if (arterials) stroke(arterials, road, roadWidth);

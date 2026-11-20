@@ -201,11 +201,8 @@ const PutzMapBoard = memo(
       return after(DWELL_MS, () => depart());
     }, [visit.n, visit.dwelling, visit.flightMs, go, depart]);
 
-    // Rows at the stop light up as the camera sets off, and flash as it gets there.
-    const litKeys = useMemo(
-      () => new Set(visit.stop ? visit.stop.people.map((p) => p.providerId) : rows.map((row) => row.key)),
-      [visit.stop, rows]
-    );
+    // Rows at the stop start pulsing as the camera sets off, and flash as it gets there.
+    const litKeys = useMemo(() => visit.stop ? new Set(visit.stop.people.map((p) => p.providerId)) : undefined, [visit.stop]);
     const [flash, setFlash] = useState(false);
     useEffect(() => {
       if (!visit.arrived || !visit.stop || visit.flightMs === 0) return;

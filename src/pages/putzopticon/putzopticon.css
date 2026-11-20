@@ -47,7 +47,7 @@
   display: flex;
   min-height: 0;
   border-top: 1px solid #414449;
-  background: #0a0a0b;
+  background: #141517;
   color: #e7e9ea;
   color-scheme: dark;
 }
@@ -138,8 +138,8 @@
   transform: translateY(-50%);
   color: #e6e8ea;
   text-shadow:
-    0 0 0.2em #0a0a0b,
-    0 0 0.45em #0a0a0b;
+    0 0 0.2em #141517,
+    0 0 0.45em #141517;
   font-family: Mondwest;
   font-size: var(--u);
   font-weight: bold;
@@ -222,3 +222,4 @@
     animation: none;
   }
 }
+
