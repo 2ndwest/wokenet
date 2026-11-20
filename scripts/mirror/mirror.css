@@ -1,0 +1,9 @@
+.radix-themes { height:100dvh; display:flex; flex-direction:column; }
+.mirror-notice { box-sizing:border-box; }
+.mirror-notice { flex-shrink:0; height:26px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:5px 12px; background:var(--gray-2); color:var(--gray-11); border-bottom:1px solid var(--gray-5); font-size:10px; }
+.mirror-notice span {white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.mirror-notice a { color:var(--accent-11); white-space:nowrap; }
+.mirror-app { flex:1; min-height:0; }
+.mirror-app > div { height:100% !important; }
+.mirror-app #mobile-navigation { top:76px; }
+@media(max-width:550px){.mirror-notice {font-size:9px;}.mirror-notice span {max-width:260px;}}
