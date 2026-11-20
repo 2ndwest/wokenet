@@ -8,6 +8,7 @@ import {
 import { easeFlight, easeOutCubic, flightPath, toScreen, type Camera, type Size } from "./camera";
 import { baseUnit, planVisit, type Tag } from "./layout";
 import { hexOf, type Located, type Point, type Stop } from "./stops";
+import { drawZoneGlow, loadZones, type Zones } from "./zones";
 
 // The top half of /putzopticon: the grayscale basemap on a canvas, everyone as a dot in their
 // pill color, and the current stop's people named in columns of tags beside it. The camera eases out
@@ -62,6 +63,7 @@ type Shown = { tags: (Tag & { name: string })[]; camera: Camera; unit: number; s
 type Scene = {
   size: Size;
   paths?: Paths;
+  zones?: Zones;
   located: Located[];
   stop: Stop | null;
   arrived: boolean;
@@ -179,15 +181,9 @@ const paint = (
   }
   const since = now - motion.arrivedAt;
 
-  const unit = baseUnit(size);
-  const radius = dotRadii(unit);
-  const at = (point: Point) => toScreen(camera, size, point);
-  const lit = new Set(stop?.people.map((p) => p.providerId));
-  for (const person of scene.located) {
-    if (!lit.has(person.providerId)) dot(context, at(person.point), radius.idle, hexOf(person.color), IDLE_ALPHA);
-  }
   // The stop's dots brighten over the first half of the flight in, swell on arrival, and shrink and
-  // dim back to everyone else's as it's left, so nothing pops.
+  // dim back to everyone else's as it's left, so nothing pops. The stop's location polygon(s) glow
+  // in and out on the same arrival/leave curve.
   const leave = scene.leaving ? easeOutCubic(clamp01((now - motion.leftAt) / LEAVE_MS)) : 0;
   const grow = scene.arrived ? easeOutCubic(clamp01(since / GROW_MS)) * (1 - leave) : 0;
   const bright = scene.arrived
@@ -195,6 +191,18 @@ const paint = (
     : motion.duration > 0
       ? easeOutCubic(clamp01((now - motion.departedAt) / (motion.duration / 2)))
       : 1;
+
+  if (stop && grow > 0) {
+    drawZoneGlow(context, size, camera, density, scene.zones, stop.labels, hexOf(stop.color), grow);
+  }
+
+  const unit = baseUnit(size);
+  const radius = dotRadii(unit);
+  const at = (point: Point) => toScreen(camera, size, point);
+  const lit = new Set(stop?.people.map((p) => p.providerId));
+  for (const person of scene.located) {
+    if (!lit.has(person.providerId)) dot(context, at(person.point), radius.idle, hexOf(person.color), IDLE_ALPHA);
+  }
   for (const person of stop?.people ?? []) {
     const alpha = IDLE_ALPHA + (1 - IDLE_ALPHA) * bright;
     dot(context, at(person.point), radius.idle + (radius.lit - radius.idle) * grow, hexOf(person.color), alpha);
@@ -273,6 +281,7 @@ export const TourMap = memo(
     const layerRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState<Size>({ width: 0, height: 0 });
     const [paths, setPaths] = useState<Paths>();
+    const [zones, setZones] = useState<Zones>();
     const [failed, setFailed] = useState(false);
     const [fontsReady, setFontsReady] = useState(false);
 
@@ -299,6 +308,12 @@ export const TourMap = memo(
         () => {
           if (live) setFailed(true);
         }
+      );
+      loadZones().then(
+        (loaded) => {
+          if (live) setZones(loaded);
+        },
+        () => undefined
       );
       // Tags are laid out from measured names, so wait for the font.
       document.fonts
@@ -419,7 +434,7 @@ export const TourMap = memo(
 
     // Every render: hand the canvas the latest and draw (it keeps going while anything moves).
     useLayoutEffect(() => {
-      scene.current = { size, paths, located, stop, arrived, leaving, shown };
+      scene.current = { size, paths, zones, located, stop, arrived, leaving, shown };
       const canvas = canvasRef.current;
       if (canvas && paint(canvas, layerRef.current, scene.current, motion.current, performance.now())) {
         kick();

@@ -3,6 +3,7 @@ import { toPersonRows } from "../src/pages/putzopticon/rows";
 import { flightPath, frameBounds, toScreen, type Camera } from "../src/pages/putzopticon/camera";
 import { leftCount, planVisit, stack, type Tag } from "../src/pages/putzopticon/layout";
 import { buildStops, HOME, locate, nextStop, type Person } from "../src/pages/putzopticon/stops";
+import { zonePathData } from "../src/pages/putzopticon/zones";
 
 const person = (name: string, label: string, color: string, latitude: number, longitude: number): Person => ({
   providerId: name.toLowerCase(),
@@ -194,5 +195,31 @@ describe("camera", () => {
     const path = flightPath({ x: 1, y: 1, scale: 10 }, { x: 1, y: 1, scale: 1000 }, size);
     expect(path(0.5).scale).toBeCloseTo(100);
     expect(path(0.5).x).toBe(1);
+  });
+});
+
+describe("zones", () => {
+  it("projects Polygon and MultiPolygon rings into closed SVG paths", () => {
+    const poly = zonePathData({
+      type: "Polygon",
+      coordinates: [
+        [
+          [-71.0921, 42.3592],
+          [-71.0883, 42.3604],
+          [-71.0921, 42.3592],
+        ],
+      ],
+    });
+    expect(poly.startsWith("M0,0L")).toBe(true);
+    expect(poly.endsWith("Z")).toBe(true);
+
+    const multi = zonePathData({
+      type: "MultiPolygon",
+      coordinates: [
+        [[[-71.0921, 42.3592], [-71.09, 42.36], [-71.0921, 42.3592]]],
+        [[[-71.08, 42.35], [-71.07, 42.36], [-71.08, 42.35]]],
+      ],
+    });
+    expect(multi.match(/Z/g)?.length).toBe(2);
   });
 });
