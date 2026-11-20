@@ -145,8 +145,11 @@ export const planVisit = ({
     unit = Math.max(MIN_UNIT, unit * 0.9);
   }
 
-  const half = metrics.height / 2;
-  const insets = { top: area.top + half, bottom: reserved.bottom + half, left: sidePad, right: sidePad };
+  // Keep the topmost dot low enough that its tag, which sits `lift` above it, still has a little air
+  // above. The same margin goes along the bottom so the stop stays centered when zoom, not height,
+  // is what limits the framing (which is usually the case).
+  const edge = metrics.height / 2 + (metrics.lift ?? 0) + 0.6 * unit;
+  const insets = { top: area.top + edge, bottom: reserved.bottom + edge, left: sidePad, right: sidePad };
   // A stop in one building still shows the buildings around it: no closer than about 600 m across.
   const maxScale = Math.sqrt(size.width * size.height) / (stop.far ? 4 : 0.6);
   const camera = frameBounds(bounds, size, insets, maxScale);

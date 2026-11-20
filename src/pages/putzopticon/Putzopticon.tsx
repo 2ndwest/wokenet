@@ -142,7 +142,7 @@ const PutzMapBoard = memo(
       (target?: Stop) =>
         setVisit((current) => {
           const { stops, located, reducedMotion } = latest.current;
-          const stop = target ?? nextStop(stops, current.stop?.key ?? null) ?? null;
+          const stop = target ?? nextStop(stops, current.stop) ?? null;
           const n = current.n + 1;
           // Nowhere to go, or nowhere new: stay put for another dwell.
           if (!stop || stop.key === current.stop?.key) {
@@ -166,7 +166,7 @@ const PutzMapBoard = memo(
       (target?: Stop) => {
         const { stops, reducedMotion } = latest.current;
         clearTimeout(leaveTimer.current);
-        const next = target ?? nextStop(stops, visitRef.current.stop?.key ?? null);
+        const next = target ?? nextStop(stops, visitRef.current.stop);
         if (reducedMotion || !visitRef.current.stop || !next || next.key === visitRef.current.stop.key) {
           setLeaving(false);
           go(target);

@@ -1,8 +1,10 @@
 import { COLOR_HEX, COLOR_ORDER } from "../../utils/colors";
 
-// Where the map tour goes: one stop per pill color. Colors already group places that sit together
-// (the East Campus dorms, Main Group + Stata, west campus, Boston, other states, abroad), and
-// COLOR_ORDER walks outward from Putz, so a full cycle reads as zooming out across the map.
+// Where the map tour goes: the people of one pill color who are actually near each other. Colors
+// already group places that sit together (the East Campus dorms, Main Group + Stata, west campus),
+// but red covers Cambridge and all of Boston, so around town a color splits into one stop per
+// cluster (out of town it stays whole). COLOR_ORDER walks outward from Putz, and within a
+// color the nearest cluster goes first, so a full cycle reads as zooming out across the map.
 
 export type Person = {
   providerId: string;
@@ -59,12 +61,13 @@ export const locate = (people: Person[]): Located[] =>
     }));
 
 export type Stop = {
-  key: string; // its color, which stays put while people come and go
+  key: string; // its color and first member by id, which stay put while people move about
   color: string;
   labels: string[]; // most people first
   people: Located[];
   far: boolean;
   km: number; // to its farthest person
+  near: number; // to its nearest person (orders a color's stops)
 };
 
 const colorRank = (color: string) => {
@@ -72,31 +75,55 @@ const colorRank = (color: string) => {
   return i === -1 ? COLOR_ORDER.length : i;
 };
 
-const byTourOrder = (a: string, b: string) => colorRank(a) - colorRank(b) || a.localeCompare(b);
+const byTourOrder = (a: Stop, b: Stop) =>
+  colorRank(a.color) - colorRank(b.color) || a.near - b.near || a.key.localeCompare(b.key);
+
+// Around Boston, two people are at the same stop if they're within a kilometre of each other.
+// Out of town (past AWAY_KM) a color stays one stop, so everyone out of state is seen together.
+const AWAY_KM = 50;
+const linked = (a: Located, b: Located) =>
+  (a.km > AWAY_KM && b.km > AWAY_KM) || Math.hypot(a.point.x - b.point.x, a.point.y - b.point.y) < 1;
+
+// Groups chained by `linked` (anyone linked to anyone in a group joins it).
+const clusters = (people: Located[]): Located[][] => {
+  const groups: Located[][] = [];
+  for (const person of people) {
+    const touching = groups.filter((group) => group.some((other) => linked(person, other)));
+    const merged = [person, ...touching.flat()];
+    for (const group of touching) groups.splice(groups.indexOf(group), 1);
+    groups.push(merged);
+  }
+  return groups;
+};
 
 export const buildStops = (located: Located[]): Stop[] => {
   const byColor = new Map<string, Located[]>();
   for (const person of located) byColor.set(person.color, [...(byColor.get(person.color) ?? []), person]);
 
-  return [...byColor.keys()].sort(byTourOrder).map((color) => {
-    const people = byColor.get(color)!.sort((a, b) => a.name.localeCompare(b.name));
-    const counts = new Map<string, number>();
-    for (const { label } of people) counts.set(label, (counts.get(label) ?? 0) + 1);
-    const km = Math.max(...people.map((p) => p.km));
-    return {
-      key: color,
-      color,
-      labels: [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b)),
-      people,
-      far: km > FAR_KM,
-      km,
-    };
-  });
+  const stops = [...byColor].flatMap(([color, members]) =>
+    clusters(members).map((group): Stop => {
+      const people = group.sort((a, b) => a.name.localeCompare(b.name));
+      const counts = new Map<string, number>();
+      for (const { label } of people) counts.set(label, (counts.get(label) ?? 0) + 1);
+      const first = people.map((p) => p.providerId).sort()[0];
+      const km = Math.max(...people.map((p) => p.km));
+      return {
+        key: `${color}:${first}`,
+        color,
+        labels: [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b)),
+        people,
+        far: km > FAR_KM,
+        km,
+        near: Math.min(...people.map((p) => p.km)),
+      };
+    })
+  );
+  return stops.sort(byTourOrder);
 };
 
-// The stop after `key` in tour order (the next color along if that one has emptied out), wrapping.
-export const nextStop = (stops: Stop[], key: string | null): Stop | undefined =>
-  (key === null ? undefined : stops.find((stop) => byTourOrder(stop.key, key) > 0)) ?? stops[0];
+// The stop after `current` in tour order (the next one along if it has emptied out), wrapping.
+export const nextStop = (stops: Stop[], current: Stop | null): Stop | undefined =>
+  (current === null ? undefined : stops.find((stop) => byTourOrder(stop, current) > 0)) ?? stops[0];
 
 // What the camera has to fit for a stop: its people, plus Putz when it's far.
 export const stopPoints = (stop: Stop): Point[] => [

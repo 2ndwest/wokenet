@@ -49,8 +49,11 @@ describe("toPersonRows", () => {
 describe("stops", () => {
   const stops = buildStops(locate(PEOPLE));
 
-  it("makes one stop per color, in COLOR_ORDER, leaving UNKNOWN off the map", () => {
-    expect(stops.map((stop) => stop.key)).toEqual(["green", "darkgreen", "yellow", "red", "brown"]);
+  const keys = stops.map((stop) => stop.key);
+
+  it("makes a stop per cluster of each color, in COLOR_ORDER then nearest first, leaving UNKNOWN off", () => {
+    // Downtown and Logan are both red but kilometres apart; out of state stays together.
+    expect(keys).toEqual(["green:bram", "darkgreen:bartholomew", "yellow:pilar", "red:hugo", "red:yara", "brown:bao"]);
     expect(stops.flatMap((stop) => stop.people).some((p) => p.label === "UNKNOWN")).toBe(false);
   });
 
@@ -59,15 +62,18 @@ describe("stops", () => {
   });
 
   it("frames stops past walking distance with Putz", () => {
-    expect(stops.map((stop) => stop.far)).toEqual([false, false, false, true, true]);
-    expect(stops[4].km).toBeGreaterThan(4000);
+    expect(stops.map((stop) => stop.far)).toEqual([false, false, false, true, true, true]);
+    expect(stops[5].km).toBeGreaterThan(4000);
   });
 
-  it("moves on to the next color along, wrapping, even when the current one has emptied", () => {
-    expect(nextStop(stops, null)?.key).toBe("green");
-    expect(nextStop(stops, "yellow")?.key).toBe("red");
-    expect(nextStop(stops, "purple")?.key).toBe("red"); // purple sits between yellow and blue
-    expect(nextStop(stops, "brown")?.key).toBe("green");
+  it("moves on to the next stop along, wrapping, even when the current one has emptied", () => {
+    const at = (key: string) => stops.find((stop) => stop.key === key)!;
+    expect(nextStop(stops, null)?.key).toBe("green:bram");
+    expect(nextStop(stops, at("yellow:pilar"))?.key).toBe("red:hugo");
+    expect(nextStop(stops, at("red:hugo"))?.key).toBe("red:yara");
+    // A purple stop that's since emptied sits between yellow and red.
+    expect(nextStop(stops, { ...at("yellow:pilar"), key: "purple:x", color: "purple" })?.key).toBe("red:hugo");
+    expect(nextStop(stops, at("brown:bao"))?.key).toBe("green:bram");
     expect(nextStop([], null)).toBeUndefined();
   });
 });
