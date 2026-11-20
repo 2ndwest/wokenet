@@ -10,9 +10,9 @@ import { LEAVE_MS, TourMap } from "./TourMap";
 import { HOME, buildStops, hexOf, locate, nextStop, type Located, type Person, type Point, type Stop } from "./stops";
 import "./putzopticon.css";
 
-// /putzopticon: the board (marquee and name/location rows) in the top half, over a map that tours
-// where everyone is. At each stop the camera eases in on one color's people and names them; their
-// rows light up with the usual refresh flash while the rest sit back.
+// /putzopticon: the SMDS marquee, then a map that tours where everyone is in the top half, over the
+// board of name/location rows. At each stop the camera eases in on one cluster of a color's people and
+// names them; their rows light up with the usual refresh flash as it arrives.
 
 const DWELL_MS = 6000; // lingering at each stop
 const FAR_FLIGHT_MS = 5200; // to or from a far-away stop
@@ -92,12 +92,11 @@ const subscribeToMotion = (onChange: () => void) => {
   return () => media.removeEventListener("change", onChange);
 };
 
-// However many columns keep the rows nearest their usual proportions in the space there is (the
-// marquee counts as a row, as on the board).
+// However many columns keep the rows nearest their usual proportions in the space there is.
 const pickColumns = (count: number, width: number, height: number) => {
   let best = { columns: 2, score: Infinity };
   for (let columns = 1; columns <= 6 && width > 0 && height > 0; columns++) {
-    const aspect = width / columns / (height / (Math.ceil(count / columns) + 1));
+    const aspect = width / columns / (height / Math.ceil(count / columns));
     const score = Math.abs(Math.log(aspect / 8));
     if (score < best.score) best = { columns, score };
   }
@@ -238,19 +237,8 @@ const PutzMapBoard = memo(
 
     return (
       <div className="putz-map-view">
-        <section ref={roster} className="putz-map-roster" aria-label="Where everyone is">
-          <SMDSMarquee height={`${100 / (rowsPerColumn + 1)}%`} />
-          <PersonRows
-            rows={rows}
-            columns={columns}
-            rowsPerColumn={rowsPerColumn}
-            litKeys={litKeys}
-            flash={flash}
-            onRowClick={visitPerson}
-            // A ragged last column gets the time in its first empty slot.
-            lastCell={rows.length % columns !== 0 ? <ClockCell color={visit.stop ? hexOf(visit.stop.color) : undefined} /> : undefined}
-          />
-        </section>
+        {/* As tall as a row of the board below. */}
+        <SMDSMarquee height={`${Math.round(rosterSize.height / rowsPerColumn)}px`} />
         <section className="putz-map-stage" aria-label="Map tour">
           {visit.stop && (
             // Drains as the camera travels (easing like it), then fills while it lingers.
@@ -272,6 +260,18 @@ const PutzMapBoard = memo(
             arrived={visit.arrived}
             leaving={leaving}
             onArrive={arrive}
+          />
+        </section>
+        <section ref={roster} className="putz-map-roster" aria-label="Where everyone is">
+          <PersonRows
+            rows={rows}
+            columns={columns}
+            rowsPerColumn={rowsPerColumn}
+            litKeys={litKeys}
+            flash={flash}
+            onRowClick={visitPerson}
+            // A ragged last column gets the time in its first empty slot.
+            lastCell={rows.length % columns !== 0 ? <ClockCell color={visit.stop ? hexOf(visit.stop.color) : undefined} /> : undefined}
           />
         </section>
       </div>

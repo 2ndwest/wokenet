@@ -9,7 +9,7 @@ import { easeFlight, easeOutCubic, flightPath, toScreen, type Camera, type Size 
 import { baseUnit, planVisit, type Tag } from "./layout";
 import { hexOf, type Located, type Point, type Stop } from "./stops";
 
-// The bottom half of /putzopticon: the grayscale basemap on a canvas, everyone as a dot in their
+// The top half of /putzopticon: the grayscale basemap on a canvas, everyone as a dot in their
 // pill color, and the current stop's people named in columns of tags beside it. The camera eases out
 // to each stop along a zoom-and-pan arc; far-away stops keep Putz in frame.
 

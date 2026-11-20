@@ -12,9 +12,9 @@ import "./putzopticon.css";
 const FLASH_MS = 750; // a row's flash when the map gets to them
 const SMDS_MARQUEE_COUNT = 100; // n most recent smds
 
-// Blackout periods for SMDS marquee (eastern time, 24h format)
+// Blackout periods for SMDS marquee (eastern time, 24h format). An empty message hides the bar.
 const SMDS_BLACKOUTS: [string, string, string][] = [
-  ["09:00", "14:00", "¡Buenos días Nataly! Gracias por mantener limpio a Putz."],
+  ["09:00", "14:00", ""],
   ["23:30", "01:30", "Good evening night watch! Thank you for helping keep us safe."],
   ["03:00", "06:00", "Good morning night watch! Thank you for helping keep us safe."],
 ];
@@ -195,7 +195,7 @@ export const SMDSMarquee = memo(({ height }: { height: string }) => {
     return () => clearInterval(interval);
   }, []);
 
-  if (shuffledSayings.length === 0 && !blackoutMessage) return null;
+  if (blackoutMessage === "" || (shuffledSayings.length === 0 && !blackoutMessage)) return null;
 
   return (
     <Flex
@@ -216,8 +216,10 @@ export const SMDSMarquee = memo(({ height }: { height: string }) => {
         <span
           style={{
             fontFamily: "Mondwest",
-            fontSize: "60cqh",
+            // Shrinks to fit on one line when the message is long for the screen.
+            fontSize: `min(60cqh, ${fitWidth(blackoutMessage.length, 0.55, 94)})`,
             textAlign: "center",
+            whiteSpace: "nowrap",
           }}
         >
           {blackoutMessage}

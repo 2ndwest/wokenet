@@ -1,15 +1,16 @@
-/* /putzopticon: the board's rows in the top half, a grayscale map tour in the bottom half.
+/* /putzopticon: the SMDS marquee, a grayscale map tour in the top half, the board's rows in the bottom half.
    Flat blocks and square corners, in the site's own fonts. */
 
 .putz-map-view {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
 .putz-map-roster {
+  grid-row: 3; /* pinned, so the halves stay put when the marquee is hidden */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -43,10 +44,11 @@
 }
 
 .putz-map-stage {
+  grid-row: 2;
   position: relative;
   display: flex;
   min-height: 0;
-  border-top: 1px solid #414449;
+  border-bottom: 1px solid #414449;
   background: #141517;
   color: #e7e9ea;
   color-scheme: dark;
@@ -56,7 +58,7 @@
 .putz-tour-progress {
   position: absolute;
   z-index: 3;
-  top: -1px;
+  bottom: -1px;
   left: 0;
   width: 100%;
   height: 2px;
