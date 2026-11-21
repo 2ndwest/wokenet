@@ -17,6 +17,14 @@ export const toScreen = (camera: Camera, size: Size, point: Point): Point => ({
   y: size.height / 2 + (point.y - camera.y) * camera.scale,
 });
 
+// What a camera sees.
+export const viewBounds = (camera: Camera, size: Size): Bounds => ({
+  minX: camera.x - size.width / 2 / camera.scale,
+  minY: camera.y - size.height / 2 / camera.scale,
+  maxX: camera.x + size.width / 2 / camera.scale,
+  maxY: camera.y + size.height / 2 / camera.scale,
+});
+
 // The camera that fits `bounds` into the view less `insets`, zoomed in no closer than `maxScale`.
 export const frameBounds = (bounds: Bounds, size: Size, insets: Insets, maxScale: number): Camera => {
   const width = Math.max(1, size.width - insets.left - insets.right);

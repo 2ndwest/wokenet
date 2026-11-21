@@ -1,14 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import {
-  drawBasemap,
-  loadBasemap,
-  streetDetail,
-  type Paths,
-} from "./basemap";
-import { easeFlight, easeOutCubic, flightPath, toScreen, type Camera, type Size } from "./camera";
+import { drawBasemap, loadBasemap, onLand, type Paths } from "./basemap";
+import { easeFlight, easeOutCubic, flightPath, toScreen, viewBounds, type Camera, type Size } from "./camera";
 import { baseUnit, planVisit, type Tag } from "./layout";
 import { hexOf, type Located, type Point, type Stop } from "./stops";
-import { drawZoneGlow, loadZones, type Zones } from "./zones";
+import { drawZoneGlow, loadZones, zoneGlows, type Glow, type Zones } from "./zones";
 
 // The top half of /putzopticon: the grayscale basemap on a canvas, everyone as a dot in their
 // pill color, and the current stop's people named in columns of tags beside it. The camera eases out
@@ -63,7 +58,7 @@ type Shown = { tags: (Tag & { name: string })[]; camera: Camera; unit: number; s
 type Scene = {
   size: Size;
   paths?: Paths;
-  zones?: Zones;
+  glows: Glow[];
   located: Located[];
   stop: Stop | null;
   arrived: boolean;
@@ -164,8 +159,7 @@ const paint = (
   }
   context.setTransform(density, 0, 0, density, 0, 0);
 
-  const detail = streetDetail(camera, size);
-  drawBasemap(context, size, camera, scene.paths, detail);
+  drawBasemap(context, size, camera, scene.paths);
 
   // The name tags are laid out for the camera at their stop; they ride along from there (the last
   // stop's, as they fade out on the way to the next).
@@ -193,7 +187,7 @@ const paint = (
       : 1;
 
   if (stop && grow > 0) {
-    drawZoneGlow(context, size, camera, density, scene.zones, stop.labels, hexOf(stop.color), grow);
+    drawZoneGlow(context, size, camera, density, scene.glows, hexOf(stop.color), grow);
   }
 
   const unit = baseUnit(size);
@@ -338,7 +332,14 @@ export const TourMap = memo(
           : null,
       [ready, size, stop, located]
     );
-
+    // How strongly each of the stop's locations glows, as the stop is framed.
+    const glows = useMemo(
+      () =>
+        plan && stop && zones
+          ? zoneGlows(zones, stop.labels, viewBounds(plan.camera, size), (x, y) => !paths || onLand(paths, x, y))
+          : [],
+      [plan, stop, zones, paths, size]
+    );
 
     // Names go up on arrival and stay up (riding the camera as they fade) until the next stop's do.
     const [shown, setShown] = useState<Shown | null>(null);
@@ -370,7 +371,7 @@ export const TourMap = memo(
       drifts: true,
       raf: 0,
     });
-    const scene = useRef<Scene>({ size, located, stop, arrived, leaving, shown });
+    const scene = useRef<Scene>({ size, glows, located, stop, arrived, leaving, shown });
 
     const kick = useCallback(() => {
       const m = motion.current;
@@ -434,7 +435,7 @@ export const TourMap = memo(
 
     // Every render: hand the canvas the latest and draw (it keeps going while anything moves).
     useLayoutEffect(() => {
-      scene.current = { size, paths, zones, located, stop, arrived, leaving, shown };
+      scene.current = { size, paths, glows, located, stop, arrived, leaving, shown };
       const canvas = canvasRef.current;
       if (canvas && paint(canvas, layerRef.current, scene.current, motion.current, performance.now())) {
         kick();

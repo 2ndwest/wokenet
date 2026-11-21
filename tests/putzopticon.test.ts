@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { basemapDetail } from "../src/pages/putzopticon/basemap";
 import { toPersonRows } from "../src/pages/putzopticon/rows";
-import { flightPath, frameBounds, toScreen, type Camera } from "../src/pages/putzopticon/camera";
+import { flightPath, frameBounds, toScreen, viewBounds, type Camera } from "../src/pages/putzopticon/camera";
 import { leftCount, planVisit, stack, type Tag } from "../src/pages/putzopticon/layout";
 import { buildStops, HOME, locate, nextStop, type Person } from "../src/pages/putzopticon/stops";
-import { zonePathData } from "../src/pages/putzopticon/zones";
+import { zoneGlow, zonePathData } from "../src/pages/putzopticon/zones";
 
 const person = (name: string, label: string, color: string, latitude: number, longitude: number): Person => ({
   providerId: name.toLowerCase(),
@@ -198,7 +200,110 @@ describe("camera", () => {
   });
 });
 
+describe("basemapDetail", () => {
+  // As far as the bundled map really reaches.
+  const { reach } = JSON.parse(
+    readFileSync(new URL("../src/pages/putzopticon/basemap.json", import.meta.url), "utf8")
+  ) as { reach: { region: number; streets: number } };
+  const tv = { width: 1080, height: 935 };
+  const phone = { width: 390, height: 397 };
+  // What shows at the stop of someone on their own there, framed with Putz.
+  const at = (latitude: number, longitude: number, size = tv, name = "Meadow") => {
+    const located = locate([person(name, "MASSACHUSETTS", "brown", latitude, longitude)]);
+    const { camera } = planVisit({ size, stop: buildStops(located)[0], located, nameWidth });
+    return basemapDetail(camera, size, reach);
+  };
+
+  it("shows everything by campus", () => {
+    expect(basemapDetail({ x: HOME.x, y: HOME.y, scale: 1600 }, tv, reach)).toEqual({ region: 1, arterials: 1, streets: 1 });
+  });
+
+  it("has streets right across the view for someone a few towns out", () => {
+    for (const size of [tv, phone]) {
+      const detail = at(42.304, -71.3109, size); // 18 km west, past where the streets used to stop
+      expect(detail.region).toBe(1);
+      expect(detail.streets).toBeGreaterThan(0.4);
+    }
+  });
+
+  it("trades the streets for the regional map further out, then drops arterials", () => {
+    for (const size of [tv, phone]) {
+      expect(at(42.0181, -70.9984, size)).toEqual({ region: 1, arterials: 1, streets: 0 }); // 38 km south
+      expect(at(42.4501, -73.2454, size)).toEqual({ region: 1, arterials: 0, streets: 0 }); // Pittsfield
+    }
+  });
+
+  it("reaches anyone in Massachusetts, whatever their name's length does to the framing", () => {
+    const corners = [
+      [42.712, -73.2037], // Williamstown
+      [42.1959, -73.3621], // Great Barrington
+      [42.0584, -70.1787], // Provincetown
+      [41.2835, -70.0995], // Nantucket
+      [42.8126, -70.8773], // Newburyport
+    ];
+    for (const size of [tv, phone]) {
+      for (const [latitude, longitude] of corners) {
+        expect(at(latitude, longitude, size, "Bartholomew").region).toBe(1);
+      }
+    }
+  });
+
+  it("leaves the far-away map alone once most of the view is past the region", () => {
+    expect(at(39.9526, -75.1652).region).toBeLessThan(0.5); // Philadelphia: just past it, mostly far-away
+    expect(at(38.9072, -77.0369).region).toBe(0); // Washington
+    expect(at(37.7793, -122.4193)).toEqual({ region: 0, arterials: 0, streets: 0 }); // San Francisco
+  });
+
+  it("fades with how much of the view the region covers", () => {
+    const size = { width: 1000, height: 1000 };
+    const scale = 1000 / (2 * reach.region); // exactly as wide as the region
+    const detail = (x: number) => basemapDetail({ x, y: 0, scale }, size, reach).region;
+    expect(detail(0)).toBe(1);
+    expect(detail(reach.region * 0.5)).toBe(1); // a quarter of the view past the edge
+    expect(detail(reach.region * 0.8)).toBeCloseTo(0.5); // 40% past it
+    expect(detail(reach.region * 1.1)).toBe(0);
+  });
+
+  it("drops the streets before where they stop can come into view", () => {
+    const size = { width: 1000, height: 1000 };
+    const beyond = basemapDetail({ x: reach.streets, y: 0, scale: 100 }, size, reach); // 10 km across
+    expect(beyond).toEqual({ region: 1, arterials: 1, streets: 0 });
+  });
+
+  it("draws land close in while the map is still loading", () => {
+    expect(basemapDetail({ x: 0, y: 0, scale: 500 }, tv).region).toBe(1);
+    expect(basemapDetail({ x: 0, y: 0, scale: 1 }, tv).region).toBe(0);
+  });
+});
+
 describe("zones", () => {
+  it("glows a zone less the more of the view's land it takes up", () => {
+    const view = viewBounds({ x: 0, y: 0, scale: 10 }, { width: 100, height: 100 }); // 10 km square
+    expect(view).toEqual({ minX: -5, minY: -5, maxX: 5, maxY: 5 });
+    const everywhere = () => true;
+    const west = (km: number) => (x: number) => x < km; // 7 columns of samples, 10/7 km apart
+    expect(zoneGlow(view, west(-2), everywhere)).toBe(1); // 2 columns of 7: a shape with plenty around it
+    expect(zoneGlow(view, west(1), everywhere)).toBeCloseTo((0.7 - 4 / 7) / 0.3); // 4 of 7
+    expect(zoneGlow(view, west(2), everywhere)).toBe(0); // 5 of 7: most of what there is to see
+    expect(zoneGlow(view, everywhere, everywhere)).toBe(0);
+    expect(zoneGlow(view, () => false, everywhere)).toBe(1);
+  });
+
+  it("doesn't count the sea: a state that's all the land in view doesn't glow", () => {
+    const view = viewBounds({ x: 0, y: 0, scale: 10 }, { width: 100, height: 100 });
+    const west = (x: number) => x < -2;
+    expect(zoneGlow(view, west, west)).toBe(0); // land to the west, all of it the zone's
+    expect(zoneGlow(view, west, () => true)).toBe(1);
+  });
+
+  it("asks what's land only until it knows", () => {
+    const view = viewBounds({ x: 0, y: 0, scale: 10 }, { width: 100, height: 100 });
+    let asked = 0;
+    const land = () => (asked++, true);
+    expect(zoneGlow(view, (x) => x < -4, land)).toBe(1); // one column of seven
+    expect(asked).toBe(11); // enough for the zone's seven to be under 40%, not all 42
+  });
+
   it("projects Polygon and MultiPolygon rings into closed SVG paths", () => {
     const poly = zonePathData({
       type: "Polygon",

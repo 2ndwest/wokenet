@@ -31,3 +31,6 @@ dist-ssr
 __pycache__/
 *.pyc
 dj-ripper/venv/
+
+# Putzopticon basemap sources, downloaded by scripts/gen-putzopticon-basemap.py
+design-proposal/data/
