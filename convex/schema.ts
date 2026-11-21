@@ -276,6 +276,16 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_createdAt", ["createdAt"]),
 
+  // Messages admins can put up full-screen on the Putzopticon. Write them ahead of time, then show
+  // one (at most one is live) and take it down again from the admin panel.
+  announcements: defineTable({
+    text: v.string(), // the headline, as big as it'll go
+    details: v.optional(v.string()), // smaller text underneath
+    live: v.boolean(),
+    createdBy: v.string(), // kerb
+    createdAt: v.number(),
+  }).index("by_live", ["live"]),
+
   // Track individual user votes on SMDS quotes
   smdsVotes: defineTable({
     sayingId: v.id("shitMyDadSays"),

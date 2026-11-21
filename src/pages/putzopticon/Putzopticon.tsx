@@ -4,6 +4,7 @@ import { Flex, Heading, Text } from "@radix-ui/themes";
 import { api } from "../../../convex/_generated/api";
 import { CenterSpinner } from "../../utils/spinner";
 import { useIdleCursor } from "../../utils/useIdleCursor";
+import { LiveAnnouncement } from "./Announcement";
 import { PersonRows, SMDSMarquee } from "./PersonRows";
 import { toPersonRows } from "./rows";
 import { LEAVE_MS, TourMap } from "./TourMap";
@@ -30,6 +31,15 @@ const OPENING_MS = 1200; // on the shot of everyone nearby, before the first sto
 const FLASH_MS = 750; // the board's refresh flash
 
 export function Putzopticon() {
+  return (
+    <>
+      <PutzopticonView />
+      <LiveAnnouncement />
+    </>
+  );
+}
+
+function PutzopticonView() {
   const data = useQuery(api.locations.getLocations);
   const tooWide = useSyncExternalStore(subscribeToWide, () => matchMedia(TOO_WIDE).matches);
   if (tooWide) return <ShrinkWindow />;

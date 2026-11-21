@@ -6,6 +6,7 @@ import { api } from "../../convex/_generated/api";
 import { Affiliation, AFFILIATION_VALIDATOR } from "../../convex/schema";
 import { CenterSpinner } from "../utils/spinner";
 import { getRelativeTime } from "../utils/time";
+import { AdminAnnouncements } from "./AdminAnnouncements";
 
 export const AdminPanel = memo(() => {
   const users = useQuery(api.users.listUsers);
@@ -16,7 +17,9 @@ export const AdminPanel = memo(() => {
   return (
     <Flex direction="column" align="center" p="4" width="100%" height="100%">
       <Box minWidth={{ initial: "100%", lg: "750px" }} pb="4">
-        <Flex justify="between" align="center" mb="4">
+        <AdminAnnouncements />
+
+        <Flex justify="between" align="center" mt="6" mb="4">
           <Heading size="8">Users</Heading>
           <Button
             onClick={() => {

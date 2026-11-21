@@ -1,0 +1,102 @@
+/* Announcements: over everything, the headline in bold Mondwest capitals. Flashes between a block in
+   the accent (like the clock's) and the dark stage about once a second, well under the three flashes
+   a second that are a seizure risk. Any smaller text sits underneath as a caption. */
+
+.putz-announcement {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  padding: 5vmin;
+  background: rgb(var(--banner-rgb));
+  color: #141517;
+  animation: putz-announcement-flash 1.2s steps(1, end) infinite;
+  cursor: none;
+}
+
+.putz-announcement[data-preview="true"] {
+  position: absolute;
+  z-index: auto;
+  padding: 5%;
+  cursor: default;
+}
+
+.putz-announcement-column {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6vmin;
+}
+
+.putz-announcement[data-preview="true"] .putz-announcement-column {
+  gap: 6%;
+}
+
+/* The headline's space, as tall as its lines (sized to fit the room left by Announcement.tsx). */
+.putz-announcement-frame {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.putz-announcement-text {
+  width: 100%;
+  margin: 0;
+  font-family: Mondwest;
+  font-weight: bold;
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: pre-wrap; /* keeps the line breaks it was written with */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.putz-announcement-details {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  width: 100%;
+  font-family: Mondwest;
+  /* Mondwest has one weight, and bold (faked) is too heavy here: a hairline outline in the text's
+     own color thickens it just enough to read from across the room. */
+  -webkit-text-stroke: 0.02em currentColor;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: normal;
+}
+
+.putz-announcement-details p {
+  margin: 0;
+  text-wrap: balance;
+}
+
+.putz-announcement-text[data-exact-lines="true"] {
+  white-space: pre;
+}
+
+@keyframes putz-announcement-flash {
+  0% {
+    background: rgb(var(--banner-rgb));
+    color: #141517;
+  }
+  50% {
+    background: #141517;
+    color: rgb(var(--banner-rgb));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .putz-announcement {
+    animation: none;
+  }
+}
