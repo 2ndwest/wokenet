@@ -23,3 +23,20 @@ putz web services monorepo
 1. Go to [https://geojson.io](https://geojson.io/#map=9.94/42.3382/-71.112) to construct your polygons.
 2. Once you're done, copy the coordinates into `convex/location_labels/location_labels_states.json` or `convex/location_labels/location_labels_misc.json`.
 3. Test it by setting `VITE_SHOW_REGIONS=true` and spinning up wokenet. Your region should show up where you expect it.
+
+## Live Pig Temp
+
+Any Putz member can update the reading through the Convex mutation API. Set
+`VITE_CONVEX_URL` to the backend URL and `TOKEN` to the member's Clerk JWT
+from the `convex` template.
+
+```sh
+curl "$VITE_CONVEX_URL/api/mutation" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"path":"livePigTemp:update","args":[{"fahrenheit":145.5}],"format":"convex_encoded_json"}'
+```
+
+A successful update returns the Fahrenheit value and the server's `updatedAt`
+timestamp in milliseconds since the Unix epoch. Putzopticon shows the reading
+for 60 seconds after each update.

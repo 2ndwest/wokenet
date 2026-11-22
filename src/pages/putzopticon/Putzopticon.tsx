@@ -79,21 +79,45 @@ const clockText = () => {
   return `${CLOCK_DATE.format(now)} ${CLOCK_TIME.format(now)}`.toUpperCase();
 };
 
-const ClockCell = memo(({ color }: { color?: string }) => {
-  const [text, setText] = useState(clockText);
-  useEffect(() => {
-    const interval = setInterval(() => setText(clockText()), 10_000);
-    return () => clearInterval(interval);
-  }, []);
+type BoardCellProps = { color?: string; column?: number };
+
+function BoardCell({ text, color, column }: BoardCellProps & { text: string }) {
   return (
-    <div className="putz-map-clock" style={color ? { backgroundColor: color, color: "inherit" } : undefined}>
+    <div className="putz-map-clock" style={{
+      backgroundColor: color,
+      color: color ? "inherit" : undefined,
+      gridColumn: column,
+      gridRow: column ? "-2 / -1" : undefined,
+    }}>
       {/* Berkeley Mono glyphs are 0.6em wide. */}
       <span className="putz-caps" style={{ fontSize: `min(64cqh, ${(86 / (text.length * 0.6)).toFixed(2)}cqw)` }}>
         {text}
       </span>
     </div>
   );
+}
+
+const ClockCell = memo((props: BoardCellProps) => {
+  const [text, setText] = useState(clockText);
+  useEffect(() => {
+    const interval = setInterval(() => setText(clockText()), 10_000);
+    return () => clearInterval(interval);
+  }, []);
+  return <BoardCell text={text} {...props} />;
 });
+
+function useLivePigTemp() {
+  const reading = useQuery(api.livePigTemp.latest);
+  const expiresAt = (reading?.updatedAt ?? 0) + 60_000;
+  const [expiredAt, setExpiredAt] = useState(0);
+  useEffect(() => {
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) return;
+    const timeout = setTimeout(() => setExpiredAt(expiresAt), remaining);
+    return () => clearTimeout(timeout);
+  }, [expiresAt]);
+  return reading && expiredAt !== expiresAt && Date.now() < expiresAt ? reading.fahrenheit : null;
+}
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 const subscribeToMotion = (onChange: () => void) => {
@@ -242,8 +266,11 @@ const PutzMapBoard = memo(
       observer.observe(element);
       return () => observer.disconnect();
     }, []);
+    const temperature = useLivePigTemp();
     const columns = pickColumns(rows.length, rosterSize.width, rosterSize.height);
-    const rowsPerColumn = Math.max(1, Math.ceil(rows.length / columns));
+    const footerCells = temperature === null ? 0 : Math.min(2, columns);
+    const rowsPerColumn = Math.max(1, Math.ceil((rows.length + footerCells) / columns));
+    const color = visit.stop ? hexOf(visit.stop.color) : undefined;
 
     return (
       <div className="putz-map-view">
@@ -280,9 +307,12 @@ const PutzMapBoard = memo(
             litKeys={litKeys}
             flash={flash}
             onRowClick={visitPerson}
-            // A ragged last column gets the time in its first empty slot.
-            lastCell={rows.length % columns !== 0 ? <ClockCell color={visit.stop ? hexOf(visit.stop.color) : undefined} /> : undefined}
-          />
+          >
+            {temperature !== null && <BoardCell column={1} color={color} text={`LIVE PIG TEMP ${temperature}°F`} />}
+            {temperature !== null
+              ? columns > 1 && <ClockCell column={2} color={color} />
+              : rows.length % columns !== 0 && <ClockCell color={color} />}
+          </PersonRows>
         </section>
       </div>
     );
