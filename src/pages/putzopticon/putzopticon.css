@@ -38,9 +38,19 @@
   overflow: hidden;
   white-space: nowrap;
   font-weight: bold;
-  color: var(--gray-11);
-  background-color: var(--gray-3);
-  transition: background-color 600ms ease-out;
+  /* Red, breathing between dimmer and brighter (a 3s breath) nonstop. */
+  color: white;
+  background-color: var(--clock-red);
+  animation: putz-clock-breathe 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes putz-clock-breathe {
+  from {
+    filter: brightness(0.75) saturate(1);
+  }
+  to {
+    filter: brightness(1.5) saturate(1.3);
+  }
 }
 
 .putz-map-stage {
@@ -220,7 +230,8 @@
     transition: none;
   }
   .putz-tour-leader-reveal,
-  .putz-tour-tag {
+  .putz-tour-tag,
+  .putz-map-clock {
     animation: none;
   }
 }

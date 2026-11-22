@@ -79,13 +79,15 @@ const clockText = () => {
   return `${CLOCK_DATE.format(now)} ${CLOCK_TIME.format(now)}`.toUpperCase();
 };
 
-type BoardCellProps = { color?: string; column?: number };
+type BoardCellProps = { column?: number };
 
-function BoardCell({ text, color, column }: BoardCellProps & { text: string }) {
+// The red pills' red, pulsing (see putzopticon.css).
+const CLOCK_RED = hexOf("red");
+
+function BoardCell({ text, column }: BoardCellProps & { text: string }) {
   return (
     <div className="putz-map-clock" style={{
-      backgroundColor: color,
-      color: color ? "inherit" : undefined,
+      ["--clock-red" as string]: CLOCK_RED,
       // Pinned to the bottom of its column; the rows flow around it.
       gridColumn: column,
       gridRow: column ? "-2 / -1" : undefined,
@@ -271,7 +273,6 @@ const PutzMapBoard = memo(
     const columns = pickColumns(rows.length, rosterSize.width, rosterSize.height);
     // The bottom right cell is the time, or the live pig temperature while there is one.
     const rowsPerColumn = Math.max(1, Math.ceil((rows.length + 1) / columns));
-    const color = visit.stop ? hexOf(visit.stop.color) : undefined;
 
     return (
       <div className="putz-map-view">
@@ -310,9 +311,9 @@ const PutzMapBoard = memo(
             onRowClick={visitPerson}
           >
             {temperature !== null ? (
-              <BoardCell column={columns} color={color} text={`LIVE PIG TEMP ${temperature}°F`} />
+              <BoardCell column={columns} text={`LIVE PIG TEMP ${temperature}°F`} />
             ) : (
-              <ClockCell column={columns} color={color} />
+              <ClockCell column={columns} />
             )}
           </PersonRows>
         </section>
