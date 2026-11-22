@@ -86,6 +86,7 @@ function BoardCell({ text, color, column }: BoardCellProps & { text: string }) {
     <div className="putz-map-clock" style={{
       backgroundColor: color,
       color: color ? "inherit" : undefined,
+      // Pinned to the bottom of its column; the rows flow around it.
       gridColumn: column,
       gridRow: column ? "-2 / -1" : undefined,
     }}>
@@ -268,8 +269,8 @@ const PutzMapBoard = memo(
     }, []);
     const temperature = useLivePigTemp();
     const columns = pickColumns(rows.length, rosterSize.width, rosterSize.height);
-    const footerCells = temperature === null ? 0 : Math.min(2, columns);
-    const rowsPerColumn = Math.max(1, Math.ceil((rows.length + footerCells) / columns));
+    // The bottom right cell is the time, or the live pig temperature while there is one.
+    const rowsPerColumn = Math.max(1, Math.ceil((rows.length + 1) / columns));
     const color = visit.stop ? hexOf(visit.stop.color) : undefined;
 
     return (
@@ -308,10 +309,11 @@ const PutzMapBoard = memo(
             flash={flash}
             onRowClick={visitPerson}
           >
-            {temperature !== null && <BoardCell column={1} color={color} text={`LIVE PIG TEMP ${temperature}°F`} />}
-            {temperature !== null
-              ? columns > 1 && <ClockCell column={2} color={color} />
-              : rows.length % columns !== 0 && <ClockCell color={color} />}
+            {temperature !== null ? (
+              <BoardCell column={columns} color={color} text={`LIVE PIG TEMP ${temperature}°F`} />
+            ) : (
+              <ClockCell column={columns} color={color} />
+            )}
           </PersonRows>
         </section>
       </div>
