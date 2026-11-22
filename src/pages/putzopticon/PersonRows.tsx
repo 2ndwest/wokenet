@@ -41,14 +41,14 @@ type RowsProps = {
   rows: PersonRowData[];
   columns: number;
   rowsPerColumn: number;
-  lastCell?: React.ReactNode; // Optional row-sized cell placed after the rows (bottom right).
+  children?: React.ReactNode;
   onRowClick?: (key: string) => void;
   // `flash` sets off the rows in `litKeys` (the people the map is on) like a refresh.
   litKeys?: ReadonlySet<string>;
   flash?: boolean;
 };
 
-export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowClick, litKeys, flash = false }: RowsProps) => {
+export const PersonRows = memo(({ rows, columns, rowsPerColumn, children, onRowClick, litKeys, flash = false }: RowsProps) => {
   const [autoAnimate] = useAutoAnimate();
   // Every row makes its name column wide enough for the board's longest name at full size.
   const longestName = useMemo(() => Math.max(1, ...rows.map((row) => row.name.length)), [rows]);
@@ -83,7 +83,7 @@ export const PersonRows = memo(({ rows, columns, rowsPerColumn, lastCell, onRowC
           onClick={onRowClick}
         />
       ))}
-      {lastCell}
+      {children}
     </Grid>
   );
 });
