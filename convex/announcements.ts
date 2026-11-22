@@ -1,9 +1,12 @@
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireAdmin, requirePutz } from "./utils/auth";
 
 // Announcements: full-screen messages on the Putzopticon. Admins write them ahead of time and
-// show one whenever; the TV picks it up live and holds it until it's hidden again.
+// show one whenever (now, or scheduled for later); the TV picks it up live and holds it until it's
+// hidden again.
 
 const MAX_LENGTH = 280;
 const MAX_DETAILS_LENGTH = 500;
@@ -29,6 +32,18 @@ const takeDownLive = async (ctx: MutationCtx) => {
     .withIndex("by_live", (q) => q.eq("live", true))
     .collect();
   await Promise.all(live.map((a) => ctx.db.patch(a._id, { live: false })));
+};
+
+// Drops a pending schedule, so it won't go up on its own.
+const unscheduled = async (ctx: MutationCtx, announcement: Doc<"announcements">) => {
+  if (announcement.scheduledJob) await ctx.scheduler.cancel(announcement.scheduledJob);
+  await ctx.db.patch(announcement._id, { scheduledFor: undefined, scheduledJob: undefined });
+};
+
+const putUp = async (ctx: MutationCtx, announcement: Doc<"announcements">) => {
+  await unscheduled(ctx, announcement);
+  await takeDownLive(ctx);
+  await ctx.db.patch(announcement._id, { live: true });
 };
 
 /** What the TV shows: the live announcement's text, or null. Only the live one leaves the server. */
@@ -80,18 +95,56 @@ export const remove = mutation({
   args: { id: v.id("announcements") },
   handler: async (ctx, { id }) => {
     await requireAdmin(ctx);
+    const announcement = await ctx.db.get(id);
+    if (!announcement) return;
+    await unscheduled(ctx, announcement);
     await ctx.db.delete(id);
   },
 });
 
-/** Puts this one up, replacing whatever was showing. */
+/** Puts this one up now, replacing whatever was showing (and dropping its schedule, if any). */
 export const show = mutation({
   args: { id: v.id("announcements") },
   handler: async (ctx, { id }) => {
     await requireAdmin(ctx);
-    if (!(await ctx.db.get(id))) throw new Error("NOT_FOUND");
-    await takeDownLive(ctx);
-    await ctx.db.patch(id, { live: true });
+    const announcement = await ctx.db.get(id);
+    if (!announcement) throw new Error("NOT_FOUND");
+    await putUp(ctx, announcement);
+  },
+});
+
+/** Has this one go up on its own at `at` (ms since epoch), replacing whatever is showing then. */
+export const schedule = mutation({
+  args: { id: v.id("announcements"), at: v.number() },
+  handler: async (ctx, { id, at }) => {
+    await requireAdmin(ctx);
+    const announcement = await ctx.db.get(id);
+    if (!announcement) throw new Error("NOT_FOUND");
+    if (announcement.live) throw new Error("ALREADY_LIVE");
+    if (!Number.isFinite(at) || at <= Date.now()) throw new Error("SCHEDULED_IN_PAST");
+    await unscheduled(ctx, announcement);
+    const scheduledJob = await ctx.scheduler.runAt(at, internal.announcements.goLive, { id, at });
+    await ctx.db.patch(id, { scheduledFor: at, scheduledJob });
+  },
+});
+
+export const unschedule = mutation({
+  args: { id: v.id("announcements") },
+  handler: async (ctx, { id }) => {
+    await requireAdmin(ctx);
+    const announcement = await ctx.db.get(id);
+    if (announcement) await unscheduled(ctx, announcement);
+  },
+});
+
+/** The scheduled job. Does nothing if the announcement was deleted, unscheduled or rescheduled since. */
+export const goLive = internalMutation({
+  args: { id: v.id("announcements"), at: v.number() },
+  handler: async (ctx, { id, at }) => {
+    const announcement = await ctx.db.get(id);
+    if (!announcement || announcement.scheduledFor !== at) return;
+    // This job is running, so there's nothing left to cancel.
+    await putUp(ctx, { ...announcement, scheduledJob: undefined });
   },
 });
 

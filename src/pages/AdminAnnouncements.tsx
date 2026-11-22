@@ -1,14 +1,15 @@
-import { Badge, Box, Button, Dialog, Flex, Heading, Table, Text, TextArea } from "@radix-ui/themes";
+import { Badge, Box, Button, Dialog, Flex, Heading, Table, Text, TextArea, TextField } from "@radix-ui/themes";
 import { memo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { AnnouncementCard } from "./putzopticon/Announcement";
 import { CenterSpinner } from "../utils/spinner";
-import { getRelativeTime } from "../utils/time";
+import { formatET, fromET, getRelativeTime, toET } from "../utils/time";
 
 // Admin panel: announcements for the Putzopticon. Write them ahead of time, then Show puts one up
-// on the TV full-screen right away, and Hide takes it down.
+// on the TV full-screen right away (or Schedule has it go up on its own at a time in ET), and Hide
+// takes it down.
 
 // Match convex/announcements.ts.
 const MAX_LENGTH = 280;
@@ -99,6 +100,45 @@ const Editor = memo(
   }
 );
 
+// Picks when it goes up, on the house's clock (ET) whatever time zone the browser is in.
+const Scheduler = memo(({ initial, onSubmit }: { initial?: number; onSubmit: (at: number) => Promise<unknown> }) => {
+  // Defaults to the top of the next hour.
+  const [start] = useState(() => toET(initial ?? Math.ceil((Date.now() + 1) / 3_600_000) * 3_600_000));
+  const [date, setDate] = useState(start.date);
+  const [time, setTime] = useState(start.time);
+  const [saving, setSaving] = useState(false);
+  const at = date && time ? fromET(date, time) : NaN;
+  const past = at <= Date.now();
+  return (
+    <Flex direction="column" gap="3">
+      <Flex gap="2" align="center">
+        <TextField.Root type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <TextField.Root type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        <Text size="2" color="gray">
+          ET
+        </Text>
+      </Flex>
+      <Text size="2" color={past ? "red" : "gray"}>
+        {Number.isNaN(at) ? "Pick a date and time." : past ? "That's in the past." : `Goes up ${formatET(at)}.`}
+      </Text>
+      <Flex justify="end">
+        <Button
+          disabled={Number.isNaN(at) || past || saving}
+          loading={saving}
+          onClick={() => {
+            setSaving(true);
+            onSubmit(at)
+              .catch(alert)
+              .finally(() => setSaving(false));
+          }}
+        >
+          Schedule
+        </Button>
+      </Flex>
+    </Flex>
+  );
+});
+
 export const AdminAnnouncements = memo(() => {
   const announcements = useQuery(api.announcements.list);
   const create = useMutation(api.announcements.create);
@@ -106,9 +146,12 @@ export const AdminAnnouncements = memo(() => {
   const remove = useMutation(api.announcements.remove);
   const show = useMutation(api.announcements.show);
   const hide = useMutation(api.announcements.hide);
+  const schedule = useMutation(api.announcements.schedule);
+  const unschedule = useMutation(api.announcements.unschedule);
 
   const [previewing, setPreviewing] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<(Draft & { id: Id<"announcements"> }) | null>(null);
+  const [scheduling, setScheduling] = useState<{ id: Id<"announcements">; at?: number } | null>(null);
   const live = announcements?.find((a) => a.live);
 
   return (
@@ -123,7 +166,8 @@ export const AdminAnnouncements = memo(() => {
       </Flex>
 
       <Text as="p" size="2" color="gray" mb="3">
-        Shown full-screen on the Putzopticon, flashing, until hidden. Only admins can see this list.
+        Shown full-screen on the Putzopticon, flashing, until hidden. Show puts one up now; Schedule has it go up
+        on its own at a time in ET. Only admins can see this list.
       </Text>
 
       <Box mb="4">
@@ -149,6 +193,7 @@ export const AdminAnnouncements = memo(() => {
                 <Table.Cell>
                   <Flex direction="column" gap="1" align="start">
                     {a.live && <Badge color="red">On the TV now</Badge>}
+                    {a.scheduledFor && <Badge color="blue">Goes up {formatET(a.scheduledFor)}</Badge>}
                     <Text style={{ whiteSpace: "pre-wrap" }}>{a.text}</Text>
                     {a.details && (
                       <Text size="2" color="gray" style={{ whiteSpace: "pre-wrap" }}>
@@ -179,6 +224,16 @@ export const AdminAnnouncements = memo(() => {
                         Show
                       </Button>
                     )}
+                    {!a.live && (
+                      <Button variant="soft" color="blue" onClick={() => setScheduling({ id: a._id, at: a.scheduledFor })}>
+                        {a.scheduledFor ? "Reschedule" : "Schedule"}
+                      </Button>
+                    )}
+                    {a.scheduledFor && (
+                      <Button variant="soft" color="gray" onClick={() => unschedule({ id: a._id }).catch(alert)}>
+                        Unschedule
+                      </Button>
+                    )}
                     <Button variant="soft" color="gray" onClick={() => setPreviewing({ text: a.text, details: a.details })}>
                       Preview
                     </Button>
@@ -206,6 +261,22 @@ export const AdminAnnouncements = memo(() => {
         <Dialog.Content maxWidth="370px">
           <Dialog.Title>Preview</Dialog.Title>
           <Flex justify="center">{previewing && <TVPreview {...previewing} width={300} />}</Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root open={scheduling !== null} onOpenChange={(open) => !open && setScheduling(null)}>
+        <Dialog.Content maxWidth="400px">
+          <Dialog.Title>Schedule announcement</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="3">
+            It goes up on the Putzopticon on its own at this time, replacing whatever is showing, and stays up until hidden.
+          </Dialog.Description>
+          {scheduling && (
+            <Scheduler
+              key={scheduling.id}
+              initial={scheduling.at}
+              onSubmit={(at) => schedule({ id: scheduling.id, at }).then(() => setScheduling(null))}
+            />
+          )}
         </Dialog.Content>
       </Dialog.Root>
 

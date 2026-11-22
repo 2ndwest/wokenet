@@ -277,11 +277,13 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"]),
 
   // Messages admins can put up full-screen on the Putzopticon. Write them ahead of time, then show
-  // one (at most one is live) and take it down again from the admin panel.
+  // one (at most one is live), now or at a scheduled time, and take it down again from the admin panel.
   announcements: defineTable({
     text: v.string(), // the headline, as big as it'll go
     details: v.optional(v.string()), // smaller text underneath
     live: v.boolean(),
+    scheduledFor: v.optional(v.number()), // when it goes up on its own, if scheduled
+    scheduledJob: v.optional(v.id("_scheduled_functions")), // the job that puts it up then
     createdBy: v.string(), // kerb
     createdAt: v.number(),
   }).index("by_live", ["live"]),
