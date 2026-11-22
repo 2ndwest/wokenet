@@ -8,7 +8,7 @@ import { LiveAnnouncement } from "./Announcement";
 import { PersonRows, SMDSMarquee } from "./PersonRows";
 import { toPersonRows } from "./rows";
 import { LEAVE_MS, TourMap } from "./TourMap";
-import { HOME, buildStops, hexOf, locate, nextStop, type Located, type Person, type Point, type Stop } from "./stops";
+import { HOME, buildStops, hexOf, locate, nextStop, tourStops, type Located, type Person, type Point, type Stop } from "./stops";
 import "./putzopticon.css";
 
 // /putzopticon: the SMDS marquee, then a map that tours where everyone is in the top half, over the
@@ -166,19 +166,20 @@ const PutzMapBoard = memo(
       arrived: true,
       dwelling: false,
     }));
-    const latest = useRef({ stops, located, reducedMotion });
+    const tour = useMemo(() => tourStops(stops), [stops]); // where it goes by itself
+    const latest = useRef({ stops, tour, located, reducedMotion });
     const visitRef = useRef(visit);
     visitRef.current = visit;
     useLayoutEffect(() => {
-      latest.current = { stops, located, reducedMotion };
+      latest.current = { stops, tour, located, reducedMotion };
     });
 
     // Off to `target`, or else the next stop along.
     const go = useCallback(
       (target?: Stop) =>
         setVisit((current) => {
-          const { stops, located, reducedMotion } = latest.current;
-          const stop = target ?? nextStop(stops, current.stop) ?? null;
+          const { tour, located, reducedMotion } = latest.current;
+          const stop = target ?? nextStop(tour, current.stop) ?? null;
           const n = current.n + 1;
           // Nowhere to go, or nowhere new: stay put for another dwell.
           if (!stop || stop.key === current.stop?.key) {
@@ -200,9 +201,9 @@ const PutzMapBoard = memo(
     useEffect(() => () => clearTimeout(leaveTimer.current), []);
     const depart = useCallback(
       (target?: Stop) => {
-        const { stops, reducedMotion } = latest.current;
+        const { tour, reducedMotion } = latest.current;
         clearTimeout(leaveTimer.current);
-        const next = target ?? nextStop(stops, visitRef.current.stop);
+        const next = target ?? nextStop(tour, visitRef.current.stop);
         if (reducedMotion || !visitRef.current.stop || !next || next.key === visitRef.current.stop.key) {
           setLeaving(false);
           go(target);

@@ -4,7 +4,7 @@ import { basemapDetail } from "../src/pages/putzopticon/basemap";
 import { toPersonRows } from "../src/pages/putzopticon/rows";
 import { flightPath, frameBounds, toScreen, viewBounds, type Camera } from "../src/pages/putzopticon/camera";
 import { leftCount, planVisit, stack, type Tag } from "../src/pages/putzopticon/layout";
-import { buildStops, HOME, locate, nextStop, type Person } from "../src/pages/putzopticon/stops";
+import { buildStops, HOME, locate, nextStop, tourStops, type Person } from "../src/pages/putzopticon/stops";
 import { zoneGlow, zonePathData } from "../src/pages/putzopticon/zones";
 
 const person = (name: string, label: string, color: string, latitude: number, longitude: number): Person => ({
@@ -78,6 +78,15 @@ describe("stops", () => {
     expect(nextStop(stops, { ...at("yellow:pilar"), key: "purple:x", color: "purple" })?.key).toBe("red:hugo");
     expect(nextStop(stops, at("brown:bao"))?.key).toBe("green:bram");
     expect(nextStop([], null)).toBeUndefined();
+  });
+
+  it("tours only around town for now, coming home from an out-of-state stop someone tapped", () => {
+    const at = (key: string) => stops.find((stop) => stop.key === key)!;
+    const international = buildStops(locate([...PEOPLE, person("Ines", "INTERNATIONAL", "lightblue", 48.8566, 2.3522)]));
+    const tour = tourStops(international);
+    expect(tour.map((stop) => stop.key)).toEqual(["green:bram", "darkgreen:bartholomew", "yellow:pilar", "red:hugo", "red:yara"]);
+    expect(nextStop(tour, at("red:yara"))?.key).toBe("green:bram");
+    expect(nextStop(tour, at("brown:bao"))?.key).toBe("green:bram");
   });
 });
 

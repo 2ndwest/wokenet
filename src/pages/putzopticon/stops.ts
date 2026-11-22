@@ -121,6 +121,12 @@ export const buildStops = (located: Located[]): Stop[] => {
   return stops.sort(byTourOrder);
 };
 
+// For now the tour stays around town: it skips the out-of-state stops (brown) and everything after
+// them in COLOR_ORDER. Those people still have rows, and tapping one still flies to them.
+const TOUR_ENDS_BEFORE = "brown";
+export const tourStops = (stops: Stop[]): Stop[] =>
+  stops.filter((stop) => colorRank(stop.color) < colorRank(TOUR_ENDS_BEFORE));
+
 // The stop after `current` in tour order (the next one along if it has emptied out), wrapping.
 export const nextStop = (stops: Stop[], current: Stop | null): Stop | undefined =>
   (current === null ? undefined : stops.find((stop) => byTourOrder(stop, current) > 0)) ?? stops[0];
