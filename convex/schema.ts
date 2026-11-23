@@ -60,6 +60,39 @@ export default defineSchema({
     djColor: v.optional(v.string()),
   }).index("by_email", ["email"]),
 
+  // Movie Monday. Open to everyone, signed in or not, so nothing here is tied
+  // to a user: a voter is a random id kept in their browser.
+  movieNominations: defineTable({
+    imdbId: v.string(), // "tt0111161"
+    title: v.string(),
+    year: v.optional(v.string()),
+    poster: v.optional(v.string()),
+    runtimeMinutes: v.optional(v.number()),
+    genres: v.array(v.string()),
+  }).index("by_imdbId", ["imdbId"]),
+
+  movieBallots: defineTable({
+    voterId: v.string(),
+    /** Nominations in order of preference, best first. */
+    ranking: v.array(v.id("movieNominations")),
+  }).index("by_voterId", ["voterId"]),
+
+  /** Holds one row while this week's voting is closed, none while it's open. */
+  movieVotingClosed: defineTable({
+    closedAt: v.number(),
+  }),
+
+  /** Past winners, so a repeat nomination can be flagged. */
+  movieHistory: defineTable({
+    imdbId: v.string(),
+    title: v.string(),
+    year: v.optional(v.string()),
+    poster: v.optional(v.string()),
+    runtimeMinutes: v.optional(v.number()),
+    genres: v.array(v.string()),
+    watchedAt: v.number(),
+  }).index("by_imdbId", ["imdbId"]),
+
   shitMyDadSays: defineTable({
     timestamp: v.number(),
     sender: v.string(),

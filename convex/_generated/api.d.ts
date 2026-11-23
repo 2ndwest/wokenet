@@ -23,6 +23,7 @@ import type * as email from "../email.js";
 import type * as http from "../http.js";
 import type * as loadLocations from "../loadLocations.js";
 import type * as locations from "../locations.js";
+import type * as movieMonday from "../movieMonday.js";
 import type * as shitMyDadSays from "../shitMyDadSays.js";
 import type * as users from "../users.js";
 import type * as utils_auth from "../utils/auth.js";
@@ -30,6 +31,8 @@ import type * as utils_duplicates from "../utils/duplicates.js";
 import type * as utils_genres from "../utils/genres.js";
 import type * as utils_keys from "../utils/keys.js";
 import type * as utils_location_labels from "../utils/location_labels.js";
+import type * as utils_movies from "../utils/movies.js";
+import type * as utils_rankedChoice from "../utils/rankedChoice.js";
 import type * as utils_strings from "../utils/strings.js";
 
 /**
@@ -51,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   loadLocations: typeof loadLocations;
   locations: typeof locations;
+  movieMonday: typeof movieMonday;
   shitMyDadSays: typeof shitMyDadSays;
   users: typeof users;
   "utils/auth": typeof utils_auth;
@@ -58,6 +62,8 @@ declare const fullApi: ApiFromModules<{
   "utils/genres": typeof utils_genres;
   "utils/keys": typeof utils_keys;
   "utils/location_labels": typeof utils_location_labels;
+  "utils/movies": typeof utils_movies;
+  "utils/rankedChoice": typeof utils_rankedChoice;
   "utils/strings": typeof utils_strings;
 }>;
 export declare const api: FilterApi<
