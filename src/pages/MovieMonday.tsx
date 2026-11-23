@@ -198,12 +198,7 @@ export const MovieMonday = memo(() => {
     <Flex direction="column" width="100%" height="100%" p="5" align="center">
       <Flex direction="column" width="100%" style={{ maxWidth: 1100 }} gap="5" pb="5">
         <Flex justify="between" align="center" wrap="wrap" gap="3">
-          <Flex direction="column">
-            <Heading size="8">Movie Monday</Heading>
-            <Text size="2" color="gray">
-              Nominate a film, rank the ones you'd watch. Starts over every week.
-            </Text>
-          </Flex>
+          <Heading size="8">Movie Monday</Heading>
 
           {round && (
             <Flex gap="2" align="center">
@@ -432,10 +427,6 @@ export const MovieMonday = memo(() => {
               {history === undefined ? (
                 <Text size="2" color="gray">
                   Loading…
-                </Text>
-              ) : history.length === 0 ? (
-                <Text size="2" color="gray">
-                  Nothing yet. Each week's winner lands here.
                 </Text>
               ) : (
                 <Flex direction="column" gap="2">
