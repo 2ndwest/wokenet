@@ -16,7 +16,7 @@ export const AdminPanel = memo(() => {
 
   return (
     <Flex direction="column" align="center" p="4" width="100%" height="100%">
-      <Box minWidth={{ initial: "100%", lg: "750px" }} pb="4">
+      <Box minWidth={{ initial: "100%", lg: "750px" }} maxWidth="100%" pb="4">
         <AdminAnnouncements />
 
         <Flex justify="between" align="center" mt="6" mb="4">

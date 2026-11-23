@@ -1,4 +1,4 @@
-import { Badge, Box, Button, Dialog, Flex, Heading, Table, Text, TextArea, TextField } from "@radix-ui/themes";
+import { Badge, Box, Button, Card, Dialog, Flex, Heading, Text, TextArea, TextField } from "@radix-ui/themes";
 import { memo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -16,6 +16,9 @@ const MAX_LENGTH = 280;
 const MAX_DETAILS_LENGTH = 500;
 
 type Draft = { text: string; details?: string };
+
+// Keeps the line breaks as typed, and breaks a long word or link rather than widening the page.
+const WRAPPED = { whiteSpace: "pre-wrap", overflowWrap: "anywhere" } as const;
 
 // A TV-shaped (9:16) preview of how it'll look.
 const TVPreview = memo(({ text, details, width }: Draft & { width: number }) => (
@@ -46,7 +49,7 @@ const Editor = memo(
     const unchanged = trimmed === (initial?.text ?? "").trim() && details.trim() === (initial?.details ?? "").trim();
     return (
       <Flex gap="4" align={{ initial: "stretch", sm: "start" }} direction={{ initial: "column", sm: "row" }}>
-        <Flex direction="column" gap="2" flexGrow="1">
+        <Flex direction="column" gap="2" flexGrow="1" minWidth="0">
           <Text size="2" weight="bold">
             Headline
           </Text>
@@ -70,7 +73,7 @@ const Editor = memo(
             placeholder="A few sentences underneath, e.g. the details."
             onChange={(e) => setDetails(e.target.value)}
           />
-          <Flex justify="between" align="center">
+          <Flex justify="between" align="center" gap="3">
             <Text size="1" color="gray">
               {details.trim() ? details.trim().split(/\s+/).length : 0} words, {details.trim().length}/{MAX_DETAILS_LENGTH}
             </Text>
@@ -111,9 +114,9 @@ const Scheduler = memo(({ initial, onSubmit }: { initial?: number; onSubmit: (at
   const past = at <= Date.now();
   return (
     <Flex direction="column" gap="3">
-      <Flex gap="2" align="center">
-        <TextField.Root type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <TextField.Root type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+      <Flex gap="2" align="center" wrap="wrap">
+        <TextField.Root type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ flex: "1 1 130px", minWidth: 0 }} />
+        <TextField.Root type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ flex: "1 1 100px", minWidth: 0 }} />
         <Text size="2" color="gray">
           ET
         </Text>
@@ -156,8 +159,8 @@ export const AdminAnnouncements = memo(() => {
 
   return (
     <>
-      <Flex justify="between" align="center" mb="4" gap="3">
-        <Heading size="8">Announcements</Heading>
+      <Flex justify="between" align="center" mb="4" gap="3" wrap="wrap">
+        <Heading size={{ initial: "7", sm: "8" }}>Announcements</Heading>
         {live && (
           <Button color="red" variant="solid" onClick={() => hide().catch(alert)}>
             Hide from TV
@@ -179,82 +182,76 @@ export const AdminAnnouncements = memo(() => {
       ) : announcements.length === 0 ? (
         <Text color="gray">None yet.</Text>
       ) : (
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Text</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Added</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell />
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {announcements.map((a) => (
-              <Table.Row key={a._id} align="center">
-                <Table.Cell>
-                  <Flex direction="column" gap="1" align="start">
-                    {a.live && <Badge color="red">On the TV now</Badge>}
-                    {a.scheduledFor && <Badge color="blue">Goes up {formatET(a.scheduledFor)}</Badge>}
-                    <Text style={{ whiteSpace: "pre-wrap" }}>{a.text}</Text>
-                    {a.details && (
-                      <Text size="2" color="gray" style={{ whiteSpace: "pre-wrap" }}>
-                        {a.details}
-                      </Text>
-                    )}
-                  </Flex>
-                </Table.Cell>
-                <Table.Cell>
-                  <Text color="gray" size="2">
+        // A card each, not a table: on a phone the text goes on top and the buttons wrap underneath.
+        <Flex direction="column" gap="2">
+          {announcements.map((a) => (
+            <Card key={a._id}>
+              <Flex gap="3" justify="between" direction={{ initial: "column", sm: "row" }} align={{ initial: "stretch", sm: "center" }}>
+                <Flex direction="column" gap="1" align="start" minWidth="0">
+                  {a.live && <Badge color="red">On the TV now</Badge>}
+                  {a.scheduledFor && <Badge color="blue">Goes up {formatET(a.scheduledFor)}</Badge>}
+                  <Text style={WRAPPED}>{a.text}</Text>
+                  {a.details && (
+                    <Text size="2" color="gray" style={WRAPPED}>
+                      {a.details}
+                    </Text>
+                  )}
+                  <Text color="gray" size="1">
                     {a.createdBy}, {getRelativeTime(a.createdAt)}
                   </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Flex gap="2" wrap="wrap" justify="end">
-                    {a.live ? (
-                      <Button color="red" variant="solid" onClick={() => hide().catch(alert)}>
-                        Hide
-                      </Button>
-                    ) : (
-                      <Button
-                        color="red"
-                        variant="soft"
-                        onClick={() => {
-                          if (confirm("Put this up on the Putzopticon now?")) show({ id: a._id }).catch(alert);
-                        }}
-                      >
-                        Show
-                      </Button>
-                    )}
-                    {!a.live && (
-                      <Button variant="soft" color="blue" onClick={() => setScheduling({ id: a._id, at: a.scheduledFor })}>
-                        {a.scheduledFor ? "Reschedule" : "Schedule"}
-                      </Button>
-                    )}
-                    {a.scheduledFor && (
-                      <Button variant="soft" color="gray" onClick={() => unschedule({ id: a._id }).catch(alert)}>
-                        Unschedule
-                      </Button>
-                    )}
-                    <Button variant="soft" color="gray" onClick={() => setPreviewing({ text: a.text, details: a.details })}>
-                      Preview
+                </Flex>
+                <Flex
+                  gap="2"
+                  wrap="wrap"
+                  flexShrink="0"
+                  justify={{ initial: "start", sm: "end" }}
+                  maxWidth={{ initial: "100%", sm: "350px" }}
+                >
+                  {a.live ? (
+                    <Button color="red" variant="solid" onClick={() => hide().catch(alert)}>
+                      Hide
                     </Button>
-                    <Button variant="soft" color="gray" onClick={() => setEditing({ id: a._id, text: a.text, details: a.details })}>
-                      Edit
-                    </Button>
+                  ) : (
                     <Button
+                      color="red"
                       variant="soft"
-                      color="gray"
                       onClick={() => {
-                        if (confirm("Delete this announcement?")) remove({ id: a._id }).catch(alert);
+                        if (confirm("Put this up on the Putzopticon now?")) show({ id: a._id }).catch(alert);
                       }}
                     >
-                      Delete
+                      Show
                     </Button>
-                  </Flex>
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+                  )}
+                  {!a.live && (
+                    <Button variant="soft" color="blue" onClick={() => setScheduling({ id: a._id, at: a.scheduledFor })}>
+                      {a.scheduledFor ? "Reschedule" : "Schedule"}
+                    </Button>
+                  )}
+                  {a.scheduledFor && (
+                    <Button variant="soft" color="gray" onClick={() => unschedule({ id: a._id }).catch(alert)}>
+                      Unschedule
+                    </Button>
+                  )}
+                  <Button variant="soft" color="gray" onClick={() => setPreviewing({ text: a.text, details: a.details })}>
+                    Preview
+                  </Button>
+                  <Button variant="soft" color="gray" onClick={() => setEditing({ id: a._id, text: a.text, details: a.details })}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="soft"
+                    color="gray"
+                    onClick={() => {
+                      if (confirm("Delete this announcement?")) remove({ id: a._id }).catch(alert);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </Flex>
+              </Flex>
+            </Card>
+          ))}
+        </Flex>
       )}
 
       <Dialog.Root open={previewing !== null} onOpenChange={(open) => !open && setPreviewing(null)}>
