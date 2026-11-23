@@ -21,7 +21,6 @@ import type * as crons from "../crons.js";
 import type * as djs from "../djs.js";
 import type * as email from "../email.js";
 import type * as http from "../http.js";
-import type * as livePigTemp from "../livePigTemp.js";
 import type * as loadLocations from "../loadLocations.js";
 import type * as locations from "../locations.js";
 import type * as shitMyDadSays from "../shitMyDadSays.js";
@@ -50,7 +49,6 @@ declare const fullApi: ApiFromModules<{
   djs: typeof djs;
   email: typeof email;
   http: typeof http;
-  livePigTemp: typeof livePigTemp;
   loadLocations: typeof loadLocations;
   locations: typeof locations;
   shitMyDadSays: typeof shitMyDadSays;

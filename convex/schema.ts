@@ -36,8 +36,6 @@ const CUE_VALIDATOR = v.object({
 });
 
 export default defineSchema({
-  livePigTemp: defineTable({ fahrenheit: v.number(), updatedAt: v.number() }),
-
   locations: defineTable({
     name: v.string(),
     lastName: v.optional(v.string()), // Used to disambiguate people who share a first name.
